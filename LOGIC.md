@@ -1,210 +1,211 @@
-# TrackMyFilm — Logic & Architecture
+# TrackMyFilm — Owner Guide
 
-> Last updated: March 2026
-> Stack: Next.js 16 (App Router) · Supabase · Resend · Tailwind · shadcn/ui (Base UI)
-
----
-
-## Overview
-
-TrackMyFilm is a film lab order tracking system for **Yours Durham**. Everything is behind login — staff manage orders and customers, and can also look up order status from the tracking page.
-
-| Page | Auth | Purpose |
-|---|---|---|
-| `/dashboard` | Required | Create drop-offs, update order status |
-| `/customers` | Required | Manage customers, view order history |
-| `/tracking` | Required | Look up order status by order # or email |
-| `/login` | Public | Sign in |
-| `/login/update-password` | Public | Set new password via reset link |
+> Last updated: April 2026
 
 ---
 
-## Auth
+## What is this?
 
-- **Provider:** Supabase Auth (email + password)
-- **Session:** Cookie-based via `@supabase/ssr`, auto-refreshed by middleware on every request
-- **Protection:** `proxy.ts` (Next.js middleware) guards `/dashboard`, `/customers`, `/tracking` — unauthenticated users are redirected to `/login?redirectTo=<path>`
-- **Forgot password:** "Forgot password?" on login page → sends reset email → `/login/update-password` to set new password
-- **Logout:** POST `/api/auth/logout` → clears session → back to `/login`
-- **One admin user:** `hello@yoursdurham.com`
-
-Key files: `proxy.ts`, `lib/supabase/client.ts`, `lib/supabase/server.ts`, `lib/api-auth.ts`
-
-All API routes also call `requireAuth()` server-side — so even direct API calls without a browser session are rejected with 401.
+TrackMyFilm is a private system for **Yours Durham** to track film orders from drop-off to delivery. Customers can check the status of their film online. You log in as staff to manage everything.
 
 ---
 
-## Status Flow
+## How to Log In
 
-Orders move through exactly 3 statuses in order:
+Go to your app URL and sign in with:
+
+- **Email:** `hello@yoursdurham.com`
+- **Password:** `YoursDurham2026!`
+
+If you ever forget the password, click **"Forgot password?"** on the login page and a reset link will be sent to `hello@yoursdurham.com`.
+
+---
+
+## The Three Pages
+
+### 1. Dashboard (`/dashboard`)
+This is the main page. It shows every film order as a card.
+
+- You can filter by status (Received by Yours / Received at Lab / Scans Sent)
+- You can search by customer name or order number
+- Click **New Drop-off** to log a new film order
+
+### 2. Customers (`/customers`)
+A full list of all 529+ customers imported from your spreadsheet.
+
+- Search by name, email, or order number
+- Click any row to expand it and edit their details
+- All edits save automatically when you press Enter or click away
+
+### 3. Tracking (`/tracking`)
+Customers use this to look up the status of their film by entering their order number or email address.
+
+---
+
+## The Full Workflow — Step by Step
+
+### Step 1 — Customer drops off film
+You open the dashboard and click **New Drop-off**. Fill in:
+- Customer name and email
+- Order number (e.g. `JE1234`)
+- Drop-off date
+- Number of rolls
+- Film type (35mm or 120)
+- Film process (Color, Black & White, or Both)
+- Film stock (optional)
+- Notes (optional, internal only — not shown to customer)
+
+The system will:
+- Find the customer if they already exist (by email or name)
+- Create a new customer record if they don't
+- Log the order with status **"Received by Yours"**
+- Send the customer a confirmation email automatically
+
+> **Email toggle:** There is a checkbox at the bottom of the form — "Send confirmation email". It is on by default. Uncheck it if you do not want to send an email for a particular drop-off.
+
+---
+
+### Step 2 — You drive film to the lab in Raleigh
+On the dashboard, find the order card and click **Update Status → Received at Lab**.
+
+The system will:
+- Update the order status
+- Send the customer an email saying their film has arrived at the lab
+
+---
+
+### Step 3 — Lab sends scans back
+When you receive the WeTransfer link from the lab, go to the order card and click **Update Status → Scans Sent**.
+
+A box will appear asking you to paste the WeTransfer download link. Once you confirm:
+- The link is saved to the order permanently
+- The customer receives an email with their download link
+- The order card shows a **Copy link** and **Open** button for your reference
+
+> The WeTransfer link is stored in the database. You can always go back to the order card to copy or open it again later.
+
+---
+
+## Emails — What Gets Sent and When
+
+There are exactly 3 emails, one per status change:
+
+| When | Email sent | What it says |
+|------|-----------|--------------|
+| New drop-off logged | Confirmation | "We've got your film, here's your order info" |
+| Status → Received at Lab | Lab update | "Your film is at the lab in Raleigh" |
+| Status → Scans Sent | Scans ready | "Your scans are ready — download link inside" |
+
+**No email is sent if the customer has no email address on file.**
+
+**If an email fails to send**, a red "⚠️ Email failed to send" banner appears on the order card with a **Retry** button. Click it to try again.
+
+---
+
+## What You Can Change
+
+### Email templates
+All 3 email templates are managed in your **Resend dashboard** (resend.com). Log in there and go to Templates. You can edit:
+- The subject line
+- The body text and layout
+- The variables used: `{{first_name}}`, `{{order_number}}`, `{{roll_count}}`, `{{wetransfer_link}}`
+
+> Do not rename the variables (e.g. do not change `{{first_name}}` to `{{name}}`) — the system fills these in automatically and the names must match exactly.
+
+### Customer records
+On the Customers page, click any row to edit:
+- Email, First Name, Last Name
+- Last drop-off date, Order number, Current rolls, Total rolls, Drop-off count
+- Notes (internal, never shown to customers)
+
+### Order status
+On the Dashboard, use the **Update Status** dropdown on any order card. You can also move a status backward (e.g. from Received at Lab back to Received by Yours) — it will ask you to confirm first.
+
+---
+
+## What You Cannot Change (Without a Developer)
+
+- The 3 status names ("Received by Yours", "Received at Lab", "Scans Sent") — these are hardcoded in the system
+- The order of the statuses — they always go in the same sequence
+- Adding new status types
+- The WeTransfer link validation — it only accepts links from `wetransfer.com`
+- The login email — only `hello@yoursdurham.com` has access
+
+---
+
+## Customer Deduplication — How It Works
+
+When you log a new drop-off, the system tries to find an existing customer before creating a new one:
+
+1. It searches by **email address** first (exact match, case-insensitive)
+2. If no email match, it searches by **name** (case-insensitive, ignores extra spaces)
+3. If still no match → a new customer is created automatically
+
+This means:
+- If you enter "John Smith" and there's already a "john smith" in the system, it will link to the existing customer — **not create a duplicate**
+- If the same person drops off film 5 times, their total drop-off count and total rolls will accumulate correctly
+
+> **Important:** Enter the customer's email whenever possible. Name matching is less reliable — "Jon Smith" and "John Smith" would be treated as two different people.
+
+---
+
+## The Customer Table — What Each Column Means
+
+| Column | What it is |
+|--------|-----------|
+| Email | Customer's email address — used for sending emails and finding existing customers |
+| First Name | First name only |
+| Last Name | Last name only (do not put full name in First Name) |
+| Date | Date of their most recent drop-off |
+| Order # | Most recent order number |
+| Current Rolls | Number of rolls in the most recent drop-off |
+| Total Rolls | All rolls across every drop-off ever |
+| Drop-off Count | Total number of times this customer has dropped off film |
+
+---
+
+## The WeTransfer Link
+
+When you update an order to **Scans Sent**, the system asks for the WeTransfer download link from the lab. This link is:
+
+- **Saved permanently** to the order in the database
+- **Sent automatically** in the scans email to the customer
+- **Available anytime** on the order card (Copy link / Open buttons)
+- **Accessible** from the customer's expanded row in the Customers page
+
+> WeTransfer links expire after 7 days. If a customer misses the link, you can go to the order card and copy it to send manually — but if the WeTransfer itself has expired, you'll need to contact the lab.
+
+---
+
+## Frequently Asked Questions
+
+**What if I log a drop-off with the wrong order number?**
+Delete the order from the dashboard (trash icon on the card) and re-create it with the correct number. Order numbers must be unique — the system will reject a duplicate.
+
+**What if a customer has no email?**
+The drop-off is still logged and saved. No email will be sent. You can add their email later on the Customers page, but it won't retroactively send any missed emails.
+
+**Can two customers have the same name?**
+Yes — if they have different email addresses the system will keep them as separate records. If they have no email and the same name, the system will treat them as the same person. Use notes to distinguish them.
+
+**What if the email fails and Retry doesn't work?**
+The most common reason is the sending domain isn't verified in Resend. Contact your developer to check the Resend dashboard.
+
+**Can I change what the tracking page looks like?**
+Not without a developer. The tracking page is part of the app code.
+
+---
+
+## Summary
 
 ```
-Received by Yours → Received at Lab → Scans Sent
+Customer drops off film
+        ↓
+You log it → "Received by Yours" → Email 1 sent to customer
+        ↓
+You drive film to Raleigh → "Received at Lab" → Email 2 sent to customer
+        ↓
+Lab sends scans → You paste WeTransfer link → "Scans Sent" → Email 3 sent with download link
 ```
 
-- **Forward** transitions are always allowed
-- **Backward** transitions require admin confirmation (UI shows dialog, sends `force: true` to API)
-- **Same status** is a no-op — returns `skipped: true`
-- **Scans Sent** requires a WeTransfer link before the transition is allowed
-
-Defined in `lib/constants.ts` as `STATUS_FLOW`.
-
----
-
-## Order Lifecycle
-
-```
-Admin creates drop-off (NewDropoffForm)
-  → looks up existing customer by email or name
-  → creates customer if not found
-  → creates film_order (status = "Received by Yours")
-  → updates customer total_rolls + total_dropoffs
-  → fires confirmation email via /api/email
-
-Admin updates status → /api/status
-  → validates transition
-  → updates order + status_history
-  → fires status email via /api/email
-
-Customer visits /tracking (login required)
-  → searches by order number or email
-  → sees status timeline + WeTransfer download button
-```
-
----
-
-## Email System
-
-`/api/email` is the single source of truth for all email sending.
-
-| Template key | Trigger | Env var |
-|---|---|---|
-| `film_drop_received` | Drop-off created | `RESEND_TEMPLATE_FILM_DROP_RECEIVED` |
-| `film_at_lab` | Status → Received at Lab | `RESEND_TEMPLATE_FILM_TO_RALEIGH` |
-| `scans_sent` | Status → Scans Sent | `RESEND_TEMPLATE_SCANS_SENT` |
-
-**Dedup:** Per-order timestamp fields (`received_email_sent_at`, `at_lab_email_sent_at`, `scans_sent_email_sent_at`) prevent duplicate emails within 1 hour.
-
-**Email failure:** Does not fail the status update. `email_status: "failed"` is recorded on the order and shown as a red badge in the OrderCard.
-
-**Variables sent to Resend:** `first_name`, `order_number`, `roll_count`, `film_type`, `film_process`, `tracking_url`, `wetransfer_link`, `last_updated`
-
-**From:** `TrackMyFilm <no-reply@trackmyfilm.com>`
-**Reply-to:** `REPLY_TO_EMAIL` env var (default: `hello@yoursdurham.com`)
-
----
-
-## API Routes
-
-All routes require auth. Exception: `/api/orders/track` is intentionally public (customer-facing tracking lookup).
-
-| Method | Route | Description |
-|---|---|---|
-| GET | `/api/orders` | List all orders (newest first) |
-| POST | `/api/orders` | Create order (409 on duplicate order number) |
-| GET | `/api/orders/[id]` | Get single order |
-| PATCH | `/api/orders/[id]` | Update order fields |
-| DELETE | `/api/orders/[id]` | Delete order |
-| GET | `/api/orders/track` | Track by `?order_number=` or `?email=` |
-| POST | `/api/status` | Update status + trigger email |
-| POST | `/api/email` | Send transactional email via Resend |
-| GET | `/api/customers` | List all customers |
-| POST | `/api/customers` | Create customer |
-| PATCH | `/api/customers/[id]` | Update customer |
-| DELETE | `/api/customers/[id]` | Delete customer |
-| GET | `/api/customers/lookup` | Find customer by `?email=` or `?name=` |
-| POST | `/api/auth/logout` | Sign out |
-
----
-
-## Database (Supabase)
-
-Two tables. API routes use `SUPABASE_SERVICE_ROLE_KEY` server-side (bypasses RLS). RLS is enabled on both tables to block any accidental direct browser access.
-
-### customers
-`id`, `name`, `last_name`, `email`, `phone`, `normalized_name`, `notes`, `wetransfer_link`, `total_rolls`, `total_dropoffs`, `points`, `created_at`
-
-### film_orders
-`id`, `customer_id` (FK), `customer_name`, `customer_email`, `order_number` (unique), `dropoff_date`, `roll_count`, `film_type`, `film_process`, `dropoff_number`, `status`, `status_history` (jsonb), `status_updated_at`, `received_by_yours_at`, `at_lab_at`, `scans_sent_at`, `wetransfer_link`, `notes`, `email_status`, `email_error`, `received_email_sent_at`, `at_lab_email_sent_at`, `scans_sent_email_sent_at`, `created_at`
-
-Migrations are in `supabase/migrations/`.
-
----
-
-## Customer Deduplication
-
-When creating a drop-off, the system finds or creates a customer:
-
-1. Search by email (case-insensitive exact match) → if found, use it
-2. Search by `normalized_name` → if exactly 1 match, use it
-3. No match → create new customer
-
-`normalized_name` = lowercased, trimmed, collapsed whitespace full name (from `lib/validation.ts`).
-
----
-
-## Validation (`lib/validation.ts`)
-
-Single source of truth for all business logic — imported by both API routes and components:
-
-| Function | Purpose |
-|---|---|
-| `isValidTransition(current, next)` | Forward-only status flow check |
-| `isKnownStatus(status)` | Type guard for valid statuses |
-| `isWithinDedupWindow(lastSentAt)` | 1-hour email dedup check |
-| `normalizeEmail(email)` | trim + lowercase |
-| `normalizeCustomerName(name)` | trim + collapse spaces + lowercase |
-| `normalizeOrderNumber(num)` | trim + uppercase |
-| `isValidWetransferLink(url)` | Hostname check — must be `wetransfer.com` |
-| `ensureHttps(url)` | Prepends `https://` if missing |
-
----
-
-## Key Files
-
-```
-proxy.ts                            Auth middleware
-lib/
-  db.ts                             All Supabase queries
-  validation.ts                     Pure business logic
-  constants.ts                      STATUS_FLOW, STATUS_TEMPLATE_MAP
-  types.ts                          TypeScript types
-  api-auth.ts                       requireAuth() helper
-  supabase/client.ts                Browser Supabase client
-  supabase/server.ts                Server Supabase client (SSR)
-app/
-  login/page.tsx                    Login + forgot password
-  login/update-password/page.tsx    Password reset
-  dashboard/page.tsx                Admin dashboard
-  customers/page.tsx                Customer management
-  tracking/page.tsx                 Order lookup
-  api/...                           All API routes
-components/
-  OrderCard.tsx                     Order card with status controls
-  NewDropoffForm.tsx                New drop-off dialog
-  AddCustomerForm.tsx               Add customer dialog
-  StatusBadge.tsx                   Status pill badge
-supabase/migrations/
-  001_initial_schema.sql            Creates tables + indexes
-  002_import_base44_data.sql        Imports Base44 test data
-__tests__/
-  validation.test.ts                Unit tests (46 total)
-  constants.test.ts
-  utils.test.ts
-```
-
----
-
-## Environment Variables
-
-| Variable | Required | Description |
-|---|---|---|
-| `NEXT_PUBLIC_SUPABASE_URL` | ✅ | Supabase project URL |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | ✅ | Supabase anon key (browser-safe) |
-| `SUPABASE_SERVICE_ROLE_KEY` | ✅ | Service role key (server only, bypasses RLS) |
-| `RESEND_API_KEY` | For emails | Resend API key |
-| `RESEND_TEMPLATE_FILM_DROP_RECEIVED` | For emails | Resend template ID |
-| `RESEND_TEMPLATE_FILM_TO_RALEIGH` | For emails | Resend template ID |
-| `RESEND_TEMPLATE_SCANS_SENT` | For emails | Resend template ID |
-| `NEXT_PUBLIC_APP_URL` | For emails | Full app URL (used in email links) |
-| `REPLY_TO_EMAIL` | Optional | Reply-to on outgoing emails |
+That's the entire workflow. Everything else (customer records, email retries, search, editing) is for managing and correcting data as needed.

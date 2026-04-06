@@ -39,6 +39,7 @@ export async function POST(req: Request) {
     film_process: string;
     film_stock?: string;
     notes?: string;
+    send_email?: boolean;
   };
 
   try {
@@ -50,6 +51,7 @@ export async function POST(req: Request) {
   const {
     customer_name, customer_email, order_number,
     dropoff_date, roll_count, film_type, film_process, film_stock, notes,
+    send_email = true,
   } = body;
 
   // ── Validate required fields ──────────────────────────────────────────
@@ -146,7 +148,9 @@ export async function POST(req: Request) {
     error?: string;
   } = { sent: false };
 
-  if (normalizedEmail) {
+  if (!send_email) {
+    emailResult.skipped = true;
+  } else if (normalizedEmail) {
     try {
       const emailRes = await fetch(new URL("/api/email", req.url), {
         method: "POST",
@@ -168,7 +172,7 @@ export async function POST(req: Request) {
 
       if (!emailRes.ok) {
         emailResult.sent  = false;
-        emailResult.error = emailData.error ?? `Email API returned ${emailRes.status}`;
+        emailResult.error = emailData.error ?? `Resend returned ${emailRes.status}`;
       } else if (emailData.skipped) {
         emailResult.sent    = false;
         emailResult.skipped = true;

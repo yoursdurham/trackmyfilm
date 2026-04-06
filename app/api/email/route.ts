@@ -1,11 +1,10 @@
 /**
  * POST /api/email
  * Sends transactional emails via Resend using inline HTML templates.
- * No Resend template IDs required.
  *
  * Templates:
- *   film_drop_received — auto-upgrades to loyalty_5 or loyalty_10 based on dropoff_number
- *   film_at_lab        — film has arrived at the lab
+ *   film_drop_received — confirmation when film is dropped off
+ *   film_at_lab        — film has arrived at the lab in Raleigh
  *   scans_sent         — scans ready with WeTransfer link
  *
  * Dedup: each template has a per-order timestamp field. Will not resend within 1 hour.
@@ -15,16 +14,15 @@ import { NextResponse } from "next/server";
 import { getOrderById, updateOrder } from "@/lib/db";
 import { normalizeEmail, isWithinDedupWindow } from "@/lib/validation";
 import { requireAuth } from "@/lib/api-auth";
-import {
-  filmDropReceived,
-  filmDropLoyalty5,
-  filmDropLoyalty10,
-  filmAtLab,
-  scansSent,
-} from "@/lib/email-templates";
 import type { FilmOrder } from "@/lib/types";
 
-// Maps template name → which dedup field to read/write
+const TEMPLATE_IDS: Record<string, string | undefined> = {
+  film_drop_received: process.env.RESEND_TEMPLATE_FILM_DROP_RECEIVED,
+  film_at_lab:        process.env.RESEND_TEMPLATE_FILM_AT_LAB,
+  scans_sent:         process.env.RESEND_TEMPLATE_SCANS_SENT,
+};
+
+// Maps template name → dedup timestamp field on the order
 const DEDUP_FIELDS: Record<string, keyof FilmOrder> = {
   film_drop_received: "received_email_sent_at",
   film_at_lab:        "at_lab_email_sent_at",
@@ -78,44 +76,40 @@ export async function POST(req: Request) {
     return NextResponse.json({ success: true, skipped: true, reason: "Already sent within the last hour" });
   }
 
-  // Build email params
-  const firstName  = (order.customer_name || "there").trim().split(" ")[0];
-  const rollCount  = order.roll_count ?? 0;
-  const filmType   = order.film_type ?? "";
-  const filmProcess = order.film_process ?? "";
-  const orderNumber = order.order_number ?? "";
-  const dropoffNumber = order.dropoff_number ?? 0;
-
-  // Resolve which email to build
-  let email: { subject: string; html: string };
-
-  if (template === "film_drop_received") {
-    // Auto-upgrade to loyalty email at 5th and 10th milestones
-    if (dropoffNumber === 10) {
-      email = filmDropLoyalty10({ firstName, rollCount, filmType, filmProcess, orderNumber });
-    } else if (dropoffNumber === 5) {
-      email = filmDropLoyalty5({ firstName, rollCount, filmType, filmProcess, orderNumber });
-    } else {
-      email = filmDropReceived({ firstName, rollCount, filmType, filmProcess, orderNumber });
-    }
-  } else if (template === "film_at_lab") {
-    email = filmAtLab({ firstName, rollCount, filmType, filmProcess, orderNumber });
-  } else if (template === "scans_sent") {
-    if (!order.wetransfer_link) {
-      return NextResponse.json({ error: "Cannot send scans_sent email: no WeTransfer link on order" }, { status: 400 });
-    }
-    email = scansSent({ firstName, rollCount, filmType, filmProcess, orderNumber, wetransferLink: order.wetransfer_link });
-  } else {
-    return NextResponse.json({ error: `Unhandled template: ${template}` }, { status: 500 });
+  const templateId = TEMPLATE_IDS[template];
+  if (!templateId) {
+    return NextResponse.json(
+      { error: `Template ID not configured for "${template}" — add it to .env` },
+      { status: 500 }
+    );
   }
 
-  // Send via Resend
+  // Build template variables (must match {{variable}} names in Resend dashboard)
+  const variables: Record<string, string> = {
+    first_name:   (order.customer_name || "there").trim().split(" ")[0],
+    order_number: order.order_number ?? "",
+    roll_count:   String(order.roll_count ?? 0),
+  };
+
+  if (template === "scans_sent") {
+    if (!order.wetransfer_link) {
+      return NextResponse.json(
+        { error: "Cannot send scans_sent email: no WeTransfer link on order" },
+        { status: 400 }
+      );
+    }
+    variables.wetransfer_link = order.wetransfer_link;
+  }
+
+  // Send via Resend using dashboard template
   const payload = {
-    from:     process.env.RESEND_FROM_EMAIL || "Yours Durham <no-reply@yoursdurham.com>",
+    from:     process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev",
     to:       [recipientEmail],
     reply_to: process.env.REPLY_TO_EMAIL || "hello@yoursdurham.com",
-    subject:  email.subject,
-    html:     email.html,
+    template: {
+      id:        templateId,
+      variables,
+    },
   };
 
   const resendRes = await fetch("https://api.resend.com/emails", {
@@ -130,13 +124,14 @@ export async function POST(req: Request) {
   const resendData = await resendRes.json() as { id?: string; message?: string; name?: string };
 
   if (!resendRes.ok) {
-    // Record failure on order — never silently swallow
+    const errorMsg = resendData.message ?? JSON.stringify(resendData);
+    console.error("[email] Resend rejected request:", JSON.stringify(resendData, null, 2));
     await updateOrder(order_id, {
       email_status: "failed",
-      email_error:  `${resendData.name ?? "ResendError"}: ${resendData.message ?? JSON.stringify(resendData)}`,
+      email_error:  `${resendData.name ?? "ResendError"}: ${errorMsg}`,
     });
     return NextResponse.json(
-      { error: "Resend API error", details: resendData },
+      { error: `${resendData.name ?? "ResendError"}: ${errorMsg}`, details: resendData },
       { status: 502 }
     );
   }
@@ -144,18 +139,15 @@ export async function POST(req: Request) {
   // Record success — write dedup timestamp
   const now = new Date().toISOString();
   await updateOrder(order_id, {
-    [dedupField]:   now,
-    email_status:   "sent",
-    email_error:    null,
+    [dedupField]: now,
+    email_status: "sent",
+    email_error:  null,
   } as never);
 
   return NextResponse.json({
-    success:    true,
-    emailId:    resendData.id,
+    success: true,
+    emailId: resendData.id,
     template,
-    variant:    template === "film_drop_received"
-      ? (dropoffNumber === 10 ? "loyalty_10" : dropoffNumber === 5 ? "loyalty_5" : "regular")
-      : template,
-    sentTo:     recipientEmail,
+    sentTo:  recipientEmail,
   });
 }

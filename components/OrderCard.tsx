@@ -18,7 +18,7 @@ import {
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
-import { Hash, Layers, ChevronDown, Calendar, Trash2, ExternalLink, Clock, ChevronRight, Copy, Loader2 } from "lucide-react";
+import { Hash, Layers, ChevronDown, Calendar, Trash2, ExternalLink, Clock, ChevronRight, Copy, Loader2, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import StatusBadge from "./StatusBadge";
@@ -39,6 +39,32 @@ export default function OrderCard({ order, onStatusChange, onDelete }: Props) {
   const [wetransferLink, setWetransferLink] = useState("");
   const [historyOpen, setHistoryOpen] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [isRetryingEmail, setIsRetryingEmail] = useState(false);
+
+  const statusToTemplate: Record<string, string> = {
+    "Received by Yours": "film_drop_received",
+    "Received at Lab":   "film_at_lab",
+    "Scans Sent":        "scans_sent",
+  };
+
+  const handleRetryEmail = async () => {
+    setIsRetryingEmail(true);
+    try {
+      const template = statusToTemplate[order.status] ?? "film_drop_received";
+      const res = await fetch("/api/email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ order_id: order.id, template }),
+      });
+      const data = await res.json() as { error?: string; skipped?: boolean };
+      if (!res.ok) throw new Error(data.error ?? "Failed to send email");
+      toast.success("Email sent successfully");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to send email");
+    } finally {
+      setIsRetryingEmail(false);
+    }
+  };
 
   const getLastUpdated = () => {
     if (order.status_history?.length) {
@@ -143,8 +169,18 @@ export default function OrderCard({ order, onStatusChange, onDelete }: Props) {
             </div>
           )}
           {order.email_status === "failed" && (
-            <div className="bg-red-50 border border-red-200 rounded-lg px-2 py-1.5">
+            <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 flex items-center justify-between gap-2">
               <p className="text-xs text-red-700">⚠️ Email failed to send</p>
+              <button
+                onClick={handleRetryEmail}
+                disabled={isRetryingEmail}
+                className="flex items-center gap-1 text-xs font-medium text-red-600 hover:text-red-800 disabled:opacity-50 shrink-0"
+              >
+                {isRetryingEmail
+                  ? <Loader2 className="w-3 h-3 animate-spin" />
+                  : <RefreshCw className="w-3 h-3" />}
+                Retry
+              </button>
             </div>
           )}
           {order.status === "Scans Sent" && (

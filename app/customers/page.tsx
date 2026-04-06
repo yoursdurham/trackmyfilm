@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import {
   Search, ArrowLeft, Loader2, Trash2, ChevronUp, ChevronDown,
-  ChevronsUpDown, UserPlus, ChevronLeft, ChevronRight, ExternalLink, Layers, Calendar,
+  ChevronsUpDown, UserPlus, ChevronLeft, ChevronRight, ExternalLink, Layers, Calendar, RefreshCw, MailWarning,
 } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
@@ -53,6 +53,25 @@ export default function Customers() {
       toast.success("Customer deleted");
       setExpandedId(null);
     },
+  });
+
+  const retryEmailMutation = useMutation({
+    mutationFn: async ({ orderId, template }: { orderId: string; template: string }) => {
+      const res = await fetch("/api/email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ order_id: orderId, template }),
+      });
+      const data = await res.json() as { error?: string; skipped?: boolean };
+      if (!res.ok) throw new Error(data.error ?? "Failed to send email");
+      if (data.skipped) throw new Error("Email was skipped (already sent recently)");
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["filmOrders"] });
+      toast.success("Email sent successfully");
+    },
+    onError: (err: Error) => toast.error(err.message),
   });
 
   const saveMutation = useMutation({
@@ -102,13 +121,23 @@ export default function Customers() {
 
   const getOrders = (id: string) => orders.filter((o) => o.customer_id === id);
 
+  // Build a map of order numbers → customer id for fast lookup
+  const orderNumToCustomerId = new Map<string, string>();
+  orders.forEach((o) => {
+    if (o.order_number && o.customer_id) {
+      orderNumToCustomerId.set(o.order_number.toLowerCase(), o.customer_id);
+    }
+  });
+
   const filtered = customers
     .filter((c) => {
       if (!search) return true;
       const q = search.toLowerCase();
       return (
         `${c.name} ${c.last_name ?? ""}`.toLowerCase().includes(q) ||
-        c.email?.toLowerCase().includes(q)
+        c.email?.toLowerCase().includes(q) ||
+        c.last_order_number?.toLowerCase().includes(q) ||
+        orders.some((o) => o.customer_id === c.id && o.order_number.toLowerCase().includes(q))
       );
     })
     .sort((a, b) => {
@@ -167,7 +196,7 @@ export default function Customers() {
         <div className="relative max-w-sm mb-4">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <Input
-            placeholder="Search by name or email..."
+            placeholder="Search by name, email, or order #..."
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPage(1); }}
             className="pl-10 bg-white border-stone-200"
@@ -363,13 +392,32 @@ export default function Customers() {
                                             <Calendar className="w-3 h-3" />
                                             {format(new Date(order.dropoff_date), "MMM d, yyyy")}
                                           </span>
-                                          {order.wetransfer_link && (
-                                            <a href={order.wetransfer_link} target="_blank" rel="noopener noreferrer"
-                                              onClick={(e) => e.stopPropagation()}
-                                              className="flex items-center gap-1 text-emerald-600 hover:text-emerald-700 font-medium ml-auto">
-                                              <ExternalLink className="w-3.5 h-3.5" /> Scans
-                                            </a>
-                                          )}
+                                              <div className="ml-auto flex items-center gap-2">
+                                            {order.email_status === "failed" && (
+                                              <button
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  const t = order.status === "Scans Sent" ? "scans_sent" : order.status === "Received at Lab" ? "film_at_lab" : "film_drop_received";
+                                                  retryEmailMutation.mutate({ orderId: order.id, template: t });
+                                                }}
+                                                disabled={retryEmailMutation.isPending}
+                                                title={order.email_error ?? "Email failed — click to retry"}
+                                                className="flex items-center gap-1 text-xs text-red-500 hover:text-red-700 border border-red-200 hover:border-red-400 bg-red-50 hover:bg-red-100 rounded px-2 py-0.5 transition-colors disabled:opacity-50"
+                                              >
+                                                {retryEmailMutation.isPending
+                                                  ? <Loader2 className="w-3 h-3 animate-spin" />
+                                                  : <><MailWarning className="w-3 h-3" /> <RefreshCw className="w-3 h-3" /></>}
+                                                Retry email
+                                              </button>
+                                            )}
+                                            {order.wetransfer_link && (
+                                              <a href={order.wetransfer_link} target="_blank" rel="noopener noreferrer"
+                                                onClick={(e) => e.stopPropagation()}
+                                                className="flex items-center gap-1 text-emerald-600 hover:text-emerald-700 font-medium">
+                                                <ExternalLink className="w-3.5 h-3.5" /> Scans
+                                              </a>
+                                            )}
+                                          </div>
                                         </div>
                                       ))}
                                     </div>

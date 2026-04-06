@@ -57,11 +57,14 @@ const emptyForm = {
   notes: "",
 };
 
+const emptyMeta = { sendEmail: true };
+
 export default function NewDropoffForm({ open, onOpenChange, onSuccess, customers = [], selectedCustomer }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(selectedCustomer?.id ?? null);
+  const [sendEmail, setSendEmail] = useState(true);
   const [formData, setFormData] = useState({
     ...emptyForm,
     customer_name: selectedCustomer ? `${selectedCustomer.name} ${selectedCustomer.last_name || ""}`.trim() : "",
@@ -97,6 +100,7 @@ export default function NewDropoffForm({ open, onOpenChange, onSuccess, customer
           film_process:   formData.film_process,
           film_stock:     formData.film_stock || undefined,
           notes:          formData.notes || undefined,
+          send_email:     sendEmail,
         }),
       });
 
@@ -120,10 +124,7 @@ export default function NewDropoffForm({ open, onOpenChange, onSuccess, customer
 
       // Show email status
       if (data.email?.sent) {
-        const variant = data.email.variant;
-        if (variant === "loyalty_5")  toast.success("🎉 5th visit loyalty email sent!");
-        else if (variant === "loyalty_10") toast.success("🎉 10th visit loyalty email sent!");
-        else toast.success("Confirmation email sent");
+        toast.success("Confirmation email sent");
       } else if (data.email?.skipped) {
         if (data.email.error) toast.info(`No email: ${data.email.error}`);
       } else if (data.email?.error) {
@@ -134,6 +135,7 @@ export default function NewDropoffForm({ open, onOpenChange, onSuccess, customer
       onSuccess?.();
       setFormData({ ...emptyForm, dropoff_date: format(new Date(), "yyyy-MM-dd") });
       setSelectedCustomerId(null);
+      setSendEmail(true);
       onOpenChange(false);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed to create drop-off";
@@ -292,7 +294,24 @@ export default function NewDropoffForm({ open, onOpenChange, onSuccess, customer
               onChange={(e) => set("notes", e.target.value)} />
           </div>
 
-          <div className="flex gap-3 pt-4">
+          {/* Email toggle */}
+          <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+            <Checkbox
+              id="send_email"
+              checked={sendEmail}
+              onCheckedChange={(v) => setSendEmail(!!v)}
+            />
+            <div>
+              <label htmlFor="send_email" className="text-sm font-medium text-slate-700 cursor-pointer">
+                Send confirmation email
+              </label>
+              <p className="text-xs text-slate-500">
+                {sendEmail ? "Customer will receive an email when this drop-off is submitted" : "No email will be sent for this drop-off"}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex gap-3 pt-2">
             <Button type="button" variant="outline" className="flex-1" onClick={() => onOpenChange(false)} disabled={loading}>
               Cancel
             </Button>
