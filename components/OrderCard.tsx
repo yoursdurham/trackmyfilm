@@ -22,7 +22,7 @@ import { Hash, Layers, ChevronDown, Calendar, Trash2, ExternalLink, Clock, Chevr
 import { toast } from "sonner";
 import { format } from "date-fns";
 import StatusBadge from "./StatusBadge";
-import { STATUS_FLOW } from "@/lib/constants";
+import { STATUS_FLOW, STATUS_TEMPLATE_MAP } from "@/lib/constants";
 import { isValidWetransferLink, ensureHttps } from "@/lib/validation";
 import type { FilmOrder } from "@/lib/types";
 
@@ -41,16 +41,10 @@ export default function OrderCard({ order, onStatusChange, onDelete }: Props) {
   const [isUpdating, setIsUpdating] = useState(false);
   const [isRetryingEmail, setIsRetryingEmail] = useState(false);
 
-  const statusToTemplate: Record<string, string> = {
-    "Received by Yours": "film_drop_received",
-    "Received at Lab":   "film_at_lab",
-    "Scans Sent":        "scans_sent",
-  };
-
   const handleRetryEmail = async () => {
     setIsRetryingEmail(true);
     try {
-      const template = statusToTemplate[order.status] ?? "film_drop_received";
+      const template = STATUS_TEMPLATE_MAP[order.status as keyof typeof STATUS_TEMPLATE_MAP] ?? "film_drop_received";
       const res = await fetch("/api/email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

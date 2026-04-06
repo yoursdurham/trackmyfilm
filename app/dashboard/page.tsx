@@ -60,6 +60,7 @@ export default function Dashboard() {
     }
   };
 
+
   const filteredOrders = orders.filter((order) => {
     const matchesFilter = activeFilter === "all" || order.status === activeFilter;
     const matchesSearch = !searchQuery ||

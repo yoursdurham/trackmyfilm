@@ -12,9 +12,9 @@ import Link from "next/link";
 import type { FilmOrder } from "@/lib/types";
 
 const statusSteps = [
-  { status: "Received by Yours", icon: Clock,       color: "blue" },
-  { status: "Received at Lab",   icon: Package,     color: "amber" },
-  { status: "Scans Sent",        icon: CheckCircle, color: "emerald" },
+  { status: "Received by Yours", icon: Clock,       activeBg: "bg-blue-500",    activeRing: "ring-blue-200",    activeText: "text-blue-700",    activeLine: "bg-blue-500" },
+  { status: "Received at Lab",   icon: Package,     activeBg: "bg-amber-500",   activeRing: "ring-amber-200",   activeText: "text-amber-700",   activeLine: "bg-amber-500" },
+  { status: "Scans Sent",        icon: CheckCircle, activeBg: "bg-emerald-500", activeRing: "ring-emerald-200", activeText: "text-emerald-700", activeLine: "bg-emerald-500" },
 ] as const;
 
 function OrderTimeline({ currentStatus, statusHistory }: {
@@ -23,11 +23,12 @@ function OrderTimeline({ currentStatus, statusHistory }: {
 }) {
   const currentIndex = statusSteps.findIndex((s) => s.status === currentStatus);
 
-  const getTimestamp = (status: string) => {
-    if (!statusHistory) return null;
-    const entry = [...statusHistory].reverse().find((h) => h.status === status);
-    return entry ? format(new Date(entry.changed_at), "MMM d, h:mm a") : null;
-  };
+  // Pre-compute timestamp map once instead of searching on every step render
+  const timestampMap = statusHistory
+    ? Object.fromEntries(
+        [...statusHistory].reverse().map((h) => [h.status, format(new Date(h.changed_at), "MMM d, h:mm a")])
+      )
+    : {};
 
   return (
     <div className="flex items-center justify-between max-w-2xl mx-auto mb-8">
@@ -35,17 +36,17 @@ function OrderTimeline({ currentStatus, statusHistory }: {
         const Icon = step.icon;
         const isActive = index <= currentIndex;
         const isCurrent = index === currentIndex;
-        const timestamp = getTimestamp(step.status);
+        const timestamp = timestampMap[step.status];
         return (
           <div key={step.status} className="flex items-center flex-1">
             <div className="flex flex-col items-center">
               <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${
-                isActive ? `bg-${step.color}-500 shadow-lg` : "bg-slate-200"
-              } ${isCurrent ? `ring-4 ring-${step.color}-200` : ""}`}>
+                isActive ? `${step.activeBg} shadow-lg` : "bg-slate-200"
+              } ${isCurrent ? `ring-4 ${step.activeRing}` : ""}`}>
                 <Icon className={`w-6 h-6 ${isActive ? "text-white" : "text-slate-400"}`} />
               </div>
               <p className={`text-xs mt-2 text-center max-w-[100px] ${
-                isActive ? `text-${step.color}-700 font-medium` : "text-slate-400"
+                isActive ? `${step.activeText} font-medium` : "text-slate-400"
               }`}>{step.status}</p>
               {timestamp && (
                 <p className="text-xs text-slate-400 mt-0.5 text-center max-w-[100px]">{timestamp}</p>
@@ -53,7 +54,7 @@ function OrderTimeline({ currentStatus, statusHistory }: {
             </div>
             {index < statusSteps.length - 1 && (
               <div className={`flex-1 h-1 mx-2 rounded-full transition-all ${
-                index < currentIndex ? `bg-${step.color}-500` : "bg-slate-200"
+                index < currentIndex ? `${step.activeLine}` : "bg-slate-200"
               }`} />
             )}
           </div>
