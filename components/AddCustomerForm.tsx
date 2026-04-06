@@ -4,9 +4,8 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { User, Mail, Phone, FileText, Loader2, AlertCircle } from "lucide-react";
+import { Loader2, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { normalizeEmail, normalizeCustomerName } from "@/lib/validation";
 
@@ -16,18 +15,28 @@ interface Props {
   onSuccess: () => void;
 }
 
-const emptyForm = { name: "", last_name: "", email: "", phone: "", notes: "" };
+const emptyForm = {
+  email:             "",
+  name:              "",
+  last_name:         "",
+  last_dropoff_date: "",
+  last_order_number: "",
+  current_rolls:     "",
+  total_rolls:       "",
+  total_dropoffs:    "",
+  notes:             "",
+};
 
 export default function AddCustomerForm({ open, onOpenChange, onSuccess }: Props) {
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading]   = useState(false);
+  const [error, setError]       = useState<string | null>(null);
   const [formData, setFormData] = useState(emptyForm);
 
-  const handleClose = () => {
-    setFormData(emptyForm);
-    setError(null);
-    onOpenChange(false);
-  };
+  const handleClose = () => { setFormData(emptyForm); setError(null); onOpenChange(false); };
+
+  const set = (key: keyof typeof emptyForm) =>
+    (e: React.ChangeEvent<HTMLInputElement>) =>
+      setFormData((prev) => ({ ...prev, [key]: e.target.value }));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,8 +45,8 @@ export default function AddCustomerForm({ open, onOpenChange, onSuccess }: Props
 
     try {
       const normalizedEmail = formData.email ? normalizeEmail(formData.email) : null;
-      const fullName = `${formData.name.trim()} ${formData.last_name?.trim() || ""}`.trim();
-      const normalizedName = normalizeCustomerName(fullName);
+      const fullName        = `${formData.name.trim()} ${formData.last_name.trim()}`.trim();
+      const normalizedName  = normalizeCustomerName(fullName);
 
       // Check for duplicates
       const lookupRes = await fetch(
@@ -51,15 +60,16 @@ export default function AddCustomerForm({ open, onOpenChange, onSuccess }: Props
       }
 
       const payload = {
-        name: formData.name.trim(),
-        last_name: formData.last_name?.trim() || null,
-        normalized_name: normalizedName,
-        email: normalizedEmail,
-        phone: formData.phone?.trim() || null,
-        notes: formData.notes?.trim() || null,
-        total_rolls: 0,
-        total_dropoffs: 0,
-        points: 0,
+        name:              formData.name.trim(),
+        last_name:         formData.last_name.trim() || null,
+        email:             normalizedEmail,
+        normalized_name:   normalizedName,
+        last_dropoff_date: formData.last_dropoff_date || null,
+        last_order_number: formData.last_order_number.trim() || null,
+        current_rolls:     formData.current_rolls ? Number(formData.current_rolls) : null,
+        total_rolls:       formData.total_rolls ? Number(formData.total_rolls) : 0,
+        total_dropoffs:    formData.total_dropoffs ? Number(formData.total_dropoffs) : 0,
+        notes:             formData.notes.trim() || null,
       };
 
       const res = await fetch("/api/customers", {
@@ -73,26 +83,22 @@ export default function AddCustomerForm({ open, onOpenChange, onSuccess }: Props
         throw new Error(data.error || "Failed to create customer");
       }
 
-      toast.success(`Customer ${payload.name} added successfully`);
+      toast.success(`Customer ${payload.name} added`);
       onSuccess();
       handleClose();
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Failed to create customer";
-      setError(message);
+      setError(err instanceof Error ? err.message : "Failed to create customer");
     } finally {
       setLoading(false);
     }
   };
 
-  const field = (key: keyof typeof emptyForm) => ({
-    value: formData[key],
-    onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
-      setFormData((prev) => ({ ...prev, [key]: e.target.value })),
-  });
+  const fieldClass = "border-slate-200 h-9 text-sm";
+  const labelClass = "text-xs text-slate-600 font-medium";
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle className="text-xl font-semibold text-slate-800">Add New Customer</DialogTitle>
         </DialogHeader>
@@ -100,55 +106,79 @@ export default function AddCustomerForm({ open, onOpenChange, onSuccess }: Props
         <form onSubmit={handleSubmit} className="space-y-4 pt-2">
           {error && (
             <div className="p-3 rounded-lg bg-red-50 border border-red-200 flex items-start gap-2">
-              <AlertCircle className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />
-              <div>
-                <p className="text-sm font-medium text-red-800">Error</p>
-                <p className="text-sm text-red-700">{error}</p>
-              </div>
+              <AlertCircle className="w-5 h-5 text-red-600 mt-0.5 shrink-0" />
+              <p className="text-sm text-red-700">{error}</p>
             </div>
           )}
 
-          <div className="space-y-2">
-            <Label htmlFor="name" className="flex items-center gap-2 text-slate-700">
-              <User className="w-3.5 h-3.5" /> First Name *
-            </Label>
-            <Input id="name" {...field("name")} placeholder="John" required className="border-slate-200" />
+          {/* Email — full width */}
+          <div className="space-y-1">
+            <Label htmlFor="email" className={labelClass}>Email</Label>
+            <Input id="email" type="email" value={formData.email} onChange={set("email")}
+              placeholder="customer@email.com" className={fieldClass} />
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="last_name" className="flex items-center gap-2 text-slate-700">
-              <User className="w-3.5 h-3.5" /> Last Name
-            </Label>
-            <Input id="last_name" {...field("last_name")} placeholder="Doe" className="border-slate-200" />
+          {/* First + Last Name */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label htmlFor="name" className={labelClass}>First Name *</Label>
+              <Input id="name" value={formData.name} onChange={set("name")}
+                placeholder="John" required className={fieldClass} />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="last_name" className={labelClass}>Last Name</Label>
+              <Input id="last_name" value={formData.last_name} onChange={set("last_name")}
+                placeholder="Doe" className={fieldClass} />
+            </div>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="email" className="flex items-center gap-2 text-slate-700">
-              <Mail className="w-3.5 h-3.5" /> Email
-            </Label>
-            <Input id="email" type="email" {...field("email")} placeholder="customer@email.com" className="border-slate-200" />
+          {/* Date + Order # */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label htmlFor="last_dropoff_date" className={labelClass}>Date (Last Drop-off)</Label>
+              <Input id="last_dropoff_date" type="date" value={formData.last_dropoff_date}
+                onChange={set("last_dropoff_date")} className={fieldClass} />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="last_order_number" className={labelClass}>Order #</Label>
+              <Input id="last_order_number" value={formData.last_order_number}
+                onChange={set("last_order_number")} placeholder="JE1234"
+                className={`${fieldClass} font-mono`} />
+            </div>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="phone" className="flex items-center gap-2 text-slate-700">
-              <Phone className="w-3.5 h-3.5" /> Phone
-            </Label>
-            <Input id="phone" type="tel" {...field("phone")} placeholder="(555) 123-4567" className="border-slate-200" />
+          {/* Current Rolls + Total Rolls + Drop-off Count */}
+          <div className="grid grid-cols-3 gap-3">
+            <div className="space-y-1">
+              <Label htmlFor="current_rolls" className={labelClass}>Current Rolls</Label>
+              <Input id="current_rolls" type="number" min="0" value={formData.current_rolls}
+                onChange={set("current_rolls")} placeholder="0" className={fieldClass} />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="total_rolls" className={labelClass}>Total Rolls</Label>
+              <Input id="total_rolls" type="number" min="0" value={formData.total_rolls}
+                onChange={set("total_rolls")} placeholder="0" className={fieldClass} />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="total_dropoffs" className={labelClass}>Drop-off Count</Label>
+              <Input id="total_dropoffs" type="number" min="0" value={formData.total_dropoffs}
+                onChange={set("total_dropoffs")} placeholder="0" className={fieldClass} />
+            </div>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="notes" className="flex items-center gap-2 text-slate-700">
-              <FileText className="w-3.5 h-3.5" /> Notes
-            </Label>
-            <Textarea id="notes" {...field("notes")} placeholder="Add any notes about this customer..."
-              className="border-slate-200 resize-none" rows={3} />
+          {/* Notes */}
+          <div className="space-y-1">
+            <Label htmlFor="notes" className={labelClass}>Notes</Label>
+            <Input id="notes" value={formData.notes} onChange={set("notes")}
+              placeholder="Internal notes..." className={fieldClass} />
           </div>
 
-          <div className="flex gap-3 pt-4">
+          <div className="flex gap-3 pt-2">
             <Button type="button" variant="outline" className="flex-1" onClick={handleClose} disabled={loading}>
               Cancel
             </Button>
-            <Button type="submit" disabled={loading || !formData.name.trim()} className="flex-1 bg-amber-600 hover:bg-amber-700 text-white">
+            <Button type="submit" disabled={loading || !formData.name.trim()}
+              className="flex-1 bg-amber-600 hover:bg-amber-700 text-white">
               {loading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Adding...</> : "Add Customer"}
             </Button>
           </div>

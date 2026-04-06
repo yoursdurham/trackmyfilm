@@ -9,7 +9,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   try {
     const { id } = await params;
     const body = await req.json();
-    const customer = await updateCustomer(id, body);
+    // Whitelist updatable fields — prevent id/created_at/etc from being overwritten
+    const { name, last_name, email, notes, total_rolls, total_dropoffs, normalized_name, last_dropoff_date, last_order_number, current_rolls } = body;
+    const customer = await updateCustomer(id, { name, last_name, email, notes, total_rolls, total_dropoffs, normalized_name, last_dropoff_date, last_order_number, current_rolls });
     return NextResponse.json(customer);
   } catch {
     return NextResponse.json({ error: "Failed to update customer" }, { status: 500 });

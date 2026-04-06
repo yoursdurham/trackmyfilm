@@ -10,7 +10,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { User, Calendar, Hash, Layers, Loader2, Film, Mail } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
-import { normalizeEmail, normalizeCustomerName } from "@/lib/validation";
 import type { Customer } from "@/lib/types";
 
 interface Props {
@@ -21,6 +20,31 @@ interface Props {
   selectedCustomer?: Customer | null;
 }
 
+const FILM_STOCKS = [
+  "Kodak Portra 400",
+  "Kodak Portra 800",
+  "Kodak Portra 160",
+  "Kodak Gold 200",
+  "Kodak UltraMax 400",
+  "Kodak ColorPlus 200",
+  "Kodak Ektar 100",
+  "Kodak T-Max 400",
+  "Kodak T-Max 100",
+  "Kodak Tri-X 400",
+  "Fujifilm Superia 400",
+  "Fujifilm Superia 200",
+  "Fujifilm Pro 400H",
+  "Fujifilm Velvia 50",
+  "Fujifilm Provia 100F",
+  "Ilford HP5 Plus 400",
+  "Ilford Delta 400",
+  "Ilford XP2 Super 400",
+  "Cinestill 800T",
+  "Cinestill 400D",
+  "Lomography Color 400",
+  "Other",
+];
+
 const emptyForm = {
   customer_name: "",
   customer_email: "",
@@ -29,6 +53,7 @@ const emptyForm = {
   roll_count: 1,
   film_type: "" as "" | "35mm" | "120",
   film_process: "" as "" | "Color" | "Black & White" | "Both",
+  film_stock: "",
   notes: "",
 };
 
@@ -58,91 +83,55 @@ export default function NewDropoffForm({ open, onOpenChange, onSuccess, customer
 
     setLoading(true);
     try {
-      const normalizedEmail = normalizeEmail(formData.customer_email);
-      const nameParts = formData.customer_name.trim().split(/\s+/);
-      const firstName = nameParts[0];
-      const lastName = nameParts.slice(1).join(" ");
-      const normalizedName = normalizeCustomerName(formData.customer_name);
-
-      // Find or create customer
-      let customer: Customer | null = selectedCustomer ?? null;
-
-      if (!customer) {
-        const lookupRes = await fetch(
-          `/api/customers/lookup?${normalizedEmail ? `email=${encodeURIComponent(normalizedEmail)}` : `name=${encodeURIComponent(normalizedName)}`}`
-        );
-        const found = await lookupRes.json();
-        if (found) {
-          customer = found;
-          toast.success(`Matched existing customer: ${found.name} ${found.last_name || ""}`.trim());
-        }
-      }
-
-      if (!customer) {
-        const res = await fetch("/api/customers", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            name: firstName,
-            last_name: lastName || null,
-            normalized_name: normalizedName,
-            email: normalizedEmail || null,
-            total_rolls: 0,
-            total_dropoffs: 0,
-            points: 0,
-          }),
-        });
-        customer = await res.json();
-        toast.success(`Created new customer: ${customer!.name}`);
-      }
-
-      const newTotalRolls = (customer!.total_rolls || 0) + Number(formData.roll_count);
-      const newTotalDropoffs = (customer!.total_dropoffs || 0) + 1;
-      const now = new Date().toISOString();
-
-      // Create order
-      const orderRes = await fetch("/api/orders", {
+      // Single call — server handles customer lookup/create, order, totals, and email
+      const res = await fetch("/api/dropoff", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          customer_id: customer!.id,
-          customer_email: normalizedEmail,
-          customer_name: formData.customer_name.trim(),
-          order_number: formData.order_number.trim().toUpperCase(),
-          dropoff_date: formData.dropoff_date,
-          roll_count: Number(formData.roll_count),
-          film_type: formData.film_type,
-          film_process: formData.film_process,
-          dropoff_number: newTotalDropoffs,
-          status: "Received by Yours",
-          status_history: [{ status: "Received by Yours", changed_at: now }],
-          received_by_yours_at: now,
-          status_updated_at: now,
-          notes: formData.notes || null,
+          customer_name:  formData.customer_name.trim(),
+          customer_email: formData.customer_email.trim() || undefined,
+          order_number:   formData.order_number.trim(),
+          dropoff_date:   formData.dropoff_date,
+          roll_count:     Number(formData.roll_count),
+          film_type:      formData.film_type,
+          film_process:   formData.film_process,
+          film_stock:     formData.film_stock || undefined,
+          notes:          formData.notes || undefined,
         }),
       });
 
-      const newOrder = await orderRes.json();
+      const data = await res.json() as {
+        success?: boolean;
+        error?: string;
+        customer?: { name: string; isNew: boolean; total_dropoffs: number };
+        email?: { sent: boolean; skipped?: boolean; variant?: string; error?: string };
+      };
 
-      // Update customer totals
-      await fetch(`/api/customers/${customer!.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ total_rolls: newTotalRolls, total_dropoffs: newTotalDropoffs }),
-      });
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to create drop-off");
+      }
 
-      // Send confirmation email
-      if (normalizedEmail) {
-        await fetch("/api/email", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ order_id: newOrder.id, template: "film_drop_received" }),
-        }).catch(() => toast.error("Order created but confirmation email failed"));
+      // Show customer status
+      if (data.customer?.isNew) {
+        toast.success(`New customer created: ${data.customer.name}`);
+      } else if (data.customer) {
+        toast.success(`Matched existing customer: ${data.customer.name} (drop-off #${data.customer.total_dropoffs})`);
+      }
+
+      // Show email status
+      if (data.email?.sent) {
+        const variant = data.email.variant;
+        if (variant === "loyalty_5")  toast.success("🎉 5th visit loyalty email sent!");
+        else if (variant === "loyalty_10") toast.success("🎉 10th visit loyalty email sent!");
+        else toast.success("Confirmation email sent");
+      } else if (data.email?.skipped) {
+        if (data.email.error) toast.info(`No email: ${data.email.error}`);
+      } else if (data.email?.error) {
+        toast.error(`Order created but email failed: ${data.email.error}`);
       }
 
       toast.success("Drop-off created successfully");
       onSuccess?.();
-
       setFormData({ ...emptyForm, dropoff_date: format(new Date(), "yyyy-MM-dd") });
       setSelectedCustomerId(null);
       onOpenChange(false);
@@ -277,6 +266,22 @@ export default function NewDropoffForm({ open, onOpenChange, onSuccess, customer
                 </div>
               ))}
             </div>
+          </div>
+
+          {/* Film stock */}
+          <div className="space-y-2">
+            <Label htmlFor="film_stock" className="text-slate-700">Film Stock</Label>
+            <select
+              id="film_stock"
+              value={formData.film_stock}
+              onChange={(e) => set("film_stock", e.target.value)}
+              className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500"
+            >
+              <option value="">Select film stock (optional)</option>
+              {FILM_STOCKS.map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
           </div>
 
           {/* Notes */}

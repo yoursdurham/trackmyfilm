@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Search, Film, Clock, CheckCircle, Package, Loader2, Users, FileSpreadsheet, LogOut } from "lucide-react";
+import { Plus, Search, Film, Clock, CheckCircle, Package, Loader2, Users, LogOut } from "lucide-react";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
@@ -24,8 +24,6 @@ export default function Dashboard() {
   const [formOpen, setFormOpen] = useState(false);
   const [activeFilter, setActiveFilter] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
-  const [generatingSheet, setGeneratingSheet] = useState(false);
-
   const queryClient = useQueryClient();
 
   const { data: orders = [], isLoading } = useQuery<FilmOrder[]>({
@@ -62,24 +60,6 @@ export default function Dashboard() {
     }
   };
 
-  const handleGenerateSheet = async () => {
-    setGeneratingSheet(true);
-    try {
-      const res = await fetch("/api/sheets/raleigh", { method: "POST" });
-      const data = await res.json();
-      if (data.success) {
-        toast.success(`Sheet created with ${data.orderCount} orders`);
-        window.open(data.spreadsheetUrl, "_blank");
-      } else {
-        toast.error(data.error || "Failed to create sheet");
-      }
-    } catch {
-      toast.error("Failed to create sheet");
-    } finally {
-      setGeneratingSheet(false);
-    }
-  };
-
   const filteredOrders = orders.filter((order) => {
     const matchesFilter = activeFilter === "all" || order.status === activeFilter;
     const matchesSearch = !searchQuery ||
@@ -109,6 +89,11 @@ export default function Dashboard() {
               </div>
             </div>
             <div className="flex items-center gap-2">
+              <Link href="/tracking">
+                <Button variant="outline" className="border-slate-200">
+                  <Search className="w-4 h-4 mr-2" /> Track Order
+                </Button>
+              </Link>
               <Link href="/customers">
                 <Button variant="outline" className="border-slate-200">
                   <Users className="w-4 h-4 mr-2" /> Customers
@@ -119,13 +104,6 @@ export default function Dashboard() {
                   <LogOut className="w-4 h-4" />
                 </Button>
               </form>
-              <Button variant="outline" onClick={handleGenerateSheet} disabled={generatingSheet}
-                className="border-emerald-200 text-emerald-700 hover:bg-emerald-50">
-                {generatingSheet
-                  ? <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  : <FileSpreadsheet className="w-4 h-4 mr-2" />}
-                Raleigh Sheet
-              </Button>
               <Button onClick={() => setFormOpen(true)}
                 className="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white shadow-lg shadow-amber-500/25">
                 <Plus className="w-4 h-4 mr-2" /> New Drop-off

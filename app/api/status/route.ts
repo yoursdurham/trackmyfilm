@@ -7,7 +7,7 @@
 import { NextResponse } from "next/server";
 import { getOrderById, updateOrder } from "@/lib/db";
 import { STATUS_TEMPLATE_MAP, STATUS_FLOW } from "@/lib/constants";
-import { isValidTransition, isKnownStatus } from "@/lib/validation";
+import { isValidTransition, isKnownStatus, isValidWetransferLink, ensureHttps } from "@/lib/validation";
 import { requireAuth } from "@/lib/api-auth";
 import type { OrderStatus, StatusHistoryEntry } from "@/lib/types";
 
@@ -53,12 +53,18 @@ export async function POST(req: Request) {
       }, { status: 422 });
     }
 
-    // Require WeTransfer link for Scans Sent
+    // Require a valid WeTransfer link for Scans Sent
     if (new_status === "Scans Sent") {
       const finalLink = wetransfer_link || order.wetransfer_link;
       if (!finalLink) {
         return NextResponse.json(
           { error: "WeTransfer link is required for Scans Sent status" },
+          { status: 400 }
+        );
+      }
+      if (!isValidWetransferLink(finalLink)) {
+        return NextResponse.json(
+          { error: "WeTransfer link must be from wetransfer.com" },
           { status: 400 }
         );
       }
@@ -81,7 +87,8 @@ export async function POST(req: Request) {
     if (new_status === "Received at Lab")   updateData.at_lab_at = now;
     if (new_status === "Scans Sent") {
       updateData.scans_sent_at = now;
-      updateData.wetransfer_link = wetransfer_link || order.wetransfer_link;
+      const rawLink = wetransfer_link || order.wetransfer_link;
+      updateData.wetransfer_link = rawLink ? ensureHttps(rawLink) : rawLink;
     }
 
     await updateOrder(order_id, updateData);
@@ -95,7 +102,10 @@ export async function POST(req: Request) {
     try {
       const emailRes = await fetch(new URL("/api/email", req.url), {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Cookie": req.headers.get("cookie") || "",
+        },
         body: JSON.stringify({ order_id, template }),
       });
       const emailData = await emailRes.json();

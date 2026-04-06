@@ -10,12 +10,13 @@ export interface Customer {
   name: string;
   last_name?: string;
   email?: string;
-  phone?: string;
   normalized_name?: string;
   total_rolls: number;
   total_dropoffs: number;
-  points: number;
   notes?: string;
+  last_dropoff_date?: string;  // YYYY-MM-DD
+  last_order_number?: string;
+  current_rolls?: number;
   created_at?: string;
 }
 
@@ -30,6 +31,7 @@ export interface FilmOrder {
   status_updated_at: string;
   film_type: "35mm" | "120";
   film_process: "Color" | "Black & White" | "Both";
+  film_stock?: string; // e.g. "Kodak Portra 400", "Fujifilm 400H"
   roll_count: number;
   dropoff_date: string; // YYYY-MM-DD
   dropoff_number: number;

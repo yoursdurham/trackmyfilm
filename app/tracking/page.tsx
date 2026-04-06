@@ -5,9 +5,10 @@ import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
-import { Film, Search, Loader2, Calendar, Layers, Package, CheckCircle, Clock, Download, ExternalLink } from "lucide-react";
+import { Film, Search, Loader2, Calendar, Layers, Package, CheckCircle, Clock, Download, ExternalLink, ArrowLeft } from "lucide-react";
 import { format } from "date-fns";
 import { motion, AnimatePresence } from "framer-motion";
+import Link from "next/link";
 import type { FilmOrder } from "@/lib/types";
 
 const statusSteps = [
@@ -16,14 +17,25 @@ const statusSteps = [
   { status: "Scans Sent",        icon: CheckCircle, color: "emerald" },
 ] as const;
 
-function OrderTimeline({ currentStatus }: { currentStatus: string }) {
+function OrderTimeline({ currentStatus, statusHistory }: {
+  currentStatus: string;
+  statusHistory?: { status: string; changed_at: string }[];
+}) {
   const currentIndex = statusSteps.findIndex((s) => s.status === currentStatus);
+
+  const getTimestamp = (status: string) => {
+    if (!statusHistory) return null;
+    const entry = [...statusHistory].reverse().find((h) => h.status === status);
+    return entry ? format(new Date(entry.changed_at), "MMM d, h:mm a") : null;
+  };
+
   return (
     <div className="flex items-center justify-between max-w-2xl mx-auto mb-8">
       {statusSteps.map((step, index) => {
         const Icon = step.icon;
         const isActive = index <= currentIndex;
         const isCurrent = index === currentIndex;
+        const timestamp = getTimestamp(step.status);
         return (
           <div key={step.status} className="flex items-center flex-1">
             <div className="flex flex-col items-center">
@@ -35,6 +47,9 @@ function OrderTimeline({ currentStatus }: { currentStatus: string }) {
               <p className={`text-xs mt-2 text-center max-w-[100px] ${
                 isActive ? `text-${step.color}-700 font-medium` : "text-slate-400"
               }`}>{step.status}</p>
+              {timestamp && (
+                <p className="text-xs text-slate-400 mt-0.5 text-center max-w-[100px]">{timestamp}</p>
+              )}
             </div>
             {index < statusSteps.length - 1 && (
               <div className={`flex-1 h-1 mx-2 rounded-full transition-all ${
@@ -83,6 +98,13 @@ export default function Tracking() {
     <div className="min-h-screen bg-gradient-to-br from-stone-50 via-orange-50/30 to-amber-50/20">
       <header className="bg-white/80 backdrop-blur-lg border-b border-stone-200/50">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          <div className="flex items-center gap-3 mb-4">
+            <Link href="/dashboard">
+              <Button variant="ghost" size="icon">
+                <ArrowLeft className="w-5 h-5" />
+              </Button>
+            </Link>
+          </div>
           <div className="flex items-center gap-3 mb-2">
             <img
               src="https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/6978dcf349e3b02b595cdfac/635085959_YoursSingleNegativeLetterLogocolorcreambackground.png"
@@ -150,6 +172,9 @@ export default function Tracking() {
           ) : orders.length > 0 && (
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}
               className="space-y-6">
+              {customerName && (
+                <p className="text-slate-600 font-medium">Showing orders for <strong>{customerName}</strong></p>
+              )}
               {orders.map((order) => (
                 <Card key={order.id} className="bg-white shadow-md border-0 overflow-hidden">
                   <CardContent className="p-6">
@@ -165,7 +190,7 @@ export default function Tracking() {
                       }`}>{order.status}</div>
                     </div>
 
-                    <OrderTimeline currentStatus={order.status} />
+                    <OrderTimeline currentStatus={order.status} statusHistory={order.status_history} />
 
                     <div className="grid grid-cols-2 gap-4 pt-6 border-t border-slate-100">
                       <div className="flex items-center gap-3">
@@ -239,8 +264,8 @@ export default function Tracking() {
 
         <div className="text-center mt-8 text-sm text-slate-600">
           Please reach out to{" "}
-          <a href="mailto:hello@yoursdurham.com" className="text-amber-600 hover:text-amber-700 font-medium">
-            hello@yoursdurham.com
+          <a href={`mailto:${process.env.NEXT_PUBLIC_CONTACT_EMAIL || "hello@yoursdurham.com"}`} className="text-amber-600 hover:text-amber-700 font-medium">
+            {process.env.NEXT_PUBLIC_CONTACT_EMAIL || "hello@yoursdurham.com"}
           </a>{" "}
           if you have any questions regarding the status of your order.
         </div>

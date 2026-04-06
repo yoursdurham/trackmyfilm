@@ -8,19 +8,20 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
-import { Film, Loader2, AlertCircle } from "lucide-react";
+import { Film, Loader2, AlertCircle, CheckCircle } from "lucide-react";
 
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  // Only allow relative paths — prevents open redirect to external domains
   const raw = searchParams.get("redirectTo") || "";
   const redirectTo = raw.startsWith("/") && !raw.startsWith("//") ? raw : "/dashboard";
 
+  const [mode, setMode] = useState<"login" | "forgot">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -40,6 +41,75 @@ function LoginForm() {
     router.refresh();
   };
 
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+    setSuccess(null);
+
+    const supabase = createClient();
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/login/update-password`,
+    });
+
+    setLoading(false);
+    if (error) {
+      setError(error.message);
+      return;
+    }
+    setSuccess("Check your email for a password reset link.");
+  };
+
+  if (mode === "forgot") {
+    return (
+      <form onSubmit={handleForgotPassword} className="space-y-4">
+        <div className="space-y-2">
+          <Label htmlFor="email" className="text-slate-700">Email</Label>
+          <Input
+            id="email"
+            type="email"
+            placeholder="admin@yoursdurham.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            autoFocus
+            className="border-slate-200"
+          />
+        </div>
+
+        {error && (
+          <div className="flex items-start gap-2 p-3 rounded-lg bg-red-50 border border-red-200">
+            <AlertCircle className="w-4 h-4 text-red-600 mt-0.5 flex-shrink-0" />
+            <p className="text-sm text-red-700">{error}</p>
+          </div>
+        )}
+
+        {success && (
+          <div className="flex items-start gap-2 p-3 rounded-lg bg-emerald-50 border border-emerald-200">
+            <CheckCircle className="w-4 h-4 text-emerald-600 mt-0.5 flex-shrink-0" />
+            <p className="text-sm text-emerald-700">{success}</p>
+          </div>
+        )}
+
+        <Button
+          type="submit"
+          disabled={loading || !email}
+          className="w-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white shadow-md shadow-amber-500/25"
+        >
+          {loading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Sending...</> : "Send reset link"}
+        </Button>
+
+        <button
+          type="button"
+          onClick={() => { setMode("login"); setError(null); setSuccess(null); }}
+          className="w-full text-sm text-slate-500 hover:text-amber-600 text-center"
+        >
+          Back to sign in
+        </button>
+      </form>
+    );
+  }
+
   return (
     <form onSubmit={handleLogin} className="space-y-4">
       <div className="space-y-2">
@@ -57,7 +127,16 @@ function LoginForm() {
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="password" className="text-slate-700">Password</Label>
+        <div className="flex items-center justify-between">
+          <Label htmlFor="password" className="text-slate-700">Password</Label>
+          <button
+            type="button"
+            onClick={() => { setMode("forgot"); setError(null); }}
+            className="text-xs text-amber-600 hover:text-amber-700"
+          >
+            Forgot password?
+          </button>
+        </div>
         <Input
           id="password"
           type="password"
@@ -81,11 +160,7 @@ function LoginForm() {
         disabled={loading || !email || !password}
         className="w-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white shadow-md shadow-amber-500/25"
       >
-        {loading ? (
-          <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Signing in...</>
-        ) : (
-          "Sign in"
-        )}
+        {loading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Signing in...</> : "Sign in"}
       </Button>
     </form>
   );
@@ -114,13 +189,6 @@ export default function LoginPage() {
             </Suspense>
           </CardContent>
         </Card>
-
-        <p className="text-center text-xs text-slate-400 mt-6">
-          Customer order tracking is at{" "}
-          <a href="/tracking" className="text-amber-600 hover:text-amber-700 font-medium">
-            /tracking
-          </a>
-        </p>
       </div>
     </div>
   );
