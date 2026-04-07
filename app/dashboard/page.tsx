@@ -14,10 +14,10 @@ import NewDropoffForm from "@/components/NewDropoffForm";
 import type { FilmOrder, Customer } from "@/lib/types";
 
 const statusFilters = [
-  { value: "all",                label: "All",               icon: Film },
-  { value: "Received by Yours",  label: "Received by Yours", icon: Clock },
-  { value: "Received at Lab",    label: "Received at Lab",   icon: Package },
-  { value: "Scans Sent",         label: "Scans Sent",        icon: CheckCircle },
+  { value: "all",                label: "All",      mobileLabel: "All",    icon: Film },
+  { value: "Received by Yours",  label: "Received", mobileLabel: "Recvd",  icon: Clock },
+  { value: "Received at Lab",    label: "At Lab",   mobileLabel: "Lab",    icon: Package },
+  { value: "Scans Sent",         label: "Sent",     mobileLabel: "Sent",   icon: CheckCircle },
 ];
 
 export default function Dashboard() {
@@ -89,15 +89,17 @@ export default function Dashboard() {
                 <p className="text-xs text-slate-500 hidden sm:block">Drop-off Tracker</p>
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 sm:gap-2">
               <Link href="/tracking">
-                <Button variant="outline" className="border-slate-200">
-                  <Search className="w-4 h-4 mr-2" /> Track Order
+                <Button variant="outline" size="icon" className="border-slate-200 sm:w-auto sm:px-3" title="Track Order">
+                  <Search className="w-4 h-4" />
+                  <span className="hidden sm:inline ml-2">Track Order</span>
                 </Button>
               </Link>
               <Link href="/customers">
-                <Button variant="outline" className="border-slate-200">
-                  <Users className="w-4 h-4 mr-2" /> Customers
+                <Button variant="outline" size="icon" className="border-slate-200 sm:w-auto sm:px-3" title="Customers">
+                  <Users className="w-4 h-4" />
+                  <span className="hidden sm:inline ml-2">Customers</span>
                 </Button>
               </Link>
               <form action="/api/auth/logout" method="POST">
@@ -107,7 +109,9 @@ export default function Dashboard() {
               </form>
               <Button onClick={() => setFormOpen(true)}
                 className="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white shadow-lg shadow-amber-500/25">
-                <Plus className="w-4 h-4 mr-2" /> New Drop-off
+                <Plus className="w-4 h-4" />
+                <span className="hidden sm:inline ml-2">New Drop-off</span>
+                <span className="sm:hidden ml-1 text-sm font-medium">New</span>
               </Button>
             </div>
           </div>
@@ -117,13 +121,13 @@ export default function Dashboard() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <div className="grid grid-cols-3 gap-3 mb-6">
           {[
-            { label: "Received by Yours", count: statusCounts["Received by Yours"], color: "blue" },
-            { label: "Received at Lab",   count: statusCounts["Received at Lab"],   color: "amber" },
-            { label: "Scans Sent",        count: statusCounts["Scans Sent"],        color: "emerald" },
+            { label: "Received by Yours", count: statusCounts["Received by Yours"], labelClass: "text-blue-600" },
+            { label: "Received at Lab",   count: statusCounts["Received at Lab"],   labelClass: "text-amber-600" },
+            { label: "Scans Sent",        count: statusCounts["Scans Sent"],        labelClass: "text-emerald-600" },
           ].map((stat) => (
-            <div key={stat.label} className="bg-white rounded-xl p-4 shadow-sm border border-stone-100">
+            <div key={stat.label} className="bg-white rounded-xl p-3 sm:p-4 shadow-sm border border-stone-100">
               <p className="text-2xl font-bold text-slate-800">{stat.count}</p>
-              <p className={`text-sm text-${stat.color}-600`}>{stat.label}</p>
+              <p className={`text-xs sm:text-sm leading-snug ${stat.labelClass}`}>{stat.label}</p>
             </div>
           ))}
         </div>
@@ -132,8 +136,10 @@ export default function Dashboard() {
           <Tabs value={activeFilter} onValueChange={setActiveFilter} className="w-full sm:w-auto">
             <TabsList className="border border-slate-200 bg-white h-9">
               {statusFilters.map((f) => (
-                <TabsTrigger key={f.value} value={f.value} className="flex items-center gap-1.5 text-xs">
-                  <f.icon className="w-3.5 h-3.5" /> {f.label}
+                <TabsTrigger key={f.value} value={f.value} className="flex items-center gap-1 text-xs px-2 sm:px-3">
+                  <f.icon className="w-3.5 h-3.5 shrink-0" />
+                  <span className="hidden sm:inline">{f.label}</span>
+                  <span className="sm:hidden">{f.mobileLabel}</span>
                 </TabsTrigger>
               ))}
             </TabsList>

@@ -40,10 +40,10 @@ function OrderTimeline({ currentStatus, statusHistory }: {
         return (
           <div key={step.status} className="flex items-center flex-1">
             <div className="flex flex-col items-center">
-              <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${
+              <div className={`w-9 h-9 sm:w-12 sm:h-12 rounded-full flex items-center justify-center transition-all ${
                 isActive ? `${step.activeBg} shadow-lg` : "bg-slate-200"
               } ${isCurrent ? `ring-4 ${step.activeRing}` : ""}`}>
-                <Icon className={`w-6 h-6 ${isActive ? "text-white" : "text-slate-400"}`} />
+                <Icon className={`w-4 h-4 sm:w-6 sm:h-6 ${isActive ? "text-white" : "text-slate-400"}`} />
               </div>
               <p className={`text-xs mt-2 text-center max-w-[100px] ${
                 isActive ? `${step.activeText} font-medium` : "text-slate-400"
@@ -139,14 +139,14 @@ export default function Tracking() {
                   className="pl-11 h-12 text-lg" />
               </div>
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-col sm:flex-row gap-2">
               <Button onClick={() => handleSearch("order")} disabled={!searchTerm || isLoading}
-                className="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600">
+                className="flex-1 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600">
                 {isLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Search className="w-4 h-4 mr-2" />}
                 Track by Order #
               </Button>
               <Button onClick={() => handleSearch("email")} disabled={!searchTerm || isLoading}
-                variant="outline" className="border-amber-300 text-amber-700 hover:bg-amber-50">
+                variant="outline" className="flex-1 border-amber-300 text-amber-700 hover:bg-amber-50">
                 {isLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Search className="w-4 h-4 mr-2" />}
                 Track by Email
               </Button>
@@ -193,7 +193,7 @@ export default function Tracking() {
 
                     <OrderTimeline currentStatus={order.status} statusHistory={order.status_history} />
 
-                    <div className="grid grid-cols-2 gap-4 pt-6 border-t border-slate-100">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-6 border-t border-slate-100">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center">
                           <Calendar className="w-5 h-5 text-slate-600" />
