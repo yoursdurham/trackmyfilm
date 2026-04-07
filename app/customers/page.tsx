@@ -176,7 +176,7 @@ export default function Customers() {
                 <Button variant="ghost" size="icon" className="mr-1"><ArrowLeft className="w-5 h-5" /></Button>
               </Link>
               <img
-                src="https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/6978dcf349e3b02b595cdfac/635085959_YoursSingleNegativeLetterLogocolorcreambackground.png"
+                src="/logo.png"
                 alt="Yours Durham" className="w-9 h-9 rounded-xl object-cover"
               />
               <div>

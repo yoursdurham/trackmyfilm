@@ -1,51 +1,47 @@
-# TrackMyFilm — Owner Guide
+# TrackMyFilm — Owner Guide & Documentation
 
 > Last updated: April 2026
-
----
-
-## What is this?
-
-TrackMyFilm is a private system for **Yours Durham** to track film orders from drop-off to delivery. Customers can check the status of their film online. You log in as staff to manage everything.
+> Built for Yours Durham by Daniel Matias
 
 ---
 
 ## How to Log In
 
-Go to your app URL and sign in with:
+Go to **trackmyfilm.com** and sign in with:
 
 - **Email:** `hello@yoursdurham.com`
 - **Password:** `YoursDurham2026!`
 
-If you ever forget the password, click **"Forgot password?"** on the login page and a reset link will be sent to `hello@yoursdurham.com`.
+**Forgot your password?**
+Click "Forgot password?" on the login page → enter your email → check `hello@yoursdurham.com` for a reset link → click it → set a new password. You'll be redirected to the dashboard automatically.
 
 ---
 
 ## The Three Pages
 
 ### 1. Dashboard (`/dashboard`)
-This is the main page. It shows every film order as a card.
-
-- You can filter by status (Received by Yours / Received at Lab / Scans Sent)
-- You can search by customer name or order number
-- Click **New Drop-off** to log a new film order
+The main page. Every film order appears as a card.
+- Filter orders by status using the tabs at the top
+- Search by customer name or order number
+- Click **New Drop-off** to log a new order
+- Click **Update Status** on any card to advance the order
 
 ### 2. Customers (`/customers`)
-A full list of all 529+ customers imported from your spreadsheet.
-
+A full table of all 529+ customers.
 - Search by name, email, or order number
-- Click any row to expand it and edit their details
+- Click any row to expand it and edit their details inline
 - All edits save automatically when you press Enter or click away
+- Delete a customer using the button in the expanded row
 
 ### 3. Tracking (`/tracking`)
-Customers use this to look up the status of their film by entering their order number or email address.
+What customers see when they look up their order. They enter their order number or email address and see the current status and timeline.
 
 ---
 
 ## The Full Workflow — Step by Step
 
 ### Step 1 — Customer drops off film
-You open the dashboard and click **New Drop-off**. Fill in:
+Click **New Drop-off** on the dashboard. Fill in:
 - Customer name and email
 - Order number (e.g. `JE1234`)
 - Drop-off date
@@ -53,20 +49,20 @@ You open the dashboard and click **New Drop-off**. Fill in:
 - Film type (35mm or 120)
 - Film process (Color, Black & White, or Both)
 - Film stock (optional)
-- Notes (optional, internal only — not shown to customer)
+- Notes (optional — internal only, never shown to customers)
 
-The system will:
-- Find the customer if they already exist (by email or name)
-- Create a new customer record if they don't
+The system will automatically:
+- Find the customer if they already exist (matched by email first, then name)
+- Create a new customer record if they're new
 - Log the order with status **"Received by Yours"**
-- Send the customer a confirmation email automatically
+- Send a confirmation email to the customer
 
-> **Email toggle:** There is a checkbox at the bottom of the form — "Send confirmation email". It is on by default. Uncheck it if you do not want to send an email for a particular drop-off.
+> **Email toggle:** A checkbox at the bottom of the form says "Send confirmation email." It is on by default. Uncheck it if you don't want to send an email for a specific drop-off (e.g. if the customer has no email, or you're logging an old order).
 
 ---
 
-### Step 2 — You drive film to the lab in Raleigh
-On the dashboard, find the order card and click **Update Status → Received at Lab**.
+### Step 2 — Drive film to the lab in Raleigh
+Find the order card on the dashboard. Click **Update Status → Received at Lab**.
 
 The system will:
 - Update the order status
@@ -75,137 +71,221 @@ The system will:
 ---
 
 ### Step 3 — Lab sends scans back
-When you receive the WeTransfer link from the lab, go to the order card and click **Update Status → Scans Sent**.
+When you receive the WeTransfer link from the lab, click **Update Status → Scans Sent** on the order card.
 
-A box will appear asking you to paste the WeTransfer download link. Once you confirm:
-- The link is saved to the order permanently
+A box will appear asking you to paste the WeTransfer download link. Once confirmed:
+- The link is saved permanently to the order
 - The customer receives an email with their download link
-- The order card shows a **Copy link** and **Open** button for your reference
+- The order card shows **Copy link** and **Open** buttons for your reference
 
-> The WeTransfer link is stored in the database. You can always go back to the order card to copy or open it again later.
+> The WeTransfer link is stored in the database forever. You can always go back to the order card to copy or open it later.
 
 ---
 
 ## Emails — What Gets Sent and When
 
-There are exactly 3 emails, one per status change:
+There are exactly 3 emails, one per status:
 
-| When | Email sent | What it says |
-|------|-----------|--------------|
-| New drop-off logged | Confirmation | "We've got your film, here's your order info" |
-| Status → Received at Lab | Lab update | "Your film is at the lab in Raleigh" |
-| Status → Scans Sent | Scans ready | "Your scans are ready — download link inside" |
+| Status | Email | When it sends |
+|--------|-------|--------------|
+| Received by Yours | Confirmation | Automatically when drop-off is logged |
+| Received at Lab | Lab update | When you click "Update Status → Received at Lab" |
+| Scans Sent | Download link | When you click "Update Status → Scans Sent" and paste WeTransfer link |
 
-**No email is sent if the customer has no email address on file.**
+**No email is sent if:**
+- The customer has no email address on file
+- The "Send confirmation email" checkbox was unchecked when logging the drop-off
 
-**If an email fails to send**, a red "⚠️ Email failed to send" banner appears on the order card with a **Retry** button. Click it to try again.
+**If an email fails:** A red "⚠️ Email failed to send" banner appears on the order card with a **Retry** button. Click it to try again.
 
 ---
 
-## What You Can Change
+## Customizing Email Templates
 
-### Email templates
-All 3 email templates are managed in your **Resend dashboard** (resend.com). Log in there and go to Templates. You can edit:
-- The subject line
-- The body text and layout
-- The variables used: `{{first_name}}`, `{{order_number}}`, `{{roll_count}}`, `{{wetransfer_link}}`
+All 3 email templates are managed entirely in your **Resend dashboard** at resend.com. Log in → Templates. You can change anything about them without touching any code.
 
-> Do not rename the variables (e.g. do not change `{{first_name}}` to `{{name}}`) — the system fills these in automatically and the names must match exactly.
+### What you can freely change
+- Subject line
+- Body text, wording, tone
+- Layout and design
+- Logo, colors, fonts
+- Any static content (turnaround times, store hours, policies, etc.)
 
-### Customer records
-On the Customers page, click any row to edit:
-- Email, First Name, Last Name
-- Last drop-off date, Order number, Current rolls, Total rolls, Drop-off count
-- Notes (internal, never shown to customers)
+### Variables — do not rename these
+The system automatically fills in these placeholders when sending. The names must stay exactly as written:
 
-### Order status
-On the Dashboard, use the **Update Status** dropdown on any order card. You can also move a status backward (e.g. from Received at Lab back to Received by Yours) — it will ask you to confirm first.
+| Variable | What it inserts |
+|----------|----------------|
+| `{{first_name}}` | Customer's first name (e.g. "Sarah") |
+| `{{order_number}}` | The order number (e.g. "JE1234") |
+| `{{roll_count}}` | Number of rolls (e.g. "3") |
+| `{{wetransfer_link}}` | The WeTransfer download URL (scans_sent email only) |
+
+> If you rename a variable — for example changing `{{first_name}}` to `{{name}}` — the email will send with the literal text `{{name}}` showing instead of the customer's actual name. Don't rename them; only change the text around them.
+
+---
+
+### The `scans_sent` Template — Important
+
+This template **must include `{{wetransfer_link}}`** somewhere in the body, otherwise customers won't receive their download link. Here is a complete example you can use as a starting point:
+
+---
+
+**Subject:** Your scans are ready — download here!
+
+**Body:**
+```
+Hey {{first_name}}!
+
+Great news — your scans for order #{{order_number}} ({{roll_count}} rolls) are ready.
+
+Download your scans here:
+{{wetransfer_link}}
+
+The link expires after 7 days so download soon.
+
+Your negatives are being held at our Durham store for 60 days after processing. If you'd like them back, just reply to this email or stop by.
+
+Thanks for developing with us!
+— The Yours Durham team
+```
+
+---
+
+Feel free to change the wording completely. Just keep `{{wetransfer_link}}` in there so the link comes through.
+
+**After editing:** Click **Publish** in the Resend template editor. Templates in "Draft" status will not send to customers.
+
+### Suggested subject lines
+
+| Template | Suggested subject |
+|----------|------------------|
+| `film_drop_received` | We've got your film! |
+| `film_at_lab` | Your film is at the lab |
+| `scans_sent` | Your scans are ready — download here! |
+
+---
+
+## What You Can Change (Summary)
+
+| What | Where |
+|------|-------|
+| Email content, subject, design | Resend dashboard → Templates |
+| Customer details (name, email, notes, rolls) | Customers page → click any row |
+| Order status | Dashboard → card → Update Status |
+| WeTransfer link on an order | Dashboard → card → Update Status → Scans Sent |
+| Password | Login page → Forgot password |
 
 ---
 
 ## What You Cannot Change (Without a Developer)
 
-- The 3 status names ("Received by Yours", "Received at Lab", "Scans Sent") — these are hardcoded in the system
-- The order of the statuses — they always go in the same sequence
+- The 3 status names — they are fixed in the system
+- The order of statuses — always Received by Yours → Lab → Scans Sent
 - Adding new status types
-- The WeTransfer link validation — it only accepts links from `wetransfer.com`
+- The WeTransfer link validation (only accepts wetransfer.com links)
 - The login email — only `hello@yoursdurham.com` has access
+- The tracking page design
+
+---
+
+## The Customer Table — Column Reference
+
+| Column | What it means |
+|--------|--------------|
+| Email | Used for sending emails and finding existing customers |
+| First Name | First name only — do not put full name here |
+| Last Name | Last name only |
+| Date | Date of their most recent drop-off |
+| Order # | Most recent order number |
+| Current Rolls | Rolls in the most recent drop-off |
+| Total Rolls | All rolls across every drop-off ever |
+| Drop-off Count | Total number of drop-offs from this customer |
 
 ---
 
 ## Customer Deduplication — How It Works
 
-When you log a new drop-off, the system tries to find an existing customer before creating a new one:
+When logging a new drop-off, the system finds or creates the customer automatically:
 
-1. It searches by **email address** first (exact match, case-insensitive)
-2. If no email match, it searches by **name** (case-insensitive, ignores extra spaces)
-3. If still no match → a new customer is created automatically
+1. Searches by **email** first (exact match, case-insensitive)
+2. If no email match, searches by **name** (case-insensitive, ignores extra spaces)
+3. If no match found → creates a new customer
 
 This means:
-- If you enter "John Smith" and there's already a "john smith" in the system, it will link to the existing customer — **not create a duplicate**
-- If the same person drops off film 5 times, their total drop-off count and total rolls will accumulate correctly
-
-> **Important:** Enter the customer's email whenever possible. Name matching is less reliable — "Jon Smith" and "John Smith" would be treated as two different people.
-
----
-
-## The Customer Table — What Each Column Means
-
-| Column | What it is |
-|--------|-----------|
-| Email | Customer's email address — used for sending emails and finding existing customers |
-| First Name | First name only |
-| Last Name | Last name only (do not put full name in First Name) |
-| Date | Date of their most recent drop-off |
-| Order # | Most recent order number |
-| Current Rolls | Number of rolls in the most recent drop-off |
-| Total Rolls | All rolls across every drop-off ever |
-| Drop-off Count | Total number of times this customer has dropped off film |
+- "John Smith" and "john smith" are treated as the same person
+- "Jon Smith" and "John Smith" are treated as **different** people
+- Always enter the customer's email when possible — it's the most reliable way to avoid duplicates
 
 ---
 
 ## The WeTransfer Link
 
-When you update an order to **Scans Sent**, the system asks for the WeTransfer download link from the lab. This link is:
+When you update an order to "Scans Sent" and paste the WeTransfer link:
+- It is **saved permanently** to the order in the database
+- It is **sent in the email** to the customer automatically
+- It appears as **Copy link / Open** buttons on the order card
+- It can be accessed any time from the Customers page → expand a customer → order history
 
-- **Saved permanently** to the order in the database
-- **Sent automatically** in the scans email to the customer
-- **Available anytime** on the order card (Copy link / Open buttons)
-- **Accessible** from the customer's expanded row in the Customers page
-
-> WeTransfer links expire after 7 days. If a customer misses the link, you can go to the order card and copy it to send manually — but if the WeTransfer itself has expired, you'll need to contact the lab.
+> WeTransfer links expire after 7 days. If a customer misses it, you can copy the link from the order card and send it manually — but if the WeTransfer itself has expired, you'll need to contact the lab for a new one.
 
 ---
 
 ## Frequently Asked Questions
 
 **What if I log a drop-off with the wrong order number?**
-Delete the order from the dashboard (trash icon on the card) and re-create it with the correct number. Order numbers must be unique — the system will reject a duplicate.
+Delete the order using the trash icon on the card, then re-create it with the correct number. Order numbers must be unique — duplicates are rejected.
 
 **What if a customer has no email?**
-The drop-off is still logged and saved. No email will be sent. You can add their email later on the Customers page, but it won't retroactively send any missed emails.
+The drop-off is still logged. No email will be sent. You can add their email later on the Customers page, but it won't send any previously missed emails.
 
 **Can two customers have the same name?**
-Yes — if they have different email addresses the system will keep them as separate records. If they have no email and the same name, the system will treat them as the same person. Use notes to distinguish them.
+Yes — if they have different email addresses they'll be kept as separate records. If they have the same name and no email, the system treats them as one person. Use the Notes field to distinguish them.
 
 **What if the email fails and Retry doesn't work?**
-The most common reason is the sending domain isn't verified in Resend. Contact your developer to check the Resend dashboard.
+Contact your developer. The most common cause is the sending domain not being verified in Resend.
 
-**Can I change what the tracking page looks like?**
-Not without a developer. The tracking page is part of the app code.
+**Can I change the tracking page design?**
+Not without a developer — it's part of the app code.
+
+**How do I change the password?**
+Go to the login page → click "Forgot password?" → enter `hello@yoursdurham.com` → check your email for the reset link.
 
 ---
 
-## Summary
+## Developer Notes (Daniel)
+
+### Vercel — Environment Variables
+All of these must be set in **Vercel → Project → Settings → Environment Variables**:
+
+| Variable | Value |
+|----------|-------|
+| `NEXT_PUBLIC_SUPABASE_URL` | From Supabase project settings |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | From Supabase project settings |
+| `SUPABASE_SERVICE_ROLE_KEY` | From Supabase project settings |
+| `RESEND_API_KEY` | From Resend dashboard |
+| `RESEND_FROM_EMAIL` | `Yours Durham <no-reply@trackmyfilm.com>` |
+| `RESEND_TEMPLATE_FILM_DROP_RECEIVED` | `42f3637c-6e35-4229-bf5e-cf212180d9ef` |
+| `RESEND_TEMPLATE_FILM_AT_LAB` | `b11e69ed-486d-4b7e-9eb3-0209e3baea91` |
+| `RESEND_TEMPLATE_SCANS_SENT` | `9a4f158b-0edd-425d-967e-3da8004bb978` |
+| `NEXT_PUBLIC_APP_URL` | `https://trackmyfilm.com` |
+| `REPLY_TO_EMAIL` | `hello@yoursdurham.com` |
+| `NEXT_PUBLIC_CONTACT_EMAIL` | `hello@yoursdurham.com` |
+
+### Custom Domain
+- Vercel: `trackmyfilm.com` — A record pointing to `76.76.21.21`, CNAME `www` → `cname.vercel-dns.com`
+- Resend: `trackmyfilm.com` already verified (DKIM + SPF both green)
+
+---
+
+## Workflow Summary
 
 ```
 Customer drops off film
         ↓
-You log it → "Received by Yours" → Email 1 sent to customer
+Log new drop-off → Status: "Received by Yours" → Email 1 sent
         ↓
-You drive film to Raleigh → "Received at Lab" → Email 2 sent to customer
+Drive film to Raleigh → Update Status: "Received at Lab" → Email 2 sent
         ↓
-Lab sends scans → You paste WeTransfer link → "Scans Sent" → Email 3 sent with download link
+Lab sends WeTransfer link → Update Status: "Scans Sent" → paste link → Email 3 sent with download link
 ```
-
-That's the entire workflow. Everything else (customer records, email retries, search, editing) is for managing and correcting data as needed.

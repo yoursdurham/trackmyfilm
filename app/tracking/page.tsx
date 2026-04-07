@@ -108,7 +108,7 @@ export default function Tracking() {
           </div>
           <div className="flex items-center gap-3 mb-2">
             <img
-              src="https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/6978dcf349e3b02b595cdfac/635085959_YoursSingleNegativeLetterLogocolorcreambackground.png"
+              src="/logo.png"
               alt="Yours Durham"
               className="w-10 h-10 rounded-xl object-cover"
             />
