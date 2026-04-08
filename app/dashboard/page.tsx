@@ -28,12 +28,20 @@ export default function Dashboard() {
 
   const { data: orders = [], isLoading } = useQuery<FilmOrder[]>({
     queryKey: ["filmOrders"],
-    queryFn: () => fetch("/api/orders").then((r) => r.json()),
+    queryFn: async () => {
+      const r = await fetch("/api/orders");
+      if (!r.ok) throw new Error("Failed to fetch orders");
+      return r.json();
+    },
   });
 
   const { data: customers = [] } = useQuery<Customer[]>({
     queryKey: ["customers"],
-    queryFn: () => fetch("/api/customers").then((r) => r.json()),
+    queryFn: async () => {
+      const r = await fetch("/api/customers");
+      if (!r.ok) throw new Error("Failed to fetch customers");
+      return r.json();
+    },
   });
 
   const deleteMutation = useMutation({

@@ -186,7 +186,8 @@ export default function NewDropoffForm({ open, onOpenChange, onSuccess, customer
             <Input id="customer_name" value={formData.customer_name} placeholder="John Doe" required
               className="border-slate-200"
               onChange={(e) => { set("customer_name", e.target.value); setShowSuggestions(true); setSelectedCustomerId(null); }}
-              onFocus={() => setShowSuggestions(true)} />
+              onFocus={() => setShowSuggestions(true)}
+              onBlur={() => setTimeout(() => setShowSuggestions(false), 150)} />
             {showSuggestions && suggestions.length > 0 && (
               <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-40 overflow-y-auto">
                 {suggestions.map((c) => (

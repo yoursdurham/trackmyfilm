@@ -9,6 +9,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   Search, ArrowLeft, Loader2, Trash2, ChevronUp, ChevronDown,
   ChevronsUpDown, UserPlus, ChevronLeft, ChevronRight, ExternalLink, Layers, Calendar, RefreshCw, MailWarning,
@@ -32,18 +33,28 @@ export default function Customers() {
   const [editDraft, setEditDraft] = useState<Partial<Customer>>({});
   const [showAdd, setShowAdd]     = useState(false);
   const [page, setPage]           = useState(1);
+  const [pendingCustomer, setPendingCustomer] = useState<Customer | "close" | null>(null);
+  const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
   const queryClient = useQueryClient();
 
   const { data: customers = [], isLoading } = useQuery<Customer[]>({
     queryKey: ["customers"],
-    queryFn: () => fetch("/api/customers").then((r) => r.json()),
-    refetchInterval: 30000,
+    queryFn: async () => {
+      const r = await fetch("/api/customers");
+      if (!r.ok) throw new Error("Failed to fetch customers");
+      return r.json();
+    },
+    refetchInterval: 120000,
   });
 
   const { data: orders = [] } = useQuery<FilmOrder[]>({
     queryKey: ["filmOrders"],
-    queryFn: () => fetch("/api/orders").then((r) => r.json()),
-    refetchInterval: 30000,
+    queryFn: async () => {
+      const r = await fetch("/api/orders");
+      if (!r.ok) throw new Error("Failed to fetch orders");
+      return r.json();
+    },
+    refetchInterval: 120000,
   });
 
   const deleteMutation = useMutation({
@@ -75,12 +86,15 @@ export default function Customers() {
   });
 
   const saveMutation = useMutation({
-    mutationFn: ({ id, patch }: { id: string; patch: Partial<Customer> }) =>
-      fetch(`/api/customers/${id}`, {
+    mutationFn: async ({ id, patch }: { id: string; patch: Partial<Customer> }) => {
+      const r = await fetch(`/api/customers/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(patch),
-      }).then((r) => r.json()),
+      });
+      if (!r.ok) throw new Error("Failed to save");
+      return r.json();
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["customers"] });
       toast.success("Saved");
@@ -88,24 +102,88 @@ export default function Customers() {
     onError: () => toast.error("Failed to save"),
   });
 
-  const openExpand = (customer: Customer) => {
-    if (expandedId === customer.id) { setExpandedId(null); return; }
+  const isDirty = (draft: Partial<Customer>, original: Customer) =>
+    draft.name              !== original.name ||
+    (draft.last_name        ?? "") !== (original.last_name        ?? "") ||
+    (draft.email            ?? "") !== (original.email            ?? "") ||
+    (draft.notes            ?? "") !== (original.notes            ?? "") ||
+    (draft.last_dropoff_date ?? "") !== (original.last_dropoff_date ?? "") ||
+    (draft.last_order_number ?? "") !== (original.last_order_number ?? "") ||
+    (draft.current_rolls    ?? 0)  !== (original.current_rolls    ?? 0)  ||
+    (draft.total_rolls      ?? 0)  !== (original.total_rolls      ?? 0)  ||
+    (draft.total_dropoffs   ?? 0)  !== (original.total_dropoffs   ?? 0);
+
+  const buildPatch = (): Partial<Customer> => ({
+    name:              editDraft.name,
+    last_name:         editDraft.last_name  || undefined,
+    email:             editDraft.email      || undefined,
+    notes:             editDraft.notes      || undefined,
+    last_dropoff_date: editDraft.last_dropoff_date || undefined,
+    last_order_number: editDraft.last_order_number || undefined,
+    current_rolls:     editDraft.current_rolls,
+    total_rolls:       editDraft.total_rolls  ?? 0,
+    total_dropoffs:    editDraft.total_dropoffs ?? 0,
+  });
+
+  const doExpand = (customer: Customer) => {
     setExpandedId(customer.id);
     setEditDraft({
-      name:      customer.name,
-      last_name: customer.last_name ?? "",
-      email:             customer.email ?? "",
+      name:              customer.name,
+      last_name:         customer.last_name         ?? "",
+      email:             customer.email             ?? "",
       last_dropoff_date: customer.last_dropoff_date ?? "",
       last_order_number: customer.last_order_number ?? "",
-      current_rolls:     customer.current_rolls ?? 0,
-      total_rolls:       customer.total_rolls ?? 0,
-      total_dropoffs:    customer.total_dropoffs ?? 0,
-      notes:             customer.notes ?? "",
+      current_rolls:     customer.current_rolls     ?? 0,
+      total_rolls:       customer.total_rolls       ?? 0,
+      total_dropoffs:    customer.total_dropoffs    ?? 0,
+      notes:             customer.notes             ?? "",
     });
   };
 
-  const saveField = (customerId: string, field: keyof Customer, value: unknown) =>
-    saveMutation.mutate({ id: customerId, patch: { [field]: value } });
+  const openExpand = (customer: Customer) => {
+    const currentCustomer = customers.find((c) => c.id === expandedId);
+    const dirty = currentCustomer && isDirty(editDraft, currentCustomer);
+
+    if (expandedId === customer.id) {
+      // Clicking the same row → collapse; prompt if dirty
+      if (dirty) { setPendingCustomer("close"); setShowUnsavedDialog(true); return; }
+      setExpandedId(null);
+      return;
+    }
+
+    // Switching to a different row while one is open
+    if (dirty) { setPendingCustomer(customer); setShowUnsavedDialog(true); return; }
+
+    doExpand(customer);
+  };
+
+  const handleSaveAndContinue = async () => {
+    if (!expandedId) return;
+    try {
+      await saveMutation.mutateAsync({ id: expandedId, patch: buildPatch() });
+    } catch {
+      // error already toasted by onError; close dialog and stay
+      setShowUnsavedDialog(false);
+      setPendingCustomer(null);
+      return;
+    }
+    setShowUnsavedDialog(false);
+    if (pendingCustomer === "close") { setExpandedId(null); }
+    else if (pendingCustomer)        { doExpand(pendingCustomer); }
+    setPendingCustomer(null);
+  };
+
+  const handleDiscard = () => {
+    setShowUnsavedDialog(false);
+    if (pendingCustomer === "close") { setExpandedId(null); }
+    else if (pendingCustomer)        { doExpand(pendingCustomer); }
+    setPendingCustomer(null);
+  };
+
+  const handleCancelNav = () => {
+    setShowUnsavedDialog(false);
+    setPendingCustomer(null);
+  };
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
@@ -113,21 +191,7 @@ export default function Customers() {
     setPage(1);
   };
 
-  // Most-recent order per customer
-  const latestOrder = (customerId: string): FilmOrder | undefined =>
-    orders
-      .filter((o) => o.customer_id === customerId)
-      .sort((a, b) => new Date(b.dropoff_date).getTime() - new Date(a.dropoff_date).getTime())[0];
-
   const getOrders = (id: string) => orders.filter((o) => o.customer_id === id);
-
-  // Build a map of order numbers → customer id for fast lookup
-  const orderNumToCustomerId = new Map<string, string>();
-  orders.forEach((o) => {
-    if (o.order_number && o.customer_id) {
-      orderNumToCustomerId.set(o.order_number.toLowerCase(), o.customer_id);
-    }
-  });
 
   const filtered = useMemo(() => customers
     .filter((c) => {
@@ -289,8 +353,6 @@ export default function Customers() {
                                       <label className="text-xs text-slate-500 mb-1 block">Email</label>
                                       <Input type="email" value={editDraft.email ?? ""}
                                         onChange={(e) => setEditDraft((d) => ({ ...d, email: e.target.value }))}
-                                        onBlur={() => editDraft.email !== (customer.email ?? "") && saveField(customer.id, "email", editDraft.email || null)}
-                                        onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
                                         onClick={(e) => e.stopPropagation()}
                                         className="bg-white border-stone-200 h-8 text-sm" />
                                     </div>
@@ -298,8 +360,6 @@ export default function Customers() {
                                       <label className="text-xs text-slate-500 mb-1 block">First Name</label>
                                       <Input value={editDraft.name ?? ""}
                                         onChange={(e) => setEditDraft((d) => ({ ...d, name: e.target.value }))}
-                                        onBlur={() => editDraft.name !== customer.name && saveField(customer.id, "name", editDraft.name)}
-                                        onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
                                         onClick={(e) => e.stopPropagation()}
                                         className="bg-white border-stone-200 h-8 text-sm" />
                                     </div>
@@ -307,8 +367,6 @@ export default function Customers() {
                                       <label className="text-xs text-slate-500 mb-1 block">Last Name</label>
                                       <Input value={editDraft.last_name ?? ""}
                                         onChange={(e) => setEditDraft((d) => ({ ...d, last_name: e.target.value }))}
-                                        onBlur={() => editDraft.last_name !== (customer.last_name ?? "") && saveField(customer.id, "last_name", editDraft.last_name || null)}
-                                        onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
                                         onClick={(e) => e.stopPropagation()}
                                         className="bg-white border-stone-200 h-8 text-sm" />
                                     </div>
@@ -316,8 +374,6 @@ export default function Customers() {
                                       <label className="text-xs text-slate-500 mb-1 block">Date (Last Drop-off)</label>
                                       <Input type="date" value={editDraft.last_dropoff_date ?? ""}
                                         onChange={(e) => setEditDraft((d) => ({ ...d, last_dropoff_date: e.target.value }))}
-                                        onBlur={() => editDraft.last_dropoff_date !== (customer.last_dropoff_date ?? "") && saveField(customer.id, "last_dropoff_date", editDraft.last_dropoff_date || null)}
-                                        onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
                                         onClick={(e) => e.stopPropagation()}
                                         className="bg-white border-stone-200 h-8 text-sm" />
                                     </div>
@@ -326,8 +382,6 @@ export default function Customers() {
                                       <label className="text-xs text-slate-500 mb-1 block">Order #</label>
                                       <Input value={editDraft.last_order_number ?? ""}
                                         onChange={(e) => setEditDraft((d) => ({ ...d, last_order_number: e.target.value }))}
-                                        onBlur={() => editDraft.last_order_number !== (customer.last_order_number ?? "") && saveField(customer.id, "last_order_number", editDraft.last_order_number || null)}
-                                        onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
                                         onClick={(e) => e.stopPropagation()}
                                         className="bg-white border-stone-200 h-8 text-sm font-mono" />
                                     </div>
@@ -335,8 +389,6 @@ export default function Customers() {
                                       <label className="text-xs text-slate-500 mb-1 block">Current Rolls</label>
                                       <Input type="number" value={editDraft.current_rolls ?? ""}
                                         onChange={(e) => setEditDraft((d) => ({ ...d, current_rolls: Number(e.target.value) }))}
-                                        onBlur={() => editDraft.current_rolls !== customer.current_rolls && saveField(customer.id, "current_rolls", editDraft.current_rolls || null)}
-                                        onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
                                         onClick={(e) => e.stopPropagation()}
                                         className="bg-white border-stone-200 h-8 text-sm" />
                                     </div>
@@ -344,8 +396,6 @@ export default function Customers() {
                                       <label className="text-xs text-slate-500 mb-1 block">Total Rolls</label>
                                       <Input type="number" value={editDraft.total_rolls ?? 0}
                                         onChange={(e) => setEditDraft((d) => ({ ...d, total_rolls: Number(e.target.value) }))}
-                                        onBlur={() => editDraft.total_rolls !== customer.total_rolls && saveField(customer.id, "total_rolls", editDraft.total_rolls)}
-                                        onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
                                         onClick={(e) => e.stopPropagation()}
                                         className="bg-white border-stone-200 h-8 text-sm" />
                                     </div>
@@ -353,8 +403,6 @@ export default function Customers() {
                                       <label className="text-xs text-slate-500 mb-1 block">Drop-off Count</label>
                                       <Input type="number" value={editDraft.total_dropoffs ?? 0}
                                         onChange={(e) => setEditDraft((d) => ({ ...d, total_dropoffs: Number(e.target.value) }))}
-                                        onBlur={() => editDraft.total_dropoffs !== customer.total_dropoffs && saveField(customer.id, "total_dropoffs", editDraft.total_dropoffs)}
-                                        onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
                                         onClick={(e) => e.stopPropagation()}
                                         className="bg-white border-stone-200 h-8 text-sm" />
                                     </div>
@@ -363,12 +411,19 @@ export default function Customers() {
                                     <label className="text-xs text-slate-500 mb-1 block">Notes</label>
                                     <Input value={editDraft.notes ?? ""} placeholder="Internal notes..."
                                       onChange={(e) => setEditDraft((d) => ({ ...d, notes: e.target.value }))}
-                                      onBlur={() => editDraft.notes !== (customer.notes ?? "") && saveField(customer.id, "notes", editDraft.notes || null)}
-                                      onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
                                       onClick={(e) => e.stopPropagation()}
                                       className="bg-white border-stone-200 h-8 text-sm" />
                                   </div>
-                                  <p className="text-xs text-slate-400 mt-1.5">Press Enter or click away to save</p>
+                                  <div className="mt-3 flex justify-end" onClick={(e) => e.stopPropagation()}>
+                                    <Button
+                                      size="sm"
+                                      disabled={saveMutation.isPending}
+                                      onClick={() => saveMutation.mutate({ id: customer.id, patch: buildPatch() })}
+                                      className="bg-amber-600 hover:bg-amber-700 text-white h-8 px-4 text-xs"
+                                    >
+                                      {saveMutation.isPending ? <><Loader2 className="w-3 h-3 mr-1.5 animate-spin" />Saving...</> : "Save Changes"}
+                                    </Button>
+                                  </div>
                                 </div>
 
                                 {/* Order history */}
@@ -476,6 +531,30 @@ export default function Customers() {
 
       <AddCustomerForm open={showAdd} onOpenChange={setShowAdd}
         onSuccess={() => queryClient.invalidateQueries({ queryKey: ["customers"] })} />
+
+      {/* Unsaved changes dialog */}
+      <Dialog open={showUnsavedDialog} onOpenChange={(open) => { if (!open) handleCancelNav(); }}>
+        <DialogContent className="max-w-sm" onClick={(e) => e.stopPropagation()}>
+          <DialogHeader>
+            <DialogTitle>Unsaved changes</DialogTitle>
+            <DialogDescription>
+              You have unsaved changes to this customer. What would you like to do?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex-col sm:flex-row gap-2 sm:gap-0">
+            <Button variant="ghost" onClick={handleCancelNav} className="order-3 sm:order-1 text-slate-500">
+              Keep editing
+            </Button>
+            <Button variant="outline" onClick={handleDiscard} className="order-2 text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700">
+              Discard
+            </Button>
+            <Button onClick={handleSaveAndContinue} disabled={saveMutation.isPending}
+              className="order-1 sm:order-3 bg-amber-600 hover:bg-amber-700 text-white">
+              {saveMutation.isPending ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Saving...</> : "Save & continue"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

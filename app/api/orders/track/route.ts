@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getOrderByNumber, getCustomerByEmail, getOrdersByCustomerId } from "@/lib/db";
-import { normalizeEmail } from "@/lib/validation";
+import { normalizeEmail, normalizeOrderNumber } from "@/lib/validation";
 import { requireAuth } from "@/lib/api-auth";
 
 export async function GET(req: Request) {
@@ -13,7 +13,7 @@ export async function GET(req: Request) {
     const email = searchParams.get("email");
 
     if (orderNumber) {
-      const order = await getOrderByNumber(orderNumber.trim().toUpperCase());
+      const order = await getOrderByNumber(normalizeOrderNumber(orderNumber));
       if (!order) return NextResponse.json([], { status: 200 });
       return NextResponse.json([order]);
     }

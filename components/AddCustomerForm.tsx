@@ -52,9 +52,10 @@ export default function AddCustomerForm({ open, onOpenChange, onSuccess }: Props
       const lookupRes = await fetch(
         `/api/customers/lookup?${normalizedEmail ? `email=${encodeURIComponent(normalizedEmail)}` : `name=${encodeURIComponent(normalizedName)}`}`
       );
+      if (!lookupRes.ok) throw new Error("Failed to check for existing customer");
       const existing = await lookupRes.json();
       if (existing) {
-        setError(`Customer already exists: ${existing.name} ${existing.last_name || ""}`.trim());
+        setError(`Customer already exists: ${`${existing.name ?? ""} ${existing.last_name ?? ""}`.trim()}`);
         setLoading(false);
         return;
       }

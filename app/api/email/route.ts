@@ -142,7 +142,7 @@ export async function POST(req: Request) {
     [dedupField]: now,
     email_status: "sent",
     email_error:  null,
-  } as never);
+  });
 
   return NextResponse.json({
     success: true,

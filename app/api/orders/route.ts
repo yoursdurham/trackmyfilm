@@ -10,8 +10,10 @@ export async function GET() {
   try {
     const orders = await getOrders("desc");
     return NextResponse.json(orders);
-  } catch {
-    return NextResponse.json({ error: "Failed to fetch orders" }, { status: 500 });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    console.error("[GET /api/orders]", message);
+    return NextResponse.json({ error: "Failed to fetch orders", detail: message }, { status: 500 });
   }
 }
 
@@ -22,9 +24,10 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
 
-    // Duplicate order number check
+    // Duplicate order number check — normalize before both check and insert
     if (body.order_number) {
-      const existing = await getOrderByNumber(normalizeOrderNumber(body.order_number));
+      body.order_number = normalizeOrderNumber(body.order_number);
+      const existing = await getOrderByNumber(body.order_number);
       if (existing) {
         return NextResponse.json(
           { error: `Order number ${body.order_number} already exists` },

@@ -64,35 +64,37 @@ function OrderTimeline({ currentStatus, statusHistory }: {
   );
 }
 
+type CommittedSearch = { term: string; type: "order" | "email" };
+
 export default function Tracking() {
   const [searchTerm, setSearchTerm] = useState("");
-  const [searchType, setSearchType] = useState<"order" | "email" | null>(null);
-  const [hasSearched, setHasSearched] = useState(false);
+  const [committed, setCommitted] = useState<CommittedSearch | null>(null);
   const [customerName, setCustomerName] = useState<string | null>(null);
 
-  const { data: orders = [], isLoading, refetch } = useQuery<FilmOrder[]>({
-    queryKey: ["trackOrders", searchTerm, searchType],
+  const { data: orders = [], isLoading } = useQuery<FilmOrder[]>({
+    queryKey: ["trackOrders", committed?.term, committed?.type],
     queryFn: async () => {
-      if (!searchTerm || !searchType) return [];
-      const param = searchType === "order"
-        ? `order_number=${encodeURIComponent(searchTerm)}`
-        : `email=${encodeURIComponent(searchTerm)}`;
+      if (!committed) return [];
+      const param = committed.type === "order"
+        ? `order_number=${encodeURIComponent(committed.term)}`
+        : `email=${encodeURIComponent(committed.term)}`;
       const res = await fetch(`/api/orders/track?${param}`);
+      if (!res.ok) throw new Error("Failed to fetch orders");
       const data = await res.json();
-      if (searchType === "email" && data.customer) {
+      if (committed.type === "email" && data.customer) {
         setCustomerName(`${data.customer.name} ${data.customer.last_name ?? ""}`.trim());
         return data.orders ?? [];
       }
       setCustomerName(null);
       return Array.isArray(data) ? data : [];
     },
-    enabled: false,
+    enabled: !!committed,
   });
 
+  const hasSearched = !!committed;
+
   const handleSearch = (type: "order" | "email") => {
-    setSearchType(type);
-    setHasSearched(true);
-    setTimeout(() => refetch(), 50);
+    setCommitted({ term: searchTerm, type });
   };
 
   return (
@@ -167,7 +169,7 @@ export default function Tracking() {
               </div>
               <h3 className="text-lg font-medium text-slate-700 mb-1">No orders found</h3>
               <p className="text-slate-500">
-                {searchType === "email" ? "No orders found for this email address" : "Order number not found. Please check and try again."}
+                {committed?.type === "email" ? "No orders found for this email address" : "Order number not found. Please check and try again."}
               </p>
             </motion.div>
           ) : orders.length > 0 && (

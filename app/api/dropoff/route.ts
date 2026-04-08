@@ -131,13 +131,18 @@ export async function POST(req: Request) {
   }
 
   // ── Update customer totals ────────────────────────────────────────────
-  await updateCustomer(customer.id, {
-    total_rolls:       newTotalRolls,
-    total_dropoffs:    newTotalDropoffs,
-    last_order_number: normalizedOrderNum,
-    current_rolls:     roll_count,
-    last_dropoff_date: dropoff_date,
-  });
+  try {
+    await updateCustomer(customer.id, {
+      total_rolls:       newTotalRolls,
+      total_dropoffs:    newTotalDropoffs,
+      last_order_number: normalizedOrderNum,
+      current_rolls:     roll_count,
+      last_dropoff_date: dropoff_date,
+    });
+  } catch {
+    // Order was created successfully — log the failure but don't abort the response
+    console.error(`[dropoff] Failed to update totals for customer ${customer.id} on order ${normalizedOrderNum}`);
+  }
 
   // ── Send email ────────────────────────────────────────────────────────
   const emailResult: {

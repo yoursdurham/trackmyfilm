@@ -4,14 +4,22 @@
  * API routes call these functions; they never touch Supabase directly.
  */
 
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Customer, FilmOrder } from "./types";
 
-function getSupabase() {
+// Singleton — reuse one client per worker instead of creating a new connection
+// on every DB call. Eliminates repeated TCP handshakes on hot paths.
+let _supabase: SupabaseClient | null = null;
+
+function getSupabase(): SupabaseClient {
+  if (_supabase) return _supabase;
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) throw new Error("Supabase env vars not configured");
-  return createClient(url, key);
+  _supabase = createClient(url, key, {
+    auth: { persistSession: false },
+  });
+  return _supabase;
 }
 
 // ─── Orders ──────────────────────────────────────────────────────────────────

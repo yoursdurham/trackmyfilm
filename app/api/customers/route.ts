@@ -9,8 +9,10 @@ export async function GET() {
   try {
     const customers = await getCustomers();
     return NextResponse.json(customers);
-  } catch {
-    return NextResponse.json({ error: "Failed to fetch customers" }, { status: 500 });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    console.error("[GET /api/customers]", message);
+    return NextResponse.json({ error: "Failed to fetch customers", detail: message }, { status: 500 });
   }
 }
 

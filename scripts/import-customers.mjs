@@ -107,7 +107,8 @@ for (const row of rows) {
   }
 
   const lastOrderNumber = row["Order Number"]?.trim() || null;
-  const currentRolls    = parseInt(row["Current Rolls"] || "0", 10) || null;
+  const parsedCurrentRolls = parseInt(row["Current Rolls"] || "", 10);
+  const currentRolls = !isNaN(parsedCurrentRolls) ? parsedCurrentRolls : null;
 
   const record = { name: first, last_name: last, email, normalized_name: normName,
                    total_rolls: totalRolls, total_dropoffs: dropoffs,
@@ -151,9 +152,9 @@ for (const record of seenEmails.values()) {
   const existingId = existingEmailMap.get(record.email);
   if (existingId) {
     const patch = {};
-    if (record.last_dropoff_date) patch.last_dropoff_date = record.last_dropoff_date;
-    if (record.last_order_number) patch.last_order_number = record.last_order_number;
-    if (record.current_rolls)     patch.current_rolls     = record.current_rolls;
+    if (record.last_dropoff_date)           patch.last_dropoff_date = record.last_dropoff_date;
+    if (record.last_order_number)           patch.last_order_number = record.last_order_number;
+    if (record.current_rolls != null)       patch.current_rolls     = record.current_rolls;
     if (Object.keys(patch).length) toUpdate.push({ id: existingId, ...patch });
   } else {
     toInsert.push(record);
