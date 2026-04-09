@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
-import { Film, Loader2, AlertCircle, CheckCircle } from "lucide-react";
+import { Loader2, AlertCircle, CheckCircle } from "lucide-react";
 
 export default function UpdatePasswordPage() {
   const router = useRouter();
@@ -48,12 +48,10 @@ export default function UpdatePasswordPage() {
     <div className="min-h-screen bg-gradient-to-br from-stone-50 via-orange-50/30 to-amber-50/20 flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
         <div className="flex items-center justify-center gap-3 mb-8">
-          <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-lg shadow-amber-500/25">
-            <Film className="w-6 h-6 text-white" />
-          </div>
+          <img src="/logo.png" alt="Yours Durham" className="w-11 h-11 rounded-xl object-cover shadow-lg" />
           <div>
-            <h1 className="text-xl font-bold text-slate-800">TrackMyFilm</h1>
-            <p className="text-xs text-slate-500">Yours Durham — Admin</p>
+            <h1 className="text-xl font-bold text-slate-800">Yours Durham</h1>
+            <p className="text-xs text-slate-500">Film Lab Tracker</p>
           </div>
         </div>
 
