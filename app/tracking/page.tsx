@@ -171,21 +171,35 @@ export default function Tracking() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-stone-50 via-orange-50/30 to-amber-50/20">
-      <header className="bg-white/80 backdrop-blur-lg border-b border-stone-200/50">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex items-center gap-3 mb-2">
-            <img src="/logo.png" alt="Yours Durham" className="w-10 h-10 rounded-xl object-cover" />
-            <div>
-              <h1 className="text-2xl font-bold text-slate-800">Track Your Order</h1>
-              <p className="text-sm text-slate-500">Enter your order # or email to check status</p>
-            </div>
+  <div className="min-h-screen bg-gradient-to-br from-stone-50 via-orange-50/30 to-amber-50/20">
+    <header className="bg-white/80 backdrop-blur-lg border-b border-stone-200/50">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div className="flex items-center gap-3 mb-2">
+          <img
+            src="/logo.png"
+            alt="Yours Durham"
+            className="w-10 h-10 rounded-xl object-cover"
+          />
+          <div>
+            <h1 className="text-2xl font-bold text-slate-800">Track Your Film</h1>
+            <p className="text-sm text-slate-500">
+              Enter your order # or email to check status
+            </p>
           </div>
-          <p className="text-sm text-slate-500">
-            Order number is on your original confirmation email or if you purchased developing services in store it will be your first/last initials and last 4 of your phone number example: (JE1234)
-          </p>
         </div>
-      </header>
+
+        <p className="text-sm text-slate-500">
+          Your order number can be found on your original confirmation email.
+        </p>
+
+        <p className="text-sm text-slate-500">
+          If you purchased developing services in store, it will be your first/last initials
+          and the last 4 digits of your phone number, for example: JE1234
+        </p>
+      </div>
+    </header>
+  </div>
+);
 
       <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <Card className="bg-white shadow-lg border-0 mb-8">
