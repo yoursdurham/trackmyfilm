@@ -178,11 +178,11 @@ export default function Tracking() {
             <img src="/logo.png" alt="Yours Durham" className="w-10 h-10 rounded-xl object-cover" />
             <div>
               <h1 className="text-2xl font-bold text-slate-800">Track Your Order</h1>
-              <p className="text-sm text-slate-500">Enter your order number or email to check status</p>
+              <p className="text-sm text-slate-500">Enter your order # or email to check status</p>
             </div>
           </div>
           <p className="text-sm text-slate-500">
-            Order number is on your original confirmation email or if you purchased in store it will be your first/last initials and last 4 of your phone number example: (JE1234)
+            Order number is on your original confirmation email or if you purchased developing services in store it will be your first/last initials and last 4 of your phone number example: (JE1234)
           </p>
         </div>
       </header>
