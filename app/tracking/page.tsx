@@ -170,7 +170,7 @@ export default function Tracking() {
     setCommitted({ term: searchTerm, type });
   };
 
-  return (
+return (
   <div className="min-h-screen bg-gradient-to-br from-stone-50 via-orange-50/30 to-amber-50/20">
     <header className="bg-white/80 backdrop-blur-lg border-b border-stone-200/50">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -198,7 +198,10 @@ export default function Tracking() {
         </p>
       </div>
     </header>
-  </div>
+
+    <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      {/* your page content here */}
+    </main>
 );
 
       <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
