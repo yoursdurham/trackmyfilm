@@ -10,7 +10,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { User, Calendar, Hash, Layers, Loader2, Film, Mail } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
-import type { Customer } from "@/lib/types";
+import type { Customer, FilmType, FilmProcess } from "@/lib/types";
+
+const MAX_ROLLS = 20;
 
 interface Props {
   open: boolean;
@@ -21,43 +23,43 @@ interface Props {
 }
 
 const FILM_STOCKS = [
-  "Kodak Portra 400",
-  "Kodak Portra 800",
-  "Kodak Portra 160",
-  "Kodak Gold 200",
-  "Kodak UltraMax 400",
-  "Kodak ColorPlus 200",
-  "Kodak Ektar 100",
-  "Kodak T-Max 400",
-  "Kodak T-Max 100",
-  "Kodak Tri-X 400",
-  "Fujifilm Superia 400",
-  "Fujifilm Superia 200",
-  "Fujifilm Pro 400H",
-  "Fujifilm Velvia 50",
-  "Fujifilm Provia 100F",
-  "Ilford HP5 Plus 400",
-  "Ilford Delta 400",
-  "Ilford XP2 Super 400",
-  "Cinestill 800T",
-  "Cinestill 400D",
+  "Kodak Portra 400", "Kodak Portra 800", "Kodak Portra 160",
+  "Kodak Gold 200", "Kodak UltraMax 400", "Kodak ColorPlus 200",
+  "Kodak Ektar 100", "Kodak T-Max 400", "Kodak T-Max 100", "Kodak Tri-X 400",
+  "Fujifilm Superia 400", "Fujifilm Superia 200", "Fujifilm Pro 400H",
+  "Fujifilm Velvia 50", "Fujifilm Provia 100F",
+  "Ilford HP5 Plus 400", "Ilford Delta 400", "Ilford XP2 Super 400",
+  "Cinestill 800T", "Cinestill 400D",
   "Lomography Color 400",
-  "Other",
 ];
 
-const emptyForm = {
+const FILM_TYPES: FilmType[] = ["35mm", "120", "Disposable Camera"];
+const FILM_PROCESSES: FilmProcess[] = ["Color", "Black & White", "Both"];
+
+interface RollState {
+  film_type: FilmType | "";
+  film_process: FilmProcess | "";
+  film_stock: string;       // selected from dropdown (empty = none, "__other__" = custom)
+  custom_stock: string;     // shown when film_stock === "__other__"
+  prints_4x6: boolean;
+}
+
+const emptyRoll = (): RollState => ({
+  film_type: "",
+  film_process: "",
+  film_stock: "",
+  custom_stock: "",
+  prints_4x6: false,
+});
+
+const emptyMeta = {
   customer_name: "",
   customer_email: "",
   order_number: "",
   dropoff_date: format(new Date(), "yyyy-MM-dd"),
   roll_count: 1,
-  film_type: "" as "" | "35mm" | "120",
-  film_process: "" as "" | "Color" | "Black & White" | "Both",
-  film_stock: "",
   notes: "",
 };
-
-const emptyMeta = { sendEmail: true };
 
 export default function NewDropoffForm({ open, onOpenChange, onSuccess, customers = [], selectedCustomer }: Props) {
   const [loading, setLoading] = useState(false);
@@ -66,27 +68,54 @@ export default function NewDropoffForm({ open, onOpenChange, onSuccess, customer
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(selectedCustomer?.id ?? null);
   const [sendEmail, setSendEmail] = useState(true);
   const [formData, setFormData] = useState({
-    ...emptyForm,
+    ...emptyMeta,
     customer_name: selectedCustomer ? `${selectedCustomer.name} ${selectedCustomer.last_name || ""}`.trim() : "",
     customer_email: selectedCustomer?.email || "",
   });
+  const [rolls, setRolls] = useState<RollState[]>([emptyRoll()]);
 
-  const set = (key: keyof typeof emptyForm, value: unknown) =>
+  const set = (key: keyof typeof emptyMeta, value: unknown) =>
     setFormData((prev) => ({ ...prev, [key]: value }));
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleRollCountChange = (raw: number) => {
+    const count = Math.min(Math.max(1, raw || 1), MAX_ROLLS);
+    set("roll_count", count);
+    setRolls((prev) => {
+      const next = [...prev];
+      while (next.length < count) next.push(emptyRoll());
+      return next.slice(0, count);
+    });
+  };
+
+  const setRoll = <K extends keyof RollState>(index: number, key: K, value: RollState[K]) =>
+    setRolls((prev) => prev.map((r, i) => i === index ? { ...r, [key]: value } : r));
+
+  const handleSubmit = async (e: { preventDefault(): void }) => {
     e.preventDefault();
     setError("");
 
     if (!formData.customer_name.trim()) { toast.error("Customer name is required"); return; }
     if (!formData.order_number.trim()) { toast.error("Order number is required"); return; }
     if (!formData.roll_count || formData.roll_count < 1) { toast.error("Roll count must be at least 1"); return; }
-    if (!formData.film_type) { toast.error("Please select a film type"); return; }
-    if (!formData.film_process) { toast.error("Please select a film process"); return; }
+
+    for (let i = 0; i < rolls.length; i++) {
+      if (!rolls[i].film_type) { toast.error(`Select a film type for roll ${i + 1}`); return; }
+      if (!rolls[i].film_process) { toast.error(`Select a film process for roll ${i + 1}`); return; }
+      if (rolls[i].film_stock === "__other__" && !rolls[i].custom_stock.trim()) {
+        toast.error(`Enter the film stock name for roll ${i + 1}`); return;
+      }
+    }
 
     setLoading(true);
     try {
-      // Single call — server handles customer lookup/create, order, totals, and email
+      const roll_details = rolls.map((r) => ({
+        film_type: r.film_type as FilmType,
+        film_process: r.film_process as FilmProcess,
+        film_stock: r.film_stock === "__other__" ? r.custom_stock.trim() || undefined
+          : r.film_stock || undefined,
+        prints_4x6: r.prints_4x6 || undefined,
+      }));
+
       const res = await fetch("/api/dropoff", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -96,9 +125,11 @@ export default function NewDropoffForm({ open, onOpenChange, onSuccess, customer
           order_number:   formData.order_number.trim(),
           dropoff_date:   formData.dropoff_date,
           roll_count:     Number(formData.roll_count),
-          film_type:      formData.film_type,
-          film_process:   formData.film_process,
-          film_stock:     formData.film_stock || undefined,
+          film_type:      roll_details[0].film_type,
+          film_process:   roll_details[0].film_process,
+          film_stock:     roll_details[0].film_stock,
+          roll_details,
+          prints_4x6:     roll_details.some((r) => r.prints_4x6) || undefined,
           notes:          formData.notes || undefined,
           send_email:     sendEmail,
         }),
@@ -111,18 +142,14 @@ export default function NewDropoffForm({ open, onOpenChange, onSuccess, customer
         email?: { sent: boolean; skipped?: boolean; variant?: string; error?: string };
       };
 
-      if (!res.ok) {
-        throw new Error(data.error || "Failed to create drop-off");
-      }
+      if (!res.ok) throw new Error(data.error || "Failed to create drop-off");
 
-      // Show customer status
       if (data.customer?.isNew) {
         toast.success(`New customer created: ${data.customer.name}`);
       } else if (data.customer) {
         toast.success(`Matched existing customer: ${data.customer.name} (drop-off #${data.customer.total_dropoffs})`);
       }
 
-      // Show email status
       if (data.email?.sent) {
         toast.success("Confirmation email sent");
       } else if (data.email?.skipped) {
@@ -133,7 +160,8 @@ export default function NewDropoffForm({ open, onOpenChange, onSuccess, customer
 
       toast.success("Drop-off created successfully");
       onSuccess?.();
-      setFormData({ ...emptyForm, dropoff_date: format(new Date(), "yyyy-MM-dd") });
+      setFormData({ ...emptyMeta, dropoff_date: format(new Date(), "yyyy-MM-dd") });
+      setRolls([emptyRoll()]);
       setSelectedCustomerId(null);
       setSendEmail(true);
       onOpenChange(false);
@@ -236,55 +264,83 @@ export default function NewDropoffForm({ open, onOpenChange, onSuccess, customer
           {/* Roll count */}
           <div className="space-y-2">
             <Label htmlFor="roll_count" className="flex items-center gap-2 text-slate-700">
-              <Layers className="w-3.5 h-3.5" /> Number of Rolls *
+              <Layers className="w-3.5 h-3.5" /> Number of Rolls *{" "}
+              <span className="text-xs text-slate-400 font-normal">(max {MAX_ROLLS})</span>
             </Label>
-            <Input id="roll_count" type="number" min="1" value={formData.roll_count} required
+            <Input id="roll_count" type="number" min="1" max={MAX_ROLLS} value={formData.roll_count} required
               className="border-slate-200"
-              onChange={(e) => set("roll_count", Number(e.target.value))} />
+              onChange={(e) => handleRollCountChange(Number(e.target.value))} />
           </div>
 
-          {/* Film type */}
-          <div className="space-y-2">
-            <Label className="flex items-center gap-2 text-slate-700">
-              <Film className="w-3.5 h-3.5" /> Film Type *
-            </Label>
-            <div className="flex gap-4">
-              {(["35mm", "120"] as const).map((t) => (
-                <div key={t} className="flex items-center space-x-2">
-                  <Checkbox id={t} checked={formData.film_type === t} onCheckedChange={() => set("film_type", t)} />
-                  <label htmlFor={t} className="text-sm font-medium">{t}</label>
+          {/* Per-roll details */}
+          <div className="space-y-3">
+            {rolls.map((roll, i) => (
+              <div key={i} className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 space-y-3">
+                <p className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                  <Film className="w-3.5 h-3.5 text-amber-500" />
+                  Roll {i + 1}
+                </p>
+
+                {/* Film type */}
+                <div className="space-y-1">
+                  <p className="text-xs font-medium text-slate-600">Film Type *</p>
+                  <div className="flex flex-wrap gap-x-4 gap-y-1">
+                    {FILM_TYPES.map((t) => (
+                      <div key={t} className="flex items-center space-x-2">
+                        <Checkbox id={`ft-${i}-${t}`} checked={roll.film_type === t}
+                          onCheckedChange={() => setRoll(i, "film_type", t)} />
+                        <label htmlFor={`ft-${i}-${t}`} className="text-sm font-medium">{t}</label>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              ))}
-            </div>
-          </div>
 
-          {/* Film process */}
-          <div className="space-y-2">
-            <Label className="text-slate-700">Film Process *</Label>
-            <div className="flex flex-col gap-2">
-              {(["Color", "Black & White", "Both"] as const).map((p) => (
-                <div key={p} className="flex items-center space-x-2">
-                  <Checkbox id={p} checked={formData.film_process === p} onCheckedChange={() => set("film_process", p)} />
-                  <label htmlFor={p} className="text-sm font-medium">{p}</label>
+                {/* Film process */}
+                <div className="space-y-1">
+                  <p className="text-xs font-medium text-slate-600">Film Process *</p>
+                  <div className="flex flex-wrap gap-x-4 gap-y-1">
+                    {FILM_PROCESSES.map((p) => (
+                      <div key={p} className="flex items-center space-x-2">
+                        <Checkbox id={`fp-${i}-${p}`} checked={roll.film_process === p}
+                          onCheckedChange={() => setRoll(i, "film_process", p)} />
+                        <label htmlFor={`fp-${i}-${p}`} className="text-sm font-medium">{p}</label>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              ))}
-            </div>
-          </div>
 
-          {/* Film stock */}
-          <div className="space-y-2">
-            <Label htmlFor="film_stock" className="text-slate-700">Film Stock</Label>
-            <select
-              id="film_stock"
-              value={formData.film_stock}
-              onChange={(e) => set("film_stock", e.target.value)}
-              className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500"
-            >
-              <option value="">Select film stock (optional)</option>
-              {FILM_STOCKS.map((s) => (
-                <option key={s} value={s}>{s}</option>
-              ))}
-            </select>
+                {/* Film stock */}
+                <div className="space-y-1">
+                  <p className="text-xs font-medium text-slate-600">Film Stock</p>
+                  <select
+                    value={roll.film_stock}
+                    onChange={(e) => setRoll(i, "film_stock", e.target.value)}
+                    className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  >
+                    <option value="">Select film stock (optional)</option>
+                    {FILM_STOCKS.map((s) => <option key={s} value={s}>{s}</option>)}
+                    <option value="__other__">Other (specify below)</option>
+                  </select>
+                  {roll.film_stock === "__other__" && (
+                    <Input
+                      value={roll.custom_stock}
+                      placeholder="e.g. Kodak Vision3 500T"
+                      className="border-slate-200 mt-1"
+                      onChange={(e) => setRoll(i, "custom_stock", e.target.value)}
+                    />
+                  )}
+                </div>
+
+                {/* 4x6 Prints */}
+                <div className="flex items-center gap-3 pt-1">
+                  <Checkbox id={`prints-${i}`} checked={roll.prints_4x6}
+                    onCheckedChange={(v) => setRoll(i, "prints_4x6", !!v)} />
+                  <label htmlFor={`prints-${i}`} className="text-sm font-medium text-slate-700 cursor-pointer">
+                    4x6 Prints?
+                  </label>
+                </div>
+              </div>
+            ))}
           </div>
 
           {/* Notes */}
@@ -297,11 +353,7 @@ export default function NewDropoffForm({ open, onOpenChange, onSuccess, customer
 
           {/* Email toggle */}
           <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
-            <Checkbox
-              id="send_email"
-              checked={sendEmail}
-              onCheckedChange={(v) => setSendEmail(!!v)}
-            />
+            <Checkbox id="send_email" checked={sendEmail} onCheckedChange={(v) => setSendEmail(!!v)} />
             <div>
               <label htmlFor="send_email" className="text-sm font-medium text-slate-700 cursor-pointer">
                 Send confirmation email

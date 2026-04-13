@@ -5,10 +5,11 @@ import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
-import { Film, Search, Loader2, Calendar, Layers, Package, CheckCircle, Clock, Download, ExternalLink, ArrowLeft } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { Film, Search, Loader2, Calendar, Layers, Package, CheckCircle, Clock, Download, ExternalLink, MessageSquare, Printer } from "lucide-react";
 import { format } from "date-fns";
 import { motion, AnimatePresence } from "framer-motion";
-import Link from "next/link";
+import { toast } from "sonner";
 import type { FilmOrder } from "@/lib/types";
 
 const statusSteps = [
@@ -22,8 +23,6 @@ function OrderTimeline({ currentStatus, statusHistory }: {
   statusHistory?: { status: string; changed_at: string }[];
 }) {
   const currentIndex = statusSteps.findIndex((s) => s.status === currentStatus);
-
-  // Pre-compute timestamp map once instead of searching on every step render
   const timestampMap = statusHistory
     ? Object.fromEntries(
         [...statusHistory].reverse().map((h) => [h.status, format(new Date(h.changed_at), "MMM d, h:mm a")])
@@ -60,6 +59,80 @@ function OrderTimeline({ currentStatus, statusHistory }: {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+function OrderNoteForm({ orderNumber, existingNote }: { orderNumber: string; existingNote?: string }) {
+  const [note, setNote] = useState(existingNote ?? "");
+  const [loading, setLoading] = useState(false);
+  const [saved, setSaved] = useState(!!existingNote);
+  const [open, setOpen] = useState(false);
+
+  const handleSubmit = async (e: { preventDefault(): void }) => {
+    e.preventDefault();
+    if (!note.trim()) return;
+    setLoading(true);
+    try {
+      const res = await fetch("/api/orders/note", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ order_number: orderNumber, note: note.trim() }),
+      });
+      if (!res.ok) {
+        const data = await res.json() as { error?: string };
+        throw new Error(data.error || "Failed to save note");
+      }
+      setSaved(true);
+      setOpen(false);
+      toast.success("Note saved");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to save note");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="pt-4 border-t border-slate-100 mt-4">
+      {saved && note ? (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Your Note</p>
+            <button onClick={() => { setOpen(true); setSaved(false); }}
+              className="text-xs text-amber-600 hover:text-amber-700 font-medium">Edit</button>
+          </div>
+          <p className="text-sm text-slate-600 italic">{note}</p>
+        </div>
+      ) : open ? (
+        <form onSubmit={handleSubmit} className="space-y-2">
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Add a Note</p>
+          <Textarea
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="Any special instructions or comments for Yours Durham..."
+            className="resize-none border-slate-200 text-sm"
+            rows={3}
+            maxLength={1000}
+          />
+          <div className="flex gap-2">
+            <Button type="submit" size="sm" disabled={loading || !note.trim()}
+              className="bg-amber-500 hover:bg-amber-600 text-white">
+              {loading ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : null}
+              Save Note
+            </Button>
+            <Button type="button" size="sm" variant="ghost" onClick={() => setOpen(false)}>
+              Cancel
+            </Button>
+          </div>
+        </form>
+      ) : (
+        <button onClick={() => setOpen(true)}
+          className="flex items-center gap-2 text-sm text-slate-500 hover:text-amber-600 transition-colors">
+          <MessageSquare className="w-4 h-4" />
+          Add a note to this order
+        </button>
+      )}
     </div>
   );
 }
@@ -101,19 +174,8 @@ export default function Tracking() {
     <div className="min-h-screen bg-gradient-to-br from-stone-50 via-orange-50/30 to-amber-50/20">
       <header className="bg-white/80 backdrop-blur-lg border-b border-stone-200/50">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex items-center gap-3 mb-4">
-            <Link href="/dashboard">
-              <Button variant="ghost" size="icon">
-                <ArrowLeft className="w-5 h-5" />
-              </Button>
-            </Link>
-          </div>
           <div className="flex items-center gap-3 mb-2">
-            <img
-              src="/logo.png"
-              alt="Yours Durham"
-              className="w-10 h-10 rounded-xl object-cover"
-            />
+            <img src="/logo.png" alt="Yours Durham" className="w-10 h-10 rounded-xl object-cover" />
             <div>
               <h1 className="text-2xl font-bold text-slate-800">Track Your Order</h1>
               <p className="text-sm text-slate-500">Enter your order number or email to check status</p>
@@ -181,6 +243,7 @@ export default function Tracking() {
               {orders.map((order) => (
                 <Card key={order.id} className="bg-white shadow-md border-0 overflow-hidden">
                   <CardContent className="p-6">
+                    {/* Header */}
                     <div className="flex items-start justify-between mb-6">
                       <div>
                         <h2 className="text-xl font-bold text-slate-800 mb-1">Order #{order.order_number}</h2>
@@ -195,6 +258,7 @@ export default function Tracking() {
 
                     <OrderTimeline currentStatus={order.status} statusHistory={order.status_history} />
 
+                    {/* Drop-off date + rolls */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-6 border-t border-slate-100">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center">
@@ -220,6 +284,51 @@ export default function Tracking() {
                       </div>
                     </div>
 
+                    {/* Film details */}
+                    {order.roll_details && order.roll_details.length > 0 ? (
+                      <div className="pt-4 border-t border-slate-100 mt-4 space-y-2">
+                        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Film Details</p>
+                        {order.roll_details.map((roll, i) => (
+                          <div key={i} className="flex flex-wrap items-center gap-2 text-sm">
+                            <span className="font-medium text-slate-600 min-w-[44px]">Roll {i + 1}</span>
+                            <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 text-xs font-medium">{roll.film_type}</span>
+                            <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 text-xs font-medium">{roll.film_process}</span>
+                            {roll.film_stock && (
+                              <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-xs">{roll.film_stock}</span>
+                            )}
+                            {roll.prints_4x6 && (
+                              <span className="px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 text-xs font-medium flex items-center gap-1">
+                                <Printer className="w-3 h-3" /> 4x6 Prints
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (order.film_type || order.film_process) ? (
+                      <div className="pt-4 border-t border-slate-100 mt-4 space-y-2">
+                        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Film Details</p>
+                        <div className="flex flex-wrap gap-2">
+                          {order.film_type && <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 text-xs font-medium">{order.film_type}</span>}
+                          {order.film_process && <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 text-xs font-medium">{order.film_process}</span>}
+                          {order.film_stock && <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-xs">{order.film_stock}</span>}
+                          {order.prints_4x6 && (
+                            <span className="px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 text-xs font-medium flex items-center gap-1">
+                              <Printer className="w-3 h-3" /> 4x6 Prints
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {/* Admin notes */}
+                    {order.notes && (
+                      <div className="pt-4 border-t border-slate-100 mt-4">
+                        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Order Notes</p>
+                        <p className="text-sm text-slate-600 italic">{order.notes}</p>
+                      </div>
+                    )}
+
+                    {/* Download scans */}
                     {order.status === "Scans Sent" && order.wetransfer_link && (
                       <div className="pt-4 border-t border-slate-100 mt-4">
                         <a href={order.wetransfer_link} target="_blank" rel="noopener noreferrer"
@@ -230,6 +339,9 @@ export default function Tracking() {
                         </a>
                       </div>
                     )}
+
+                    {/* Customer note */}
+                    <OrderNoteForm orderNumber={order.order_number} existingNote={order.customer_notes} />
                   </CardContent>
                 </Card>
               ))}

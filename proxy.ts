@@ -1,7 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const PROTECTED = ["/dashboard", "/customers", "/tracking"];
+const PROTECTED = ["/dashboard", "/customers"];
 
 export async function proxy(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
@@ -44,6 +44,13 @@ export async function proxy(request: NextRequest) {
     const dashboardUrl = request.nextUrl.clone();
     dashboardUrl.pathname = "/dashboard";
     return NextResponse.redirect(dashboardUrl);
+  }
+
+  // Root → public tracking page
+  if (path === "/") {
+    const trackingUrl = request.nextUrl.clone();
+    trackingUrl.pathname = "/tracking";
+    return NextResponse.redirect(trackingUrl);
   }
 
   return supabaseResponse;

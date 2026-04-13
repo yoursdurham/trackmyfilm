@@ -1,5 +1,15 @@
 export type OrderStatus = "Received by Yours" | "Received at Lab" | "Scans Sent";
 
+export type FilmType = "35mm" | "120" | "Disposable Camera";
+export type FilmProcess = "Color" | "Black & White" | "Both";
+
+export interface RollDetail {
+  film_type: FilmType;
+  film_process: FilmProcess;
+  film_stock?: string;
+  prints_4x6?: boolean;
+}
+
 export interface StatusHistoryEntry {
   status: OrderStatus;
   changed_at: string; // ISO string
@@ -29,14 +39,17 @@ export interface FilmOrder {
   status: OrderStatus;
   status_history: StatusHistoryEntry[];
   status_updated_at: string;
-  film_type: "35mm" | "120";
-  film_process: "Color" | "Black & White" | "Both";
-  film_stock?: string; // e.g. "Kodak Portra 400", "Fujifilm 400H"
+  film_type: FilmType;
+  film_process: FilmProcess;
+  film_stock?: string;
   roll_count: number;
+  roll_details?: RollDetail[];
+  prints_4x6?: boolean;
   dropoff_date: string; // YYYY-MM-DD
   dropoff_number: number;
   wetransfer_link?: string;
   notes?: string;
+  customer_notes?: string;
   received_by_yours_at?: string;
   at_lab_at?: string;
   scans_sent_at?: string;

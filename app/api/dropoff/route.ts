@@ -23,7 +23,7 @@ import {
 } from "@/lib/db";
 import { normalizeEmail, normalizeCustomerName, normalizeOrderNumber } from "@/lib/validation";
 import { requireAuth } from "@/lib/api-auth";
-import type { Customer } from "@/lib/types";
+import type { Customer, RollDetail } from "@/lib/types";
 
 export async function POST(req: Request) {
   const auth = await requireAuth();
@@ -38,6 +38,8 @@ export async function POST(req: Request) {
     film_type: string;
     film_process: string;
     film_stock?: string;
+    roll_details?: RollDetail[];
+    prints_4x6?: boolean;
     notes?: string;
     send_email?: boolean;
   };
@@ -50,7 +52,7 @@ export async function POST(req: Request) {
 
   const {
     customer_name, customer_email, order_number,
-    dropoff_date, roll_count, film_type, film_process, film_stock, notes,
+    dropoff_date, roll_count, film_type, film_process, film_stock, roll_details, prints_4x6, notes,
     send_email = true,
   } = body;
 
@@ -116,6 +118,8 @@ export async function POST(req: Request) {
       film_type:            film_type as "35mm" | "120",
       film_process:         film_process as "Color" | "Black & White" | "Both",
       film_stock:           film_stock ?? undefined,
+      roll_details:         roll_details ?? undefined,
+      prints_4x6:           prints_4x6 ?? undefined,
       dropoff_number:       newTotalDropoffs,
       status:               "Received by Yours",
       status_history:       [{ status: "Received by Yours", changed_at: now }],

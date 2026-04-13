@@ -1,12 +1,8 @@
 import { NextResponse } from "next/server";
 import { getOrderByNumber, getCustomerByEmail, getOrdersByCustomerId } from "@/lib/db";
 import { normalizeEmail, normalizeOrderNumber } from "@/lib/validation";
-import { requireAuth } from "@/lib/api-auth";
 
 export async function GET(req: Request) {
-  const auth = await requireAuth();
-  if (auth instanceof NextResponse) return auth;
-
   try {
     const { searchParams } = new URL(req.url);
     const orderNumber = searchParams.get("order_number");
