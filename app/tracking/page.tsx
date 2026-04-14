@@ -11,6 +11,7 @@ import { format } from "date-fns";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import type { FilmOrder } from "@/lib/types";
+import { Mail } from "lucide-react";
 
 const statusSteps = [
   { status: "Received by Yours", icon: Clock,       activeBg: "bg-blue-500",    activeRing: "ring-blue-200",    activeText: "text-blue-700",    activeLine: "bg-blue-500" },
@@ -171,39 +172,31 @@ export default function Tracking() {
   };
 
 return (
-  <div className="min-h-screen bg-gradient-to-br from-stone-50 via-orange-50/30 to-amber-50/20">
-    <header className="bg-white/80 backdrop-blur-lg border-b border-stone-200/50">
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <div className="flex flex-col items-center text-center gap-3 mb-2">
-          <img
-            src="/logo.png"
-            alt="Yours Durham"
-            className="w-10 h-10 rounded-xl object-cover"
-          />
-          <div>
-            <h1 className="text-2xl font-bold text-slate-800">Track Your Film</h1>
-            <p className="text-sm text-slate-500">
-              Enter your order # or email to check status
-            </p>
-          </div>
-        </div>
+ <div className="min-h-screen bg-[#F7F3EC]">
+  <header className="bg-[#F7F3EC">
+    <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-10 pb-10 text-center">
 
-        <p className="text-sm text-slate-500">
-      
-        </p>
+      <a href="/">
+        <img
+          src="/logo.png"
+          alt="Yours Durham"
+          className="w-12 h-12 mx-auto mb-4 rounded-xl"
+        />
+      </a>
 
-        <p className="text-sm text-slate-500">
-       
-        </p>
-      </div>
-    </header>
+      <h1 className="text-1xl sm:text-1xl font-semibold text-slate-900 tracking-tight">
+  Track My Film
+  <span className="text-slate-500 font-normal ml-2">
+    – A Project by Yours, Durham
+  </span>
+</h1>
 
-    <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      {/* your page content here */}
-    </main>
+     
 
+    </div>
+  </header>
       <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-0 pb-8   // tighter top, keep bottom space">
-        <Card className="bg-white shadow-lg border-0 mb-8">
+        <Card className="bg-[#FFFDF9] border border-[#E8DED2] shadow-sm rounded-[24px] mb-8">
           <CardContent className="p-6">
             <div className="w-full mb-4">
   <div className="relative w-full">
@@ -220,12 +213,12 @@ return (
             </div>
             <div className="flex flex-col sm:flex-row gap-2 w-fyk">
               <Button onClick={() => handleSearch("order")} disabled={!searchTerm || isLoading}
-                className="flex-1 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600">
+               className="flex-1 bg-[#24324A] text-white hover:bg-[#1D293D] border-0 rounded-xl">
                 {isLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Search className="w-4 h-4 mr-2" />}
                 Track by Order #
               </Button>
               <Button onClick={() => handleSearch("email")} disabled={!searchTerm || isLoading}
-                variant="outline" className="flex-1 border-amber-300 text-amber-700 hover:bg-amber-50">
+                variant="outline" className="flex-1 border border-[#D9C7B8] text-[#24324A] bg-[#FFFDF9] hover:bg-[#F3ECE3] rounded-xl">
                 {isLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Search className="w-4 h-4 mr-2" />}
                 Track by Email
               </Button>
@@ -236,7 +229,7 @@ return (
         <AnimatePresence mode="wait">
           {isLoading ? (
             <div className="flex items-center justify-center py-20">
-              <Loader2 className="w-8 h-8 text-amber-500 animate-spin" />
+              <Loader2 className="w-8 h-8 text-#C9A34B animate-spin" />
             </div>
           ) : hasSearched && orders.length === 0 ? (
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}
@@ -364,13 +357,13 @@ return (
           )}
         </AnimatePresence>
 
-        <div className="mt-12 mb-8">
+        <div className="mt-1 mb-8">
           <h2 className="text-2xl font-bold text-slate-800 text-center mb-6">Explore Our Services</h2>
-          <div className="grid md:grid-cols-2 gap-6 max-w-3xl mx-auto">
+          <div className="grid md:grid-cols-3 gap-6  mx-auto">
             <a href="https://www.yoursdurham.com/develop" target="_blank" rel="noopener noreferrer">
               <Card className="bg-white shadow-md border-0 hover:shadow-xl transition-shadow cursor-pointer h-full">
                 <CardContent className="p-6">
-                  <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center mb-4">
+                  <div className="w-12 h-12 rounded-lg bg-[#E7D6A8] flex items-center justify-center mb-4">
                     <Package className="w-6 h-6 text-white" />
                   </div>
                   <h3 className="text-xl font-bold text-slate-800 mb-2">Film Developing</h3>
@@ -381,7 +374,7 @@ return (
             <a href="https://www.yoursdurham.com/shop-now" target="_blank" rel="noopener noreferrer">
               <Card className="bg-white shadow-md border-0 hover:shadow-xl transition-shadow cursor-pointer h-full">
                 <CardContent className="p-6">
-                  <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center mb-4">
+                  <div className="w-12 h-12 rounded-lg bg-[#8FAF9A] flex items-center justify-center mb-4">
                     <Film className="w-6 h-6 text-white" />
                   </div>
                   <h3 className="text-xl font-bold text-slate-800 mb-2">Shop Film</h3>
@@ -389,16 +382,26 @@ return (
                 </CardContent>
               </Card>
             </a>
+             <a href="mailto:hello@yoursdurham.com" target="_blank" rel="noopener noreferrer">
+              <Card className="bg-white shadow-md border-0 hover:shadow-xl transition-shadow cursor-pointer h-full">
+                <CardContent className="p-6">
+                  <div className="w-12 h-12 rounded-lg bg-[#C9A3B4] flex items-center justify-center mb-4">
+                    <Mail className="w-6 h-6 text-white" />
+                  </div>
+                  <h3 className="text-xl font-bold text-slate-800 mb-2">Need help?</h3>
+                  <p className="text-slate-600">Clicke here to send us an email!</p>
+                </CardContent>
+              </Card>
+            </a>
+            
           </div>
         </div>
 
-        <div className="text-center mt-8 text-sm text-slate-600">
-          Please reach out to{" "}
-          <a href={`mailto:${process.env.NEXT_PUBLIC_CONTACT_EMAIL || "hello@yoursdurham.com"}`} className="text-amber-600 hover:text-amber-700 font-medium">
-            {process.env.NEXT_PUBLIC_CONTACT_EMAIL || "hello@yoursdurham.com"}
-          </a>{" "}
-          if you have any questions regarding the status of your order.
-        </div>
+        <div className="text-center mt-8 text-sm text-slate-600 flex flex-col gap-1">
+  <span>209 N. Gregson St. Durham, NC 27701</span>
+  <span>Retail Hours: Thursdays 5–7PM & Saturdays 11–2PM</span>
+  <span>Film Drop Box - 24/7</span>
+</div>
       </main>
     </div>
   );
