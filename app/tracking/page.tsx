@@ -174,7 +174,7 @@ return (
   <div className="min-h-screen bg-gradient-to-br from-stone-50 via-orange-50/30 to-amber-50/20">
     <header className="bg-white/80 backdrop-blur-lg border-b border-stone-200/50">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <div className="flex items-center gap-3 mb-2">
+        <div className="flex flex-col items-center text-center gap-3 mb-2">
           <img
             src="/logo.png"
             alt="Yours Durham"
@@ -189,12 +189,11 @@ return (
         </div>
 
         <p className="text-sm text-slate-500">
-          Your order number can be found on your original confirmation email.
+      
         </p>
 
         <p className="text-sm text-slate-500">
-          If you purchased developing services in store, it will be your first/last initials
-          and the last 4 digits of your phone number, for example: JE1234
+       
         </p>
       </div>
     </header>
@@ -202,13 +201,12 @@ return (
     <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* your page content here */}
     </main>
-);
 
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-0 pb-8   // tighter top, keep bottom space">
         <Card className="bg-white shadow-lg border-0 mb-8">
           <CardContent className="p-6">
-            <div className="flex gap-3 mb-4">
-              <div className="relative flex-1">
+            <div className="w-full mb-4">
+  <div className="relative w-full">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
                 <Input placeholder="Enter order number or email..." value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
@@ -220,7 +218,7 @@ return (
                   className="pl-11 h-12 text-lg" />
               </div>
             </div>
-            <div className="flex flex-col sm:flex-row gap-2">
+            <div className="flex flex-col sm:flex-row gap-2 w-fyk">
               <Button onClick={() => handleSearch("order")} disabled={!searchTerm || isLoading}
                 className="flex-1 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600">
                 {isLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Search className="w-4 h-4 mr-2" />}
