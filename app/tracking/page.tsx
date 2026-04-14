@@ -363,7 +363,7 @@ return (
             <a href="https://www.yoursdurham.com/develop" target="_blank" rel="noopener noreferrer">
               <Card className="bg-white shadow-md border-0 hover:shadow-xl transition-shadow cursor-pointer h-full">
                 <CardContent className="p-6">
-                  <div className="w-12 h-12 rounded-lg bg-[#E7D6A8] flex items-center justify-center mb-4">
+                  <div className="w-12 h-12 rounded-lg bg-[#F5EBDC] flex items-center justify-center mb-4">
                     <Package className="w-6 h-6 text-white" />
                   </div>
                   <h3 className="text-xl font-bold text-slate-800 mb-2">Film Developing</h3>
@@ -385,7 +385,7 @@ return (
              <a href="mailto:hello@yoursdurham.com" target="_blank" rel="noopener noreferrer">
               <Card className="bg-white shadow-md border-0 hover:shadow-xl transition-shadow cursor-pointer h-full">
                 <CardContent className="p-6">
-                  <div className="w-12 h-12 rounded-lg bg-[#C9A3B4] flex items-center justify-center mb-4">
+                  <div className="w-12 h-12 rounded-lg bg-[#c5aed7] flex items-center justify-center mb-4">
                     <Mail className="w-6 h-6 text-white" />
                   </div>
                   <h3 className="text-xl font-bold text-slate-800 mb-2">Need help?</h3>
