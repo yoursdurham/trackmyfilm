@@ -5,11 +5,10 @@ import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
-import { Film, Search, Loader2, Calendar, Layers, Package, CheckCircle, Clock, Download, ExternalLink, Printer } from "lucide-react";
+import { Film, Search, Loader2, Calendar, Layers, Package, CheckCircle, Clock, Download, ExternalLink, Printer, Mail } from "lucide-react";
 import { format } from "date-fns";
 import { motion, AnimatePresence } from "framer-motion";
 import type { FilmOrder } from "@/lib/types";
-import { Mail } from "lucide-react";
 
 const statusSteps = [
   { status: "Received by Yours", icon: Clock,       activeBg: "bg-blue-500",    activeRing: "ring-blue-200",    activeText: "text-blue-700",    activeLine: "bg-blue-500" },
@@ -62,7 +61,6 @@ function OrderTimeline({ currentStatus, statusHistory }: {
   );
 }
 
-
 type CommittedSearch = { term: string; type: "order" | "email" };
 
 export default function Tracking() {
@@ -96,49 +94,37 @@ export default function Tracking() {
     setCommitted({ term: searchTerm, type });
   };
 
-return (
- <div className="min-h-screen bg-[#F7F3EC]">
-  <header className="bg-[#F7F3EC">
-    <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-10 pb-10 text-center">
+  return (
+    <div className="min-h-screen bg-[#F7F3EC]">
+      <header className="bg-[#F7F3EC]">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-10 pb-10 text-center">
+          <a href="/">
+            <img src="/logo.png" alt="Yours Durham" className="w-12 h-12 mx-auto mb-4 rounded-xl" />
+          </a>
+          <h1 className="text-xl font-semibold text-slate-900 tracking-tight">
+            Track My Film
+            <span className="text-slate-500 font-normal ml-2">– A Project by Yours, Durham</span>
+          </h1>
+        </div>
+      </header>
 
-      <a href="/">
-        <img
-          src="/logo.png"
-          alt="Yours Durham"
-          className="w-12 h-12 mx-auto mb-4 rounded-xl"
-        />
-      </a>
-
-      <h1 className="text-1xl sm:text-1xl font-semibold text-slate-900 tracking-tight">
-  Track My Film
-  <span className="text-slate-500 font-normal ml-2">
-    – A Project by Yours, Durham
-  </span>
-</h1>
-
-     
-
-    </div>
-  </header>
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-0 pb-8   // tighter top, keep bottom space">
+      <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pb-8">
         <Card className="bg-[#FFFDF9] border border-[#E8DED2] shadow-sm rounded-[24px] mb-8">
           <CardContent className="p-6">
-            <div className="w-full mb-4">
-  <div className="relative w-full">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                <Input placeholder="Enter order number or email..." value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && searchTerm) {
-                      handleSearch(searchTerm.includes("@") ? "email" : "order");
-                    }
-                  }}
-                  className="pl-11 h-12 text-lg" />
-              </div>
+            <div className="relative w-full mb-4">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+              <Input placeholder="Enter order number or email..." value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && searchTerm) {
+                    handleSearch(searchTerm.includes("@") ? "email" : "order");
+                  }
+                }}
+                className="pl-11 h-12 text-lg" />
             </div>
-            <div className="flex flex-col sm:flex-row gap-2 w-fyk">
+            <div className="flex flex-col sm:flex-row gap-2">
               <Button onClick={() => handleSearch("order")} disabled={!searchTerm || isLoading}
-               className="flex-1 bg-[#24324A] text-white hover:bg-[#1D293D] border-0 rounded-xl">
+                className="flex-1 bg-[#24324A] text-white hover:bg-[#1D293D] border-0 rounded-xl">
                 {isLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Search className="w-4 h-4 mr-2" />}
                 Track by Order #
               </Button>
@@ -154,7 +140,7 @@ return (
         <AnimatePresence mode="wait">
           {isLoading ? (
             <div className="flex items-center justify-center py-20">
-              <Loader2 className="w-8 h-8 text-#C9A34B animate-spin" />
+              <Loader2 className="w-8 h-8 text-[#C9A34B] animate-spin" />
             </div>
           ) : hasSearched && orders.length === 0 ? (
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}
@@ -176,7 +162,6 @@ return (
               {orders.map((order) => (
                 <Card key={order.id} className="bg-white shadow-md border-0 overflow-hidden">
                   <CardContent className="p-6">
-                    {/* Header */}
                     <div className="flex items-start justify-between mb-6">
                       <div>
                         <h2 className="text-xl font-bold text-slate-800 mb-1">Order #{order.order_number}</h2>
@@ -191,7 +176,6 @@ return (
 
                     <OrderTimeline currentStatus={order.status} statusHistory={order.status_history} />
 
-                    {/* Drop-off date + rolls */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-6 border-t border-slate-100">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center">
@@ -272,7 +256,6 @@ return (
                         </a>
                       </div>
                     )}
-
                   </CardContent>
                 </Card>
               ))}
@@ -280,14 +263,14 @@ return (
           )}
         </AnimatePresence>
 
-        <div className="mt-1 mb-8">
+        <div className="mt-12 mb-8">
           <h2 className="text-2xl font-bold text-slate-800 text-center mb-6">Explore Our Services</h2>
-          <div className="grid md:grid-cols-3 gap-6  mx-auto">
+          <div className="grid md:grid-cols-3 gap-6">
             <a href="https://www.yoursdurham.com/develop" target="_blank" rel="noopener noreferrer">
               <Card className="bg-white shadow-md border-0 hover:shadow-xl transition-shadow cursor-pointer h-full">
                 <CardContent className="p-6">
                   <div className="w-12 h-12 rounded-lg bg-[#F5EBDC] flex items-center justify-center mb-4">
-                    <Package className="w-6 h-6 text-white" />
+                    <Package className="w-6 h-6 text-[#24324A]" />
                   </div>
                   <h3 className="text-xl font-bold text-slate-800 mb-2">Film Developing</h3>
                   <p className="text-slate-600">Professional film developing services for all your analog photography needs</p>
@@ -305,26 +288,25 @@ return (
                 </CardContent>
               </Card>
             </a>
-             <a href="mailto:hello@yoursdurham.com" target="_blank" rel="noopener noreferrer">
+            <a href="mailto:hello@yoursdurham.com">
               <Card className="bg-white shadow-md border-0 hover:shadow-xl transition-shadow cursor-pointer h-full">
                 <CardContent className="p-6">
                   <div className="w-12 h-12 rounded-lg bg-[#c5aed7] flex items-center justify-center mb-4">
                     <Mail className="w-6 h-6 text-white" />
                   </div>
                   <h3 className="text-xl font-bold text-slate-800 mb-2">Need help?</h3>
-                  <p className="text-slate-600">Clicke here to send us an email!</p>
+                  <p className="text-slate-600">Click here to send us an email!</p>
                 </CardContent>
               </Card>
             </a>
-            
           </div>
         </div>
 
         <div className="text-center mt-8 text-sm text-slate-600 flex flex-col gap-1">
-  <span>209 N. Gregson St. Durham, NC 27701</span>
-  <span>Retail Hours: Thursdays 5–7PM & Saturdays 11–2PM</span>
-  <span>Film Drop Box - 24/7</span>
-</div>
+          <span>209 N. Gregson St. Durham, NC 27701</span>
+          <span>Retail Hours: Thursdays 5–7PM & Saturdays 11–2PM</span>
+          <span>Film Drop Box - 24/7</span>
+        </div>
       </main>
     </div>
   );
