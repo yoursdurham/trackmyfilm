@@ -389,7 +389,7 @@ return (
                     <Mail className="w-6 h-6 text-white" />
                   </div>
                   <h3 className="text-xl font-bold text-slate-800 mb-2">Need help?</h3>
-                  <p className="text-slate-600">Clicke here to send us an email!</p>
+                  <p className="text-slate-600">Click here to send us an email!</p>
                 </CardContent>
               </Card>
             </a>
@@ -397,8 +397,21 @@ return (
           </div>
         </div>
 
-        <div className="text-center mt-8 text-sm text-slate-600 flex flex-col gap-1">
-  <span>209 N. Gregson St. Durham, NC 27701</span>
+        <div className="text-left sm:text-center mt-8 text-sm text-slate-600 flex flex-col gap-1 px-1 sm:px-0 leading-tight">
+
+  
+
+  <a
+
+    href="http://maps.apple.com/?q=209+N+Gregson+St+Durham+NC+27701"
+
+    className="text-[#24324A] underline underline-offset-2 hover:no-underline"
+
+  >
+
+    209 N. Gregson St. Durham, NC 27701
+
+  </a>
   <span>Retail Hours: Thursdays 5–7PM & Saturdays 11–2PM</span>
   <span>Film Drop Box - 24/7</span>
 </div>
