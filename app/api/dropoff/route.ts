@@ -205,7 +205,7 @@ export async function POST(req: Request) {
     customer: {
       id:             customer.id,
       name:           customer.name,
-      isNew:          (customer.total_dropoffs || 0) === 0,
+      isNew:          newTotalDropoffs === 1,
       total_dropoffs: newTotalDropoffs,
     },
     email: emailResult,

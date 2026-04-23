@@ -8,15 +8,6 @@ Film lab order tracking system for **Yours Durham**. Built with Next.js 16, Supa
 - Order status lookup is also behind login (`/tracking`)
 - Transactional emails fire automatically at each status change via Resend
 
-## Login
-
-```
-Email:    hello@yoursdurham.com
-Password: YoursDurham2026!
-```
-
-Forgot password? Use the "Forgot password?" link on the login page — it sends a reset email.
-
 ---
 
 ## Getting started

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -28,7 +29,7 @@ import type { FilmOrder } from "@/lib/types";
 
 interface Props {
   order: FilmOrder;
-  onStatusChange: (id: string, status: string, wetransferLink?: string, force?: boolean) => Promise<void>;
+  onStatusChange: (id: string, status: string, wetransferLink?: string, force?: boolean, sendEmail?: boolean) => Promise<void>;
   onDelete: (id: string) => void;
 }
 
@@ -37,6 +38,7 @@ export default function OrderCard({ order, onStatusChange, onDelete }: Props) {
   const [showForceDialog, setShowForceDialog] = useState(false);
   const [pendingStatus, setPendingStatus] = useState<string | null>(null);
   const [wetransferLink, setWetransferLink] = useState("");
+  const [sendScanEmail, setSendScanEmail] = useState(true);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
   const [isRetryingEmail, setIsRetryingEmail] = useState(false);
@@ -84,9 +86,10 @@ export default function OrderCard({ order, onStatusChange, onDelete }: Props) {
       return;
     }
 
-    // Scans Sent requires WeTransfer link
+    // Scans Sent — open dialog for optional WeTransfer link + email toggle
     if (status === "Scans Sent") {
       setWetransferLink(order.wetransfer_link || "");
+      setSendScanEmail(true);
       setPendingStatus(status);
       setShowLinkDialog(true);
       return;
@@ -95,10 +98,10 @@ export default function OrderCard({ order, onStatusChange, onDelete }: Props) {
     doStatusChange(status);
   };
 
-  const doStatusChange = async (status: string, link?: string, force?: boolean) => {
+  const doStatusChange = async (status: string, link?: string, force?: boolean, sendEmail?: boolean) => {
     setIsUpdating(true);
     try {
-      await onStatusChange(order.id, status, link, force);
+      await onStatusChange(order.id, status, link, force, sendEmail);
     } finally {
       setIsUpdating(false);
     }
@@ -106,10 +109,9 @@ export default function OrderCard({ order, onStatusChange, onDelete }: Props) {
 
   const handleSaveLinkAndStatus = async () => {
     const raw = wetransferLink.trim();
-    if (!raw) { toast.error("WeTransfer link is required"); return; }
-    if (!isValidWetransferLink(raw)) { toast.error("Please enter a valid WeTransfer link"); return; }
+    if (raw && !isValidWetransferLink(raw)) { toast.error("Please enter a valid WeTransfer link (wetransfer.com)"); return; }
     setShowLinkDialog(false);
-    await doStatusChange("Scans Sent", ensureHttps(raw));
+    await doStatusChange("Scans Sent", raw ? ensureHttps(raw) : undefined, undefined, sendScanEmail);
   };
 
   const handleForceConfirm = async () => {
@@ -285,23 +287,36 @@ export default function OrderCard({ order, onStatusChange, onDelete }: Props) {
         </div>
       </CardContent>
 
-      {/* WeTransfer link dialog */}
+      {/* Scans Sent dialog */}
       <Dialog open={showLinkDialog} onOpenChange={setShowLinkDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Add WeTransfer Link</DialogTitle>
-            <DialogDescription>Enter the WeTransfer link for the scans</DialogDescription>
+            <DialogTitle>Mark as Scans Sent</DialogTitle>
+            <DialogDescription>Optionally add a WeTransfer link for the customer</DialogDescription>
           </DialogHeader>
-          <div className="space-y-2">
-            <Label htmlFor="wetransfer">WeTransfer Link *</Label>
-            <Input id="wetransfer" value={wetransferLink}
-              onChange={(e) => setWetransferLink(e.target.value)}
-              placeholder="https://wetransfer.com/..." />
-            <p className="text-xs text-slate-500">Link must be from wetransfer.com</p>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="wetransfer">WeTransfer Link <span className="text-slate-400 font-normal">(optional)</span></Label>
+              <Input id="wetransfer" value={wetransferLink}
+                onChange={(e) => setWetransferLink(e.target.value)}
+                placeholder="https://wetransfer.com/..." />
+              <p className="text-xs text-slate-500">Must be from wetransfer.com if provided</p>
+            </div>
+            <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+              <Checkbox id="scan-email" checked={sendScanEmail} onCheckedChange={(v) => setSendScanEmail(!!v)} />
+              <div>
+                <label htmlFor="scan-email" className="text-sm font-medium text-slate-700 cursor-pointer">
+                  Send confirmation email
+                </label>
+                <p className="text-xs text-slate-500">
+                  {sendScanEmail ? "Customer will be notified that scans are ready" : "No email will be sent"}
+                </p>
+              </div>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowLinkDialog(false)}>Cancel</Button>
-            <Button onClick={handleSaveLinkAndStatus}>Save & Update Status</Button>
+            <Button onClick={handleSaveLinkAndStatus}>Update Status</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

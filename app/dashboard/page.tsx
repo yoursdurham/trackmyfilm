@@ -49,12 +49,12 @@ export default function Dashboard() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["filmOrders"] }),
   });
 
-  const handleStatusChange = async (id: string, status: string, wetransferLink?: string, force?: boolean) => {
+  const handleStatusChange = async (id: string, status: string, wetransferLink?: string, force?: boolean, sendEmail?: boolean) => {
     try {
       const res = await fetch("/api/status", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ order_id: id, new_status: status, wetransfer_link: wetransferLink, force }),
+        body: JSON.stringify({ order_id: id, new_status: status, wetransfer_link: wetransferLink, force, send_email: sendEmail }),
       });
       const data = await res.json();
       if (data.success) {

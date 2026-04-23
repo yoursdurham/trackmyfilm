@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -41,7 +41,6 @@ interface RollState {
   film_process: FilmProcess | "";
   film_stock: string;       // selected from dropdown (empty = none, "__other__" = custom)
   custom_stock: string;     // shown when film_stock === "__other__"
-  prints_4x6: boolean;
 }
 
 const emptyRoll = (): RollState => ({
@@ -49,7 +48,6 @@ const emptyRoll = (): RollState => ({
   film_process: "",
   film_stock: "",
   custom_stock: "",
-  prints_4x6: false,
 });
 
 const emptyMeta = {
@@ -73,6 +71,15 @@ export default function NewDropoffForm({ open, onOpenChange, onSuccess, customer
     customer_email: selectedCustomer?.email || "",
   });
   const [rolls, setRolls] = useState<RollState[]>([emptyRoll()]);
+  const [customStocks, setCustomStocks] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (!open) return;
+    fetch("/api/film-stocks")
+      .then((r) => r.ok ? r.json() : [])
+      .then((data: string[]) => setCustomStocks(data))
+      .catch(() => {});
+  }, [open]);
 
   const set = (key: keyof typeof emptyMeta, value: unknown) =>
     setFormData((prev) => ({ ...prev, [key]: value }));
@@ -113,7 +120,6 @@ export default function NewDropoffForm({ open, onOpenChange, onSuccess, customer
         film_process: r.film_process as FilmProcess,
         film_stock: r.film_stock === "__other__" ? r.custom_stock.trim() || undefined
           : r.film_stock || undefined,
-        prints_4x6: r.prints_4x6 || undefined,
       }));
 
       const res = await fetch("/api/dropoff", {
@@ -129,7 +135,6 @@ export default function NewDropoffForm({ open, onOpenChange, onSuccess, customer
           film_process:   roll_details[0].film_process,
           film_stock:     roll_details[0].film_stock,
           roll_details,
-          prints_4x6:     roll_details.some((r) => r.prints_4x6) || undefined,
           notes:          formData.notes || undefined,
           send_email:     sendEmail,
         }),
@@ -318,7 +323,12 @@ export default function NewDropoffForm({ open, onOpenChange, onSuccess, customer
                     className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500"
                   >
                     <option value="">Select film stock (optional)</option>
-                    {FILM_STOCKS.map((s) => <option key={s} value={s}>{s}</option>)}
+                    {FILM_STOCKS.map((s) => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                    {customStocks.filter((s) => !FILM_STOCKS.includes(s)).sort().map((s) => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
                     <option value="__other__">Other (specify below)</option>
                   </select>
                   {roll.film_stock === "__other__" && (
@@ -329,15 +339,6 @@ export default function NewDropoffForm({ open, onOpenChange, onSuccess, customer
                       onChange={(e) => setRoll(i, "custom_stock", e.target.value)}
                     />
                   )}
-                </div>
-
-                {/* 4x6 Prints */}
-                <div className="flex items-center gap-3 pt-1">
-                  <Checkbox id={`prints-${i}`} checked={roll.prints_4x6}
-                    onCheckedChange={(v) => setRoll(i, "prints_4x6", !!v)} />
-                  <label htmlFor={`prints-${i}`} className="text-sm font-medium text-slate-700 cursor-pointer">
-                    4x6 Prints?
-                  </label>
                 </div>
               </div>
             ))}

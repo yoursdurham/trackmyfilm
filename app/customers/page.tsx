@@ -19,6 +19,7 @@ import { toast } from "sonner";
 import Link from "next/link";
 import AddCustomerForm from "@/components/AddCustomerForm";
 import type { Customer, FilmOrder } from "@/lib/types";
+import { STATUS_TEMPLATE_MAP } from "@/lib/constants";
 
 type SortKey = "email" | "name" | "last_name" | "last_dropoff_date" | "total_rolls" | "total_dropoffs";
 type SortDir = "asc" | "desc";
@@ -452,7 +453,7 @@ export default function Customers() {
                                               <button
                                                 onClick={(e) => {
                                                   e.stopPropagation();
-                                                  const t = order.status === "Scans Sent" ? "scans_sent" : order.status === "Received at Lab" ? "film_at_lab" : "film_drop_received";
+                                                  const t = STATUS_TEMPLATE_MAP[order.status] ?? "film_drop_received";
                                                   retryEmailMutation.mutate({ orderId: order.id, template: t });
                                                 }}
                                                 disabled={retryEmailMutation.isPending}

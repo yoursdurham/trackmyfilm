@@ -16,11 +16,12 @@ export async function POST(req: Request) {
   if (auth instanceof NextResponse) return auth;
 
   try {
-    const { order_id, new_status, wetransfer_link, force = false } = await req.json() as {
+    const { order_id, new_status, wetransfer_link, force = false, send_email = true } = await req.json() as {
       order_id: string;
       new_status: OrderStatus;
       wetransfer_link?: string;
-      force?: boolean; // admin override for backward transitions
+      force?: boolean;
+      send_email?: boolean;
     };
 
     if (!order_id || !new_status) {
@@ -53,16 +54,9 @@ export async function POST(req: Request) {
       }, { status: 422 });
     }
 
-    // Require a valid WeTransfer link for Scans Sent
-    if (new_status === "Scans Sent") {
-      const finalLink = wetransfer_link || order.wetransfer_link;
-      if (!finalLink) {
-        return NextResponse.json(
-          { error: "WeTransfer link is required for Scans Sent status" },
-          { status: 400 }
-        );
-      }
-      if (!isValidWetransferLink(finalLink)) {
+    // Validate WeTransfer link only if one was provided
+    if (new_status === "Scans Sent" && wetransfer_link) {
+      if (!isValidWetransferLink(wetransfer_link)) {
         return NextResponse.json(
           { error: "WeTransfer link must be from wetransfer.com" },
           { status: 400 }
@@ -93,9 +87,9 @@ export async function POST(req: Request) {
 
     await updateOrder(order_id, updateData);
 
-    // Trigger email if a template exists for this status
+    // Trigger email if a template exists and send_email is true
     const template = STATUS_TEMPLATE_MAP[new_status];
-    if (!template) {
+    if (!template || !send_email) {
       return NextResponse.json({ success: true, order_id, new_status, email_sent: false });
     }
 

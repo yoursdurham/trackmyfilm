@@ -84,6 +84,16 @@ export async function updateOrder(id: string, data: Partial<FilmOrder>): Promise
   return updated as FilmOrder;
 }
 
+export async function getDistinctFilmStocks(): Promise<string[]> {
+  const { data, error } = await getSupabase()
+    .from("film_orders")
+    .select("film_stock")
+    .not("film_stock", "is", null);
+  if (error) throw new Error(error.message);
+  const stocks = [...new Set((data as { film_stock: string }[]).map((r) => r.film_stock).filter(Boolean))];
+  return stocks.sort();
+}
+
 export async function deleteOrder(id: string): Promise<void> {
   const { error } = await getSupabase()
     .from("film_orders")
