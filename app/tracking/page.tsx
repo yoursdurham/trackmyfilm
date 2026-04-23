@@ -129,7 +129,7 @@ export default function Tracking() {
                 Track by Order #
               </Button>
               <Button onClick={() => handleSearch("email")} disabled={!searchTerm || isLoading}
-                variant="outline" className="flex-1 border border-[#D9C7B8] text-[#24324A] bg-[#FFFDF9] hover:bg-[#F3ECE3] rounded-xl">
+                variant="outline"  className="flex-1 justify-start sm:justify-center items-center gap-3 px-4 py-4 text-left sm:text-center bg-[#24324A] text-white hover:bg-[#1D293D] border-0 rounded-xl">
                 {isLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Search className="w-4 h-4 mr-2" />}
                 Track by Email
               </Button>
@@ -302,8 +302,21 @@ export default function Tracking() {
           </div>
         </div>
 
-        <div className="text-center mt-8 text-sm text-slate-600 flex flex-col gap-1">
-  <span>209 N. Gregson St. Durham, NC 27701</span>
+        <div className="text-left sm:text-center mt-8 text-sm text-slate-600 flex flex-col gap-1 px-1 sm:px-0 leading-tight">
+
+  
+
+  <a
+
+    href="http://maps.apple.com/?q=209+N+Gregson+St+Durham+NC+27701"
+
+    className="text-[#24324A] underline underline-offset-2 hover:no-underline"
+
+  >
+
+    209 N. Gregson St. Durham, NC 27701
+
+  </a>
   <span>Retail Hours: Thursdays 5–7PM & Saturdays 11–2PM</span>
   <span>Film Drop Box - 24/7</span>
 </div>
