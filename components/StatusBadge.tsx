@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 import type { OrderStatus } from "@/lib/types";
 
 const statusConfig: Record<OrderStatus, { bg: string; text: string; dot: string }> = {
-  "Received by Yours": { bg: "bg-blue-50", text: "text-blue-700", dot: "bg-blue-500" },
+  "Received by Yours": { bg: "bg-[#E6DABD]",text: "text-[#7A6A4F]", dot: "bg-[#7A6A4F]" },
   "Received at Lab":   { bg: "bg-amber-50", text: "text-amber-700", dot: "bg-amber-500" },
   "Scans Sent":        { bg: "bg-emerald-50", text: "text-emerald-700", dot: "bg-emerald-500" },
 };
