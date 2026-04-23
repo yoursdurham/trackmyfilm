@@ -29,7 +29,7 @@ export async function proxy(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
 
   const path = request.nextUrl.pathname;
-  const isProtected = PROTECTED.some((p) => path.startsWith(p));
+  const isProtected = PROTECTED.some((p) => path === p || path.startsWith(p + "/"));
 
   // Unauthenticated user hitting a protected route → send to login
   if (isProtected && !user) {

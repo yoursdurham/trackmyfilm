@@ -323,7 +323,10 @@ export default function NewDropoffForm({ open, onOpenChange, onSuccess, customer
                     className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500"
                   >
                     <option value="">Select film stock (optional)</option>
-                    {[...new Set([...FILM_STOCKS, ...customStocks])].sort().map((s) => (
+                    {FILM_STOCKS.map((s) => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                    {customStocks.filter((s) => !FILM_STOCKS.includes(s)).sort().map((s) => (
                       <option key={s} value={s}>{s}</option>
                     ))}
                     <option value="__other__">Other (specify below)</option>
