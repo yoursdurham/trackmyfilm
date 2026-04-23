@@ -138,12 +138,12 @@ export default function Tracking() {
             </div>
             <div className="flex flex-col sm:flex-row gap-2">
               <Button onClick={() => handleSearch("order")} disabled={!searchTerm || isLoading}
-                 variant="outline"  className="flex-1 justify-start sm:justify-center items-center gap-3 px-4 py-4 text-left sm:text-center bg-[#24324A] text-white hover:bg-[#1D293D] border-0 rounded-xl">
+                 variant="outline"  className="flex-1 justify-start sm:justify-center items-center gap-3 px-4 py-4 text-left sm:text-center bg-[#7F3358] text-white hover:bg-[#7F3358] border-0 rounded-xl">
                 {isLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Search className="w-4 h-4 mr-2" />}
                 Track by Order #
               </Button>
               <Button onClick={() => handleSearch("email")} disabled={!searchTerm || isLoading}
-                variant="outline"  className="flex-1 justify-start sm:justify-center items-center gap-3 px-4 py-4 text-left sm:text-center bg-[#24324A] text-white hover:bg-[#1D293D] border-0 rounded-xl">
+                variant="outline"  className="flex-1 justify-start sm:justify-center items-center gap-3 px-4 py-4 text-left sm:text-center bg-[#7F3358] text-white hover:bg-[#7F3358] border-0 rounded-xl">
                 {isLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Search className="w-4 h-4 mr-2" />}
                 Track by Email
               </Button>
@@ -284,7 +284,7 @@ export default function Tracking() {
               <Card className="bg-white shadow-md border-0 hover:shadow-xl transition-shadow cursor-pointer h-full">
                 <CardContent className="p-6">
                   <div className="w-12 h-12 rounded-lg bg-[#F5EBDC] flex items-center justify-center mb-4">
-                    <Package className="w-6 h-6 text-[#24324A]" />
+                    <Package className="w-6 h-6 text-white" />
                   </div>
                   <h3 className="text-xl font-bold text-slate-800 mb-2">Film Developing</h3>
                   <p className="text-slate-600">Professional film developing services for all your analog photography needs</p>
@@ -316,10 +316,13 @@ export default function Tracking() {
           </div>
         </div>
 
-        <div className="text-left sm:text-center mt-8 text-sm text-slate-600 flex flex-col gap-1 px-1 sm:px-0 leading-tight">
+        <div className="text-left sm:text-center mt-8 text-sm text-slate-600 flex flex-col gap-2 px-1 sm:px-0 leading-relaxed">
 
-  
+<span className="font-semibold text-[#24324A] tracking-wide">
 
+    INFO:
+
+  </span>
   <a
 
     href="http://maps.apple.com/?q=209+N+Gregson+St+Durham+NC+27701"
