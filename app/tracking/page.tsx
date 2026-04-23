@@ -124,7 +124,7 @@ export default function Tracking() {
             </div>
             <div className="flex flex-col sm:flex-row gap-2">
               <Button onClick={() => handleSearch("order")} disabled={!searchTerm || isLoading}
-                className="flex-1 bg-[#24324A] text-white hover:bg-[#1D293D] border-0 rounded-xl">
+                 variant="outline" className="flex-1 bg-[#24324A] text-white hover:bg-[#1D293D] border-0 rounded-xl">
                 {isLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Search className="w-4 h-4 mr-2" />}
                 Track by Order #
               </Button>
