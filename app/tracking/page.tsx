@@ -101,10 +101,11 @@ export default function Tracking() {
           <a href="/">
             <img src="/logo.png" alt="Yours Durham" className="w-12 h-12 mx-auto mb-4 rounded-xl" />
           </a>
-          <h1 className="text-xl font-semibold text-slate-900 tracking-tight">
-            Track My Film
-            <span className="text-slate-500 font-normal ml-2">– A Project by Yours, Durham</span>
-          </h1>
+          <h1 className="text-sm sm:text-xl font-semibold text-slate-900 tracking-tight whitespace-nowrap">
+  Track My Film
+  <span className="text-slate-500 font-normal ml-1 sm:ml-2">– A Project by Yours, Durham</span>
+</h1>
+
         </div>
       </header>
 
