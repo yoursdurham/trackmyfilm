@@ -137,17 +137,32 @@ export default function Tracking() {
 />
             </div>
             <div className="flex flex-col sm:flex-row gap-2">
-              <Button onClick={() => handleSearch("order")} disabled={!searchTerm || isLoading}
-                 variant="outline"  className="flex-1 justify-start sm:justify-center items-center gap-3 px-4 py-4 text-left sm:text-center bg-[#7F3358] text-white hover:bg-[#7F3358] border-0 rounded-xl">
-                {isLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Search className="w-4 h-4 mr-2" />}
-                Track by Order #
-              </Button>
-              <Button onClick={() => handleSearch("email")} disabled={!searchTerm || isLoading}
-                variant="outline"  className="flex-1 justify-start sm:justify-center items-center gap-3 px-4 py-4 text-left sm:text-center bg-[#7F3358] text-white hover:bg-[#7F3358] border-0 rounded-xl">
-                {isLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Search className="w-4 h-4 mr-2" />}
-                Track by Email
-              </Button>
-            </div>
+  <button
+    onClick={() => handleSearch("order")}
+    disabled={!searchTerm || isLoading}
+    className="flex-1 flex justify-start sm:justify-center items-center gap-3 px-4 py-4 text-left sm:text-center bg-[#B19FBF] text-white rounded-xl transition-transform active:scale-[0.99] disabled:opacity-50"
+  >
+    {isLoading ? (
+      <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+    ) : (
+      <Search className="w-4 h-4 shrink-0" />
+    )}
+    <span className="flex-1 sm:flex-none">Track by Order #</span>
+  </button>
+
+  <button
+    onClick={() => handleSearch("email")}
+    disabled={!searchTerm || isLoading}
+    className="flex-1 flex justify-start sm:justify-center items-center gap-3 px-4 py-4 text-left sm:text-center bg-[#B19FBF] text-white rounded-xl transition-transform active:scale-[0.99] disabled:opacity-50"
+  >
+    {isLoading ? (
+      <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+    ) : (
+      <Search className="w-4 h-4 shrink-0" />
+    )}
+    <span className="flex-1 sm:flex-none">Track by Email</span>
+  </button>
+</div>
           </CardContent>
         </Card>
 
