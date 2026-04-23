@@ -113,14 +113,27 @@ export default function Tracking() {
           <CardContent className="p-6">
             <div className="relative w-full mb-4">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-              <Input placeholder="Enter order number or email..." value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && searchTerm) {
-                    handleSearch(searchTerm.includes("@") ? "email" : "order");
-                  }
-                }}
-                className="pl-11 h-12 text-lg" />
+              <Input
+
+  placeholder="Enter order number or email..."
+
+  value={searchTerm}
+
+  onChange={(e) => setSearchTerm(e.target.value)}
+
+  onKeyDown={(e) => {
+
+    if (e.key === "Enter" && searchTerm) {
+
+      handleSearch(searchTerm.includes("@") ? "email" : "order");
+
+    }
+
+  }}
+
+  className="pl-11 h-12 text-sm sm:text-base"
+
+/>
             </div>
             <div className="flex flex-col sm:flex-row gap-2">
               <Button onClick={() => handleSearch("order")} disabled={!searchTerm || isLoading}
