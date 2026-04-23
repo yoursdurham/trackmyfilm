@@ -92,13 +92,7 @@ export async function POST(req: Request) {
   };
 
   if (template === "scans_sent") {
-    if (!order.wetransfer_link) {
-      return NextResponse.json(
-        { error: "Cannot send scans_sent email: no WeTransfer link on order" },
-        { status: 400 }
-      );
-    }
-    variables.wetransfer_link = order.wetransfer_link;
+    variables.wetransfer_link = order.wetransfer_link ?? "";
   }
 
   // Send via Resend using dashboard template
