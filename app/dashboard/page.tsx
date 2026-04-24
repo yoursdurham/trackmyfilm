@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Search, Film, Clock, CheckCircle, Package, Loader2, Users, LogOut } from "lucide-react";
+import { Plus, Search, Film, Clock, CheckCircle, Package, Loader2, Users, LogOut, BarChart3 } from "lucide-react";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
@@ -100,6 +100,12 @@ export default function Dashboard() {
                 <Button variant="outline" size="icon" className="border-slate-200 sm:w-auto sm:px-3" title="Track Order">
                   <Search className="w-4 h-4" />
                   <span className="hidden sm:inline ml-2">Track Order</span>
+                </Button>
+              </Link>
+              <Link href="/reports">
+                <Button variant="outline" size="icon" className="border-slate-200 sm:w-auto sm:px-3" title="Reports">
+                  <BarChart3 className="w-4 h-4" />
+                  <span className="hidden sm:inline ml-2">Reports</span>
                 </Button>
               </Link>
               <Link href="/customers">
