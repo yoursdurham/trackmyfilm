@@ -323,12 +323,12 @@ export default function OrderCard({ order, onStatusChange, onDelete, onOrderUpda
             order.wetransfer_link ? (
               <div className="flex gap-2">
                 <Button size="sm" variant="outline"
-                  className="h-7 flex-1 border-[var(--accent-purple)]/40 text-xs text-[#806A91] hover:bg-[var(--accent-purple)]/10"
+                  className="h-7 flex-1 border-[var(--accent-green)]/40 text-xs text-[#5E8068] hover:bg-[var(--accent-green)]/10"
                   onClick={() => { navigator.clipboard.writeText(order.wetransfer_link!); toast.success("Link copied!"); }}>
                   <Copy className="w-3 h-3 mr-1" /> Copy link
                 </Button>
                 <Button size="sm" variant="outline"
-                  className="h-7 flex-1 border-[var(--accent-purple)]/40 text-xs text-[#806A91] hover:bg-[var(--accent-purple)]/10"
+                  className="h-7 flex-1 border-[var(--accent-green)]/40 text-xs text-[#5E8068] hover:bg-[var(--accent-green)]/10"
                   onClick={() => window.open(order.wetransfer_link, "_blank")}>
                   <ExternalLink className="w-3 h-3 mr-1" /> Open
                 </Button>
@@ -365,7 +365,7 @@ export default function OrderCard({ order, onStatusChange, onDelete, onOrderUpda
                 <div key={idx} className="flex items-start gap-2 text-xs bg-slate-50 rounded px-2 py-1.5">
                   <span className={`w-2 h-2 rounded-full mt-1 flex-shrink-0 ${
                     entry.status === "Received by Yours" ? "bg-[var(--accent-tan)]" :
-                    entry.status === "Received at Lab"   ? "bg-[var(--accent-green)]" : "bg-[var(--accent-purple)]"
+                    entry.status === "Received at Lab"   ? "bg-[var(--accent-purple)]" : "bg-[var(--accent-green)]"
                   }`} />
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-slate-700">{entry.status}</p>
@@ -396,7 +396,7 @@ export default function OrderCard({ order, onStatusChange, onDelete, onOrderUpda
                     className={order.status === status ? "bg-[var(--accent-tan)]/35 text-slate-800" : ""}>
                     <span className={`w-2 h-2 rounded-full mr-2 ${
                       status === "Received by Yours" ? "bg-[var(--accent-tan)]" :
-                      status === "Received at Lab"   ? "bg-[var(--accent-green)]" : "bg-[var(--accent-purple)]"
+                      status === "Received at Lab"   ? "bg-[var(--accent-purple)]" : "bg-[var(--accent-green)]"
                     }`} />
                     {status}
                     {isBackward && <span className="ml-auto text-xs text-slate-400">↩ undo</span>}
@@ -732,7 +732,7 @@ export default function OrderCard({ order, onStatusChange, onDelete, onOrderUpda
                           </span>
                         ) : null}
                         {roll.film_process ? (
-                          <span className="rounded-full bg-[var(--accent-green)] px-2 py-0.5 text-xs font-medium text-white">
+                          <span className="rounded-full bg-[var(--accent-purple)] px-2 py-0.5 text-xs font-medium text-white">
                             {roll.film_process}
                           </span>
                         ) : null}
@@ -742,7 +742,7 @@ export default function OrderCard({ order, onStatusChange, onDelete, onOrderUpda
                           </span>
                         ) : null}
                         {roll.prints_4x6 ? (
-                          <span className="rounded-full bg-[var(--accent-purple)] px-2 py-0.5 text-xs font-medium text-white">
+                          <span className="rounded-full bg-[var(--accent-green)] px-2 py-0.5 text-xs font-medium text-white">
                             4x6 Prints
                           </span>
                         ) : null}
@@ -876,7 +876,7 @@ export default function OrderCard({ order, onStatusChange, onDelete, onOrderUpda
                     >
                       <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${
                         entry.status === "Received by Yours" ? "bg-[var(--accent-tan)]" :
-                        entry.status === "Received at Lab" ? "bg-[var(--accent-green)]" : "bg-[var(--accent-purple)]"
+                        entry.status === "Received at Lab" ? "bg-[var(--accent-purple)]" : "bg-[var(--accent-green)]"
                       }`} />
                       <div>
                         <p className="font-medium text-slate-700">{entry.status}</p>

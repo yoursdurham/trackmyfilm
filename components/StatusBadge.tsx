@@ -10,12 +10,12 @@ const statusConfig: Record<OrderStatus, { bg: string; text: string; dot: string 
     dot: "bg-[#A77B43]",
   },
   "Received at Lab": {
-    bg: "bg-[var(--accent-green)]",
+    bg: "bg-[var(--accent-purple)]",
     text: "text-white",
     dot: "bg-white",
   },
   "Scans Sent": {
-    bg: "bg-[var(--accent-purple)]",
+    bg: "bg-[var(--accent-green)]",
     text: "text-white",
     dot: "bg-white",
   },

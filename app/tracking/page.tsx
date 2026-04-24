@@ -19,7 +19,6 @@ import {
   Search,
 } from "lucide-react";
 import Image from "next/image";
-import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import type { FilmOrder, OrderStatus, StatusHistoryEntry } from "@/lib/types";
@@ -55,18 +54,18 @@ const statusSteps: StatusStep[] = [
   {
     status: "Received at Lab",
     icon: Package,
-    activeBg: "bg-[var(--accent-green)]",
-    activeRing: "ring-[var(--accent-green)]/35",
-    activeText: "text-[#5E8068]",
-    activeLine: "bg-[var(--accent-green)]",
-  },
-  {
-    status: "Scans Sent",
-    icon: CheckCircle,
     activeBg: "bg-[var(--accent-purple)]",
     activeRing: "ring-[var(--accent-purple)]/35",
     activeText: "text-[#806A91]",
     activeLine: "bg-[var(--accent-purple)]",
+  },
+  {
+    status: "Scans Sent",
+    icon: CheckCircle,
+    activeBg: "bg-[var(--accent-green)]",
+    activeRing: "ring-[var(--accent-green)]/35",
+    activeText: "text-[#5E8068]",
+    activeLine: "bg-[var(--accent-green)]",
   },
 ];
 
@@ -86,9 +85,9 @@ function getStatusBadgeClass(status: OrderStatus) {
     case "Received by Yours":
       return "bg-[var(--accent-tan)] text-[#A77B43]";
     case "Received at Lab":
-      return "bg-[var(--accent-green)] text-white";
-    case "Scans Sent":
       return "bg-[var(--accent-purple)] text-white";
+    case "Scans Sent":
+      return "bg-[var(--accent-green)] text-white";
     default:
       return "bg-slate-100 text-slate-700";
   }
@@ -105,16 +104,27 @@ function OrderTimeline({
   const timestampMap = buildTimestampMap(statusHistory);
 
   return (
-    <div className="mx-auto mb-8 flex max-w-2xl items-center justify-between">
-      {statusSteps.map((step, index) => {
-        const Icon = step.icon;
-        const isActive = index <= currentIndex;
-        const isCurrent = index === currentIndex;
-        const timestamp = timestampMap[step.status];
+    <div className="relative mx-auto mb-8 max-w-2xl px-2 sm:px-6">
+      <div className="absolute left-[16.666%] right-[16.666%] top-[18px] z-0 flex -translate-y-1/2 sm:top-6">
+        {statusSteps.slice(0, -1).map((step, index) => (
+          <div
+            key={`${step.status}-line`}
+            className={`h-1 flex-1 rounded-full transition-all ${
+              index < currentIndex ? step.activeLine : "bg-slate-200"
+            }`}
+          />
+        ))}
+      </div>
 
-        return (
-          <div key={step.status} className="flex flex-1 items-center">
-            <div className="flex flex-col items-center">
+      <div className="relative z-10 grid grid-cols-3">
+        {statusSteps.map((step, index) => {
+          const Icon = step.icon;
+          const isActive = index <= currentIndex;
+          const isCurrent = index === currentIndex;
+          const timestamp = timestampMap[step.status];
+
+          return (
+            <div key={step.status} className="flex min-w-0 flex-col items-center">
               <div
                 className={`flex h-9 w-9 items-center justify-center rounded-full transition-all sm:h-12 sm:w-12 ${
                   isActive ? `${step.activeBg} shadow-lg` : "bg-slate-200"
@@ -127,7 +137,7 @@ function OrderTimeline({
                 />
               </div>
               <p
-                className={`mt-2 max-w-[100px] text-center text-xs ${
+                className={`mt-2 max-w-[92px] text-center text-xs leading-tight sm:max-w-[120px] ${
                   isActive ? `${step.activeText} font-medium` : "text-slate-400"
                 }`}
               >
@@ -139,16 +149,9 @@ function OrderTimeline({
                 </p>
               ) : null}
             </div>
-            {index < statusSteps.length - 1 ? (
-              <div
-                className={`mx-2 h-1 flex-1 rounded-full transition-all ${
-                  index < currentIndex ? step.activeLine : "bg-slate-200"
-                }`}
-              />
-            ) : null}
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -213,19 +216,29 @@ export default function Tracking() {
     handleSearch(normalizedSearchTerm.includes("@") ? "email" : "order");
   };
 
+  const handleReset = () => {
+    setSearchTerm("");
+    setCommitted(null);
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <header className="bg-[#F7F3EC]">
         <div className="mx-auto max-w-5xl px-4 pb-10 pt-10 text-center sm:px-6 lg:px-8">
-          <Link href="/">
+          <button
+            type="button"
+            onClick={handleReset}
+            aria-label="Reset tracking search"
+            className="mx-auto mb-4 block rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-purple)] focus-visible:ring-offset-2"
+          >
             <Image
               src="/logo.png"
               alt="Yours Durham"
               width={48}
               height={48}
-              className="mx-auto mb-4 h-12 w-12 rounded-xl"
+              className="h-12 w-12 rounded-xl"
             />
-          </Link>
+          </button>
           <h1 className="text-sm font-semibold tracking-tight text-slate-900 sm:text-xl sm:whitespace-nowrap">
             Track My Film
             <span className="ml-1 font-normal text-slate-500 sm:ml-2">
@@ -459,7 +472,7 @@ export default function Tracking() {
                           href={order.wetransfer_link}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="flex items-center justify-center gap-2 rounded-lg bg-[var(--accent-purple)] px-4 py-3 font-medium text-white shadow-md transition-all hover:bg-[#9D85AD] hover:shadow-lg"
+                          className="flex items-center justify-center gap-2 rounded-lg bg-[var(--accent-green)] px-4 py-3 font-medium text-white shadow-md transition-all hover:bg-[#7D9E88] hover:shadow-lg"
                         >
                           <Download className="h-5 w-5" />
                           Download Your Scans
@@ -496,7 +509,7 @@ export default function Tracking() {
             <a href="https://www.yoursdurham.com/shop-now" target="_blank" rel="noopener noreferrer">
               <Card className="h-full cursor-pointer border border-[var(--border-soft)] bg-[var(--card-bg)] shadow-sm ring-0 transition hover:-translate-y-0.5 hover:shadow-md">
                 <CardContent className="p-7 sm:p-8">
-                  <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-[var(--accent-green)]">
+                  <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-[var(--accent-purple)]">
                     <Film className="h-6 w-6 text-white" />
                   </div>
                   <h3 className="mb-2 text-xl font-bold text-slate-800">Shop Film</h3>
@@ -510,7 +523,7 @@ export default function Tracking() {
             <a href="mailto:hello@yoursdurham.com">
               <Card className="h-full cursor-pointer border border-[var(--border-soft)] bg-[var(--card-bg)] shadow-sm ring-0 transition hover:-translate-y-0.5 hover:shadow-md">
                 <CardContent className="p-7 sm:p-8">
-                  <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-[var(--accent-purple)]">
+                  <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-[var(--accent-green)]">
                     <Mail className="h-6 w-6 text-white" />
                   </div>
                   <h3 className="mb-2 text-xl font-bold text-slate-800">Need help?</h3>

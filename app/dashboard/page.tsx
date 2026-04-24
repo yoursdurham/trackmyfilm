@@ -128,8 +128,8 @@ export default function Dashboard() {
         <div className="grid grid-cols-3 gap-3 mb-6">
           {[
             { label: "Received by Yours", count: statusCounts["Received by Yours"], labelClass: "text-[#A77B43]" },
-            { label: "Received at Lab",   count: statusCounts["Received at Lab"],   labelClass: "text-[#5E8068]" },
-            { label: "Scans Sent",        count: statusCounts["Scans Sent"],        labelClass: "text-[#806A91]" },
+            { label: "Received at Lab",   count: statusCounts["Received at Lab"],   labelClass: "text-[#806A91]" },
+            { label: "Scans Sent",        count: statusCounts["Scans Sent"],        labelClass: "text-[#5E8068]" },
           ].map((stat) => (
             <div key={stat.label} className="bg-white rounded-xl p-3 sm:p-4 shadow-sm border border-stone-100">
               <p className="text-2xl font-bold text-slate-800">{stat.count}</p>
