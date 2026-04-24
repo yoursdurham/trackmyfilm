@@ -537,7 +537,15 @@ export default function Tracking() {
         <div className="mt-8 flex flex-col gap-2 px-1 text-left text-sm leading-relaxed text-slate-600 sm:px-0 sm:text-center">
           <span className="font-semibold tracking-wide text-[#24324A]">INFO:</span>
           <a
-            href="http://maps.apple.com/?q=209+N+Gregson+St+Durham+NC+27701"
+            href="https://www.yoursdurham.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-bold text-[#24324A] underline underline-offset-2 hover:no-underline"
+          >
+            Yours, Durham
+          </a>
+          <a
+            href="https://maps.apple/p/3E3GveJFzj_71S"
             className="text-[#24324A] underline underline-offset-2 hover:no-underline"
           >
             209 N. Gregson St. Durham, NC 27701

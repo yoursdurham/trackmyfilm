@@ -9,7 +9,12 @@ const geist = Geist({ subsets: ["latin"], variable: "--font-sans" });
 
 export const metadata: Metadata = {
   title: "TrackMyFilm",
-  description: "Film lab order tracking for Yours Durham,"
+  description: "Film lab order tracking for Yours Durham,",
+  icons: {
+    icon: "/icon.png",
+    shortcut: "/icon.png",
+    apple: "/icon.png",
+  },
 };
 
 export default function RootLayout({
