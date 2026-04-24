@@ -28,6 +28,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     const {
       order_number, customer_name, customer_email, status, status_history, status_updated_at,
       film_type, film_process, film_stock, roll_count, dropoff_date, dropoff_number, notes,
+      roll_details, prints_4x6,
       wetransfer_link: rawWetransferLink,
       received_by_yours_at, at_lab_at, scans_sent_at,
       received_email_sent_at, at_lab_email_sent_at, scans_sent_email_sent_at,
@@ -42,7 +43,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     const order = await updateOrder(id, {
       order_number, customer_name, customer_email, status, status_history, status_updated_at,
       film_type, film_process, film_stock, roll_count, dropoff_date, dropoff_number,
-      wetransfer_link, notes,
+      roll_details, prints_4x6, wetransfer_link, notes,
       received_by_yours_at, at_lab_at, scans_sent_at,
       received_email_sent_at, at_lab_email_sent_at, scans_sent_email_sent_at,
       email_status, email_error,

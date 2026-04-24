@@ -127,9 +127,9 @@ export default function Dashboard() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <div className="grid grid-cols-3 gap-3 mb-6">
           {[
-            { label: "Received by Yours", count: statusCounts["Received by Yours"], labelClass: "text-blue-600" },
-            { label: "Received at Lab",   count: statusCounts["Received at Lab"],   labelClass: "text-amber-600" },
-            { label: "Scans Sent",        count: statusCounts["Scans Sent"],        labelClass: "text-emerald-600" },
+            { label: "Received by Yours", count: statusCounts["Received by Yours"], labelClass: "text-[#A77B43]" },
+            { label: "Received at Lab",   count: statusCounts["Received at Lab"],   labelClass: "text-[#5E8068]" },
+            { label: "Scans Sent",        count: statusCounts["Scans Sent"],        labelClass: "text-[#806A91]" },
           ].map((stat) => (
             <div key={stat.label} className="bg-white rounded-xl p-3 sm:p-4 shadow-sm border border-stone-100">
               <p className="text-2xl font-bold text-slate-800">{stat.count}</p>
@@ -185,7 +185,8 @@ export default function Dashboard() {
                   initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.95 }} transition={{ duration: 0.2 }}>
                   <OrderCard order={order} onStatusChange={handleStatusChange}
-                    onDelete={(id) => deleteMutation.mutate(id)} />
+                    onDelete={(id) => deleteMutation.mutate(id)}
+                    onOrderUpdated={() => queryClient.invalidateQueries({ queryKey: ["filmOrders"] })} />
                 </motion.div>
               ))}
             </AnimatePresence>

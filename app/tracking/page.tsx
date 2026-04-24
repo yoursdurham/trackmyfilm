@@ -2,58 +2,150 @@
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Card, CardContent } from "@/components/ui/card";
-import { Film, Search, Loader2, Calendar, Layers, Package, CheckCircle, Clock, Download, ExternalLink, Printer, Mail } from "lucide-react";
 import { format } from "date-fns";
-import { motion, AnimatePresence } from "framer-motion";
-import type { FilmOrder } from "@/lib/types";
+import { AnimatePresence, motion } from "framer-motion";
+import {
+  Calendar,
+  CheckCircle,
+  Clock,
+  Download,
+  ExternalLink,
+  Film,
+  Layers,
+  Loader2,
+  Mail,
+  Package,
+  Printer,
+  Search,
+} from "lucide-react";
+import Image from "next/image";
+import Link from "next/link";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import type { FilmOrder, OrderStatus, StatusHistoryEntry } from "@/lib/types";
 
-const statusSteps = [
-  { status: "Received by Yours", icon: Clock,       activeBg: "bg-blue-500",    activeRing: "ring-blue-200",    activeText: "text-blue-700",    activeLine: "bg-blue-500" },
-  { status: "Received at Lab",   icon: Package,     activeBg: "bg-amber-500",   activeRing: "ring-amber-200",   activeText: "text-amber-700",   activeLine: "bg-amber-500" },
-  { status: "Scans Sent",        icon: CheckCircle, activeBg: "bg-emerald-500", activeRing: "ring-emerald-200", activeText: "text-emerald-700", activeLine: "bg-emerald-500" },
-] as const;
+type StatusStep = {
+  status: OrderStatus;
+  icon: typeof Clock;
+  activeBg: string;
+  activeRing: string;
+  activeText: string;
+  activeLine: string;
+};
 
-function OrderTimeline({ currentStatus, statusHistory }: {
-  currentStatus: string;
-  statusHistory?: { status: string; changed_at: string }[];
+type CommittedSearch = {
+  term: string;
+  type: "order" | "email";
+};
+
+type TrackingResult = {
+  customerName: string | null;
+  orders: FilmOrder[];
+};
+
+const statusSteps: StatusStep[] = [
+  {
+    status: "Received by Yours",
+    icon: Clock,
+    activeBg: "bg-[var(--accent-tan)]",
+    activeRing: "ring-[var(--accent-tan)]/35",
+    activeText: "text-[#A77B43]",
+    activeLine: "bg-[var(--accent-tan)]",
+  },
+  {
+    status: "Received at Lab",
+    icon: Package,
+    activeBg: "bg-[var(--accent-green)]",
+    activeRing: "ring-[var(--accent-green)]/35",
+    activeText: "text-[#5E8068]",
+    activeLine: "bg-[var(--accent-green)]",
+  },
+  {
+    status: "Scans Sent",
+    icon: CheckCircle,
+    activeBg: "bg-[var(--accent-purple)]",
+    activeRing: "ring-[var(--accent-purple)]/35",
+    activeText: "text-[#806A91]",
+    activeLine: "bg-[var(--accent-purple)]",
+  },
+];
+
+function buildTimestampMap(statusHistory?: StatusHistoryEntry[]) {
+  if (!statusHistory?.length) return {};
+
+  return Object.fromEntries(
+    [...statusHistory].reverse().map((entry) => [
+      entry.status,
+      format(new Date(entry.changed_at), "MMM d, h:mm a"),
+    ])
+  );
+}
+
+function getStatusBadgeClass(status: OrderStatus) {
+  switch (status) {
+    case "Received by Yours":
+      return "bg-[var(--accent-tan)] text-[#A77B43]";
+    case "Received at Lab":
+      return "bg-[var(--accent-green)] text-white";
+    case "Scans Sent":
+      return "bg-[var(--accent-purple)] text-white";
+    default:
+      return "bg-slate-100 text-slate-700";
+  }
+}
+
+function OrderTimeline({
+  currentStatus,
+  statusHistory,
+}: {
+  currentStatus: OrderStatus;
+  statusHistory?: StatusHistoryEntry[];
 }) {
-  const currentIndex = statusSteps.findIndex((s) => s.status === currentStatus);
-  const timestampMap = statusHistory
-    ? Object.fromEntries(
-        [...statusHistory].reverse().map((h) => [h.status, format(new Date(h.changed_at), "MMM d, h:mm a")])
-      )
-    : {};
+  const currentIndex = statusSteps.findIndex((step) => step.status === currentStatus);
+  const timestampMap = buildTimestampMap(statusHistory);
 
   return (
-    <div className="flex items-center justify-between max-w-2xl mx-auto mb-8">
+    <div className="mx-auto mb-8 flex max-w-2xl items-center justify-between">
       {statusSteps.map((step, index) => {
         const Icon = step.icon;
         const isActive = index <= currentIndex;
         const isCurrent = index === currentIndex;
         const timestamp = timestampMap[step.status];
+
         return (
-          <div key={step.status} className="flex items-center flex-1">
+          <div key={step.status} className="flex flex-1 items-center">
             <div className="flex flex-col items-center">
-              <div className={`w-9 h-9 sm:w-12 sm:h-12 rounded-full flex items-center justify-center transition-all ${
-                isActive ? `${step.activeBg} shadow-lg` : "bg-slate-200"
-              } ${isCurrent ? `ring-4 ${step.activeRing}` : ""}`}>
-                <Icon className={`w-4 h-4 sm:w-6 sm:h-6 ${isActive ? "text-white" : "text-slate-400"}`} />
+              <div
+                className={`flex h-9 w-9 items-center justify-center rounded-full transition-all sm:h-12 sm:w-12 ${
+                  isActive ? `${step.activeBg} shadow-lg` : "bg-slate-200"
+                } ${isCurrent ? `ring-4 ${step.activeRing}` : ""}`}
+              >
+                <Icon
+                  className={`h-4 w-4 sm:h-6 sm:w-6 ${
+                    isActive ? "text-white" : "text-slate-400"
+                  }`}
+                />
               </div>
-              <p className={`text-xs mt-2 text-center max-w-[100px] ${
-                isActive ? `${step.activeText} font-medium` : "text-slate-400"
-              }`}>{step.status}</p>
-              {timestamp && (
-                <p className="text-xs text-slate-400 mt-0.5 text-center max-w-[100px]">{timestamp}</p>
-              )}
+              <p
+                className={`mt-2 max-w-[100px] text-center text-xs ${
+                  isActive ? `${step.activeText} font-medium` : "text-slate-400"
+                }`}
+              >
+                {step.status}
+              </p>
+              {timestamp ? (
+                <p className="mt-0.5 max-w-[100px] text-center text-xs text-slate-400">
+                  {timestamp}
+                </p>
+              ) : null}
             </div>
-            {index < statusSteps.length - 1 && (
-              <div className={`flex-1 h-1 mx-2 rounded-full transition-all ${
-                index < currentIndex ? `${step.activeLine}` : "bg-slate-200"
-              }`} />
-            )}
+            {index < statusSteps.length - 1 ? (
+              <div
+                className={`mx-2 h-1 flex-1 rounded-full transition-all ${
+                  index < currentIndex ? step.activeLine : "bg-slate-200"
+                }`}
+              />
+            ) : null}
           </div>
         );
       })}
@@ -61,155 +153,212 @@ function OrderTimeline({ currentStatus, statusHistory }: {
   );
 }
 
-type CommittedSearch = { term: string; type: "order" | "email" };
+async function fetchTrackedOrders(search: CommittedSearch): Promise<TrackingResult> {
+  const param =
+    search.type === "order"
+      ? `order_number=${encodeURIComponent(search.term)}`
+      : `email=${encodeURIComponent(search.term)}`;
+
+  const response = await fetch(`/api/orders/track?${param}`);
+  if (!response.ok) {
+    throw new Error("Failed to fetch orders");
+  }
+
+  const data = await response.json();
+
+  if (search.type === "email") {
+    const customerName = data.customer
+      ? `${data.customer.name} ${data.customer.last_name ?? ""}`.trim()
+      : null;
+
+    return {
+      customerName,
+      orders: Array.isArray(data.orders) ? data.orders : [],
+    };
+  }
+
+  return {
+    customerName: null,
+    orders: Array.isArray(data) ? data : [],
+  };
+}
 
 export default function Tracking() {
   const [searchTerm, setSearchTerm] = useState("");
   const [committed, setCommitted] = useState<CommittedSearch | null>(null);
-  const [customerName, setCustomerName] = useState<string | null>(null);
 
-  const { data: orders = [], isLoading } = useQuery<FilmOrder[]>({
+  const normalizedSearchTerm = searchTerm.trim();
+  const hasSearched = committed !== null;
+
+  const {
+    data,
+    isLoading,
+    isError,
+  } = useQuery<TrackingResult>({
     queryKey: ["trackOrders", committed?.term, committed?.type],
-    queryFn: async () => {
-      if (!committed) return [];
-      const param = committed.type === "order"
-        ? `order_number=${encodeURIComponent(committed.term)}`
-        : `email=${encodeURIComponent(committed.term)}`;
-      const res = await fetch(`/api/orders/track?${param}`);
-      if (!res.ok) throw new Error("Failed to fetch orders");
-      const data = await res.json();
-      if (committed.type === "email" && data.customer) {
-        setCustomerName(`${data.customer.name} ${data.customer.last_name ?? ""}`.trim());
-        return data.orders ?? [];
-      }
-      setCustomerName(null);
-      return Array.isArray(data) ? data : [];
-    },
-    enabled: !!committed,
+    queryFn: () => fetchTrackedOrders(committed as CommittedSearch),
+    enabled: committed !== null,
   });
 
-  const hasSearched = !!committed;
+  const orders = data?.orders ?? [];
+  const customerName = data?.customerName ?? null;
 
   const handleSearch = (type: "order" | "email") => {
-    setCommitted({ term: searchTerm, type });
+    if (!normalizedSearchTerm) return;
+    setCommitted({ term: normalizedSearchTerm, type });
+  };
+
+  const handleEnterKey = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key !== "Enter" || !normalizedSearchTerm) return;
+    handleSearch(normalizedSearchTerm.includes("@") ? "email" : "order");
   };
 
   return (
-    <div className="min-h-screen bg-[#F7F3EC]">
+    <div className="min-h-screen bg-background">
       <header className="bg-[#F7F3EC]">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-10 pb-10 text-center">
-          <a href="/">
-            <img src="/logo.png" alt="Yours Durham" className="w-12 h-12 mx-auto mb-4 rounded-xl" />
-          </a>
-          <h1 className="text-sm sm:text-xl font-semibold text-slate-900 tracking-tight whitespace-nowrap">
-  Track My Film
-  <span className="text-slate-500 font-normal ml-1 sm:ml-2">– A Project by Yours, Durham</span>
-</h1>
-
+        <div className="mx-auto max-w-5xl px-4 pb-10 pt-10 text-center sm:px-6 lg:px-8">
+          <Link href="/">
+            <Image
+              src="/logo.png"
+              alt="Yours Durham"
+              width={48}
+              height={48}
+              className="mx-auto mb-4 h-12 w-12 rounded-xl"
+            />
+          </Link>
+          <h1 className="text-sm font-semibold tracking-tight text-slate-900 sm:text-xl sm:whitespace-nowrap">
+            Track My Film
+            <span className="ml-1 font-normal text-slate-500 sm:ml-2">
+              - A Project by Yours, Durham
+            </span>
+          </h1>
         </div>
       </header>
-
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pb-8">
-        <Card className="bg-[#FFFDF9] border border-[#E8DED2] shadow-sm rounded-[24px] mb-8">
-          <CardContent className="p-6">
-            <div className="relative w-full mb-4">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+      <main className="mx-auto max-w-5xl px-4 pb-10 sm:px-6 lg:px-8">
+        <Card className="mb-14 rounded-[24px] border border-[var(--border-soft)] bg-[var(--card-bg)] shadow-sm ring-0">
+          <CardContent className="p-6 sm:p-8">
+            <div className="relative mb-4 w-full">
+              <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
               <Input
-
-  placeholder="Enter order number or email..."
-
-  value={searchTerm}
-
-  onChange={(e) => setSearchTerm(e.target.value)}
-
-  onKeyDown={(e) => {
-
-    if (e.key === "Enter" && searchTerm) {
-
-      handleSearch(searchTerm.includes("@") ? "email" : "order");
-
-    }
-
-  }}
-
-  className="pl-11 h-12 text-sm sm:text-base"
-
-/>
+                placeholder="Enter order number or email..."
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+                onKeyDown={handleEnterKey}
+                className="h-12 rounded-xl border-[#E1DDD6] bg-[var(--card-bg)] pl-11 text-sm shadow-none ring-0 focus-visible:border-[#B19FBF] focus-visible:ring-2 focus-visible:ring-[#B19FBF]/20 sm:text-base"
+              />
             </div>
-            <div className="flex flex-col sm:flex-row gap-2">
-  <button
-    onClick={() => handleSearch("order")}
-    disabled={!searchTerm || isLoading}
-    className="flex-1 flex justify-start sm:justify-center items-center gap-3 px-4 py-4 text-left sm:text-center bg-[#B19FBF] text-white rounded-xl transition-transform active:scale-[0.99] disabled:opacity-50"
-  >
-    {isLoading ? (
-      <Loader2 className="w-4 h-4 animate-spin shrink-0" />
-    ) : (
-      <Search className="w-4 h-4 shrink-0" />
-    )}
-    <span className="flex-1 sm:flex-none">Track by Order #</span>
-  </button>
-  
 
-  <button
-    onClick={() => handleSearch("email")}
-    disabled={!searchTerm || isLoading}
-    className="flex-1 flex justify-start sm:justify-center items-center gap-3 px-4 py-4 text-left sm:text-center bg-[#B19FBF] text-white rounded-xl transition-transform active:scale-[0.99] disabled:opacity-50"
-  >
-    {isLoading ? (
-      <Loader2 className="w-4 h-4 animate-spin shrink-0" />
-    ) : (
-      <Search className="w-4 h-4 shrink-0" />
-    )}
-    <span className="flex-1 sm:flex-none">Track by Email</span>
-  </button>
-</div>
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <button
+                type="button"
+                onClick={() => handleSearch("order")}
+                disabled={!normalizedSearchTerm || isLoading}
+                className="flex flex-1 items-center justify-start gap-3 rounded-xl bg-[#B19FBF] px-4 py-4 text-left text-white transition-transform active:scale-[0.99] disabled:opacity-50 sm:justify-center sm:text-center"
+              >
+                {isLoading ? (
+                  <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
+                ) : (
+                  <Search className="h-4 w-4 shrink-0" />
+                )}
+                <span className="flex-1 sm:flex-none">Track by Order #</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleSearch("email")}
+                disabled={!normalizedSearchTerm || isLoading}
+                className="flex flex-1 items-center justify-start gap-3 rounded-xl bg-[#B19FBF] px-4 py-4 text-left text-white transition-transform active:scale-[0.99] disabled:opacity-50 sm:justify-center sm:text-center"
+              >
+                {isLoading ? (
+                  <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
+                ) : (
+                  <Search className="h-4 w-4 shrink-0" />
+                )}
+                <span className="flex-1 sm:flex-none">Track by Email</span>
+              </button>
+            </div>
           </CardContent>
         </Card>
 
         <AnimatePresence mode="wait">
           {isLoading ? (
             <div className="flex items-center justify-center py-20">
-              <Loader2 className="w-8 h-8 text-[#C9A34B] animate-spin" />
+              <Loader2 className="h-8 w-8 animate-spin text-[#C9A34B]" />
             </div>
-          ) : hasSearched && orders.length === 0 ? (
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}
-              className="text-center py-20">
-              <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-4">
-                <Film className="w-8 h-8 text-slate-400" />
+          ) : isError ? (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="py-20 text-center"
+            >
+              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-red-50">
+                <Film className="h-8 w-8 text-red-300" />
               </div>
-              <h3 className="text-lg font-medium text-slate-700 mb-1">No orders found</h3>
+              <h3 className="mb-1 text-lg font-medium text-slate-700">Search unavailable</h3>
+              <p className="text-slate-500">Please try again in a moment.</p>
+            </motion.div>
+          ) : hasSearched && orders.length === 0 ? (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="py-20 text-center"
+            >
+              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-slate-100">
+                <Film className="h-8 w-8 text-slate-400" />
+              </div>
+              <h3 className="mb-1 text-lg font-medium text-slate-700">No orders found</h3>
               <p className="text-slate-500">
-                {committed?.type === "email" ? "No orders found for this email address" : "Order number not found. Please check and try again."}
+                {committed?.type === "email"
+                  ? "No orders found for this email address"
+                  : "Order number not found. Please check and try again."}
               </p>
             </motion.div>
-          ) : orders.length > 0 && (
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}
-              className="space-y-6">
-              {customerName && (
-                <p className="text-slate-600 font-medium">Showing orders for <strong>{customerName}</strong></p>
-              )}
+          ) : orders.length > 0 ? (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="space-y-6"
+            >
+              {customerName ? (
+                <p className="font-medium text-slate-600">
+                  Showing orders for <strong>{customerName}</strong>
+                </p>
+              ) : null}
+
               {orders.map((order) => (
-                <Card key={order.id} className="bg-white shadow-md border-0 overflow-hidden">
+                <Card
+                  key={order.id}
+                  className="overflow-hidden border border-[var(--border-soft)] bg-[var(--card-bg)] shadow-sm ring-0 transition hover:shadow-md"
+                >
                   <CardContent className="p-6">
-                    <div className="flex items-start justify-between mb-6">
+                    <div className="mb-6 flex items-start justify-between gap-4">
                       <div>
-                        <h2 className="text-xl font-bold text-slate-800 mb-1">Order #{order.order_number}</h2>
+                        <h2 className="mb-1 text-xl font-bold text-slate-800">
+                          Order #{order.order_number}
+                        </h2>
                         <p className="text-slate-600">{order.customer_name}</p>
                       </div>
-                      <div className={`px-4 py-2 rounded-full text-sm font-medium ${
-                        order.status === "Received by Yours" ? "bg-blue-100 text-blue-700" :
-                        order.status === "Received at Lab"   ? "bg-amber-100 text-amber-700" :
-                        "bg-emerald-100 text-emerald-700"
-                      }`}>{order.status}</div>
+                      <div
+                        className={`rounded-full px-4 py-2 text-sm font-medium ${getStatusBadgeClass(
+                          order.status
+                        )}`}
+                      >
+                        {order.status}
+                      </div>
                     </div>
 
-                    <OrderTimeline currentStatus={order.status} statusHistory={order.status_history} />
+                    <OrderTimeline
+                      currentStatus={order.status}
+                      statusHistory={order.status_history}
+                    />
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-6 border-t border-slate-100">
+                    <div className="grid grid-cols-1 gap-4 border-t border-slate-100 pt-6 sm:grid-cols-2">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center">
-                          <Calendar className="w-5 h-5 text-slate-600" />
+                        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-100">
+                          <Calendar className="h-5 w-5 text-slate-600" />
                         </div>
                         <div>
                           <p className="text-xs text-slate-500">Dropped off</p>
@@ -218,9 +367,10 @@ export default function Tracking() {
                           </p>
                         </div>
                       </div>
+
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center">
-                          <Layers className="w-5 h-5 text-slate-600" />
+                        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-100">
+                          <Layers className="h-5 w-5 text-slate-600" />
                         </div>
                         <div>
                           <p className="text-xs text-slate-500">Number of rolls</p>
@@ -230,101 +380,140 @@ export default function Tracking() {
                         </div>
                       </div>
                     </div>
-
-                    {/* Film details */}
                     {order.roll_details && order.roll_details.length > 0 ? (
-                      <div className="pt-4 border-t border-slate-100 mt-4 space-y-2">
-                        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Film Details</p>
-                        {order.roll_details.map((roll, i) => (
-                          <div key={i} className="flex flex-wrap items-center gap-2 text-sm">
-                            <span className="font-medium text-slate-600 min-w-[44px]">Roll {i + 1}</span>
-                            <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 text-xs font-medium">{roll.film_type}</span>
-                            <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 text-xs font-medium">{roll.film_process}</span>
-                            {roll.film_stock && (
-                              <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-xs">{roll.film_stock}</span>
-                            )}
-                            {roll.prints_4x6 && (
-                              <span className="px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 text-xs font-medium flex items-center gap-1">
-                                <Printer className="w-3 h-3" /> 4x6 Prints
+                      <div className="mt-4 space-y-2 border-t border-slate-100 pt-4">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                          Film Details
+                        </p>
+                        {order.roll_details.map((roll, index) => (
+                          <div
+                            key={`${order.id}-roll-${index}`}
+                            className="flex flex-wrap items-center gap-2 text-sm"
+                          >
+                            <span className="min-w-[44px] font-medium text-slate-600">
+                              Roll {index + 1}
+                            </span>
+                            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
+                              {roll.film_type}
+                            </span>
+                            <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">
+                              {roll.film_process}
+                            </span>
+                            {roll.film_stock ? (
+                              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
+                                {roll.film_stock}
                               </span>
-                            )}
+                            ) : null}
+                            {roll.prints_4x6 ? (
+                              <span className="flex items-center gap-1 rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700">
+                                <Printer className="h-3 w-3" />
+                                4x6 Prints
+                              </span>
+                            ) : null}
                           </div>
                         ))}
                       </div>
-                    ) : (order.film_type || order.film_process) ? (
-                      <div className="pt-4 border-t border-slate-100 mt-4 space-y-2">
-                        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Film Details</p>
+                    ) : order.film_type || order.film_process ? (
+                      <div className="mt-4 space-y-2 border-t border-slate-100 pt-4">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                          Film Details
+                        </p>
                         <div className="flex flex-wrap gap-2">
-                          {order.film_type && <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 text-xs font-medium">{order.film_type}</span>}
-                          {order.film_process && <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 text-xs font-medium">{order.film_process}</span>}
-                          {order.film_stock && <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-xs">{order.film_stock}</span>}
-                          {order.prints_4x6 && (
-                            <span className="px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 text-xs font-medium flex items-center gap-1">
-                              <Printer className="w-3 h-3" /> 4x6 Prints
+                          {order.film_type ? (
+                            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
+                              {order.film_type}
                             </span>
-                          )}
+                          ) : null}
+                          {order.film_process ? (
+                            <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">
+                              {order.film_process}
+                            </span>
+                          ) : null}
+                          {order.film_stock ? (
+                            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
+                              {order.film_stock}
+                            </span>
+                          ) : null}
+                          {order.prints_4x6 ? (
+                            <span className="flex items-center gap-1 rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700">
+                              <Printer className="h-3 w-3" />
+                              4x6 Prints
+                            </span>
+                          ) : null}
                         </div>
                       </div>
                     ) : null}
 
-                    {/* Admin notes */}
-                    {order.notes && (
-                      <div className="pt-4 border-t border-slate-100 mt-4">
-                        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Order Notes</p>
-                        <p className="text-sm text-slate-600 italic">{order.notes}</p>
+                    {order.notes ? (
+                      <div className="mt-4 border-t border-slate-100 pt-4">
+                        <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                          Order Notes
+                        </p>
+                        <p className="text-sm italic text-slate-600">{order.notes}</p>
                       </div>
-                    )}
+                    ) : null}
 
-                    {/* Download scans */}
-                    {order.status === "Scans Sent" && order.wetransfer_link && (
-                      <div className="pt-4 border-t border-slate-100 mt-4">
-                        <a href={order.wetransfer_link} target="_blank" rel="noopener noreferrer"
-                          className="flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-emerald-500 to-green-500 hover:from-emerald-600 hover:to-green-600 text-white rounded-lg font-medium transition-all shadow-md hover:shadow-lg">
-                          <Download className="w-5 h-5" />
+                    {order.status === "Scans Sent" && order.wetransfer_link ? (
+                      <div className="mt-4 border-t border-slate-100 pt-4">
+                        <a
+                          href={order.wetransfer_link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center justify-center gap-2 rounded-lg bg-[var(--accent-purple)] px-4 py-3 font-medium text-white shadow-md transition-all hover:bg-[#9D85AD] hover:shadow-lg"
+                        >
+                          <Download className="h-5 w-5" />
                           Download Your Scans
-                          <ExternalLink className="w-4 h-4" />
+                          <ExternalLink className="h-4 w-4" />
                         </a>
                       </div>
-                    )}
+                    ) : null}
                   </CardContent>
                 </Card>
               ))}
             </motion.div>
-          )}
+          ) : null}
         </AnimatePresence>
 
-        <div className="mt-12 mb-8">
-          <h2 className="text-2xl font-bold text-slate-800 text-center mb-6">Explore Our Services</h2>
-          <div className="grid md:grid-cols-3 gap-6">
+        <div className="mb-10 mt-12">
+          <h2 className="mb-8 text-center text-2xl font-bold text-slate-800 sm:text-3xl">
+            Explore Our Services
+          </h2>
+          <div className="grid gap-6 md:grid-cols-3">
             <a href="https://www.yoursdurham.com/develop" target="_blank" rel="noopener noreferrer">
-              <Card className="bg-white shadow-md border-0 hover:shadow-xl transition-shadow cursor-pointer h-full">
-                <CardContent className="p-6">
-                  <div className="w-12 h-12 rounded-lg bg-[#F5EBDC] flex items-center justify-center mb-4">
-                    <Package className="w-6 h-6 text-white" />
+              <Card className="h-full cursor-pointer border border-[var(--border-soft)] bg-[var(--card-bg)] shadow-sm ring-0 transition hover:-translate-y-0.5 hover:shadow-md">
+                <CardContent className="p-7 sm:p-8">
+                  <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-[var(--accent-tan)]">
+                    <Package className="h-6 w-6 text-white" />
                   </div>
-                  <h3 className="text-xl font-bold text-slate-800 mb-2">Film Developing</h3>
-                  <p className="text-slate-600">Professional film developing services for all your analog photography needs</p>
+                  <h3 className="mb-2 text-xl font-bold text-slate-800">Film Developing</h3>
+                  <p className="text-slate-600">
+                    Professional film developing services for all your analog photography needs
+                  </p>
                 </CardContent>
               </Card>
             </a>
+
             <a href="https://www.yoursdurham.com/shop-now" target="_blank" rel="noopener noreferrer">
-              <Card className="bg-white shadow-md border-0 hover:shadow-xl transition-shadow cursor-pointer h-full">
-                <CardContent className="p-6">
-                  <div className="w-12 h-12 rounded-lg bg-[#8FAF9A] flex items-center justify-center mb-4">
-                    <Film className="w-6 h-6 text-white" />
+              <Card className="h-full cursor-pointer border border-[var(--border-soft)] bg-[var(--card-bg)] shadow-sm ring-0 transition hover:-translate-y-0.5 hover:shadow-md">
+                <CardContent className="p-7 sm:p-8">
+                  <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-[var(--accent-green)]">
+                    <Film className="h-6 w-6 text-white" />
                   </div>
-                  <h3 className="text-xl font-bold text-slate-800 mb-2">Shop Film</h3>
-                  <p className="text-slate-600">Browse our selection of premium film stock and photography supplies</p>
+                  <h3 className="mb-2 text-xl font-bold text-slate-800">Shop Film</h3>
+                  <p className="text-slate-600">
+                    Browse our selection of premium film stock and photography supplies
+                  </p>
                 </CardContent>
               </Card>
             </a>
+
             <a href="mailto:hello@yoursdurham.com">
-              <Card className="bg-white shadow-md border-0 hover:shadow-xl transition-shadow cursor-pointer h-full">
-                <CardContent className="p-6">
-                  <div className="w-12 h-12 rounded-lg bg-[#c5aed7] flex items-center justify-center mb-4">
-                    <Mail className="w-6 h-6 text-white" />
+              <Card className="h-full cursor-pointer border border-[var(--border-soft)] bg-[var(--card-bg)] shadow-sm ring-0 transition hover:-translate-y-0.5 hover:shadow-md">
+                <CardContent className="p-7 sm:p-8">
+                  <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-[var(--accent-purple)]">
+                    <Mail className="h-6 w-6 text-white" />
                   </div>
-                  <h3 className="text-xl font-bold text-slate-800 mb-2">Need help?</h3>
+                  <h3 className="mb-2 text-xl font-bold text-slate-800">Need help?</h3>
                   <p className="text-slate-600">Click here to send us an email!</p>
                 </CardContent>
               </Card>
@@ -332,27 +521,17 @@ export default function Tracking() {
           </div>
         </div>
 
-        <div className="text-left sm:text-center mt-8 text-sm text-slate-600 flex flex-col gap-2 px-1 sm:px-0 leading-relaxed">
-
-<span className="font-semibold text-[#24324A] tracking-wide">
-
-    INFO:
-
-  </span>
-  <a
-
-    href="http://maps.apple.com/?q=209+N+Gregson+St+Durham+NC+27701"
-
-    className="text-[#24324A] underline underline-offset-2 hover:no-underline"
-
-  >
-
-    209 N. Gregson St. Durham, NC 27701
-
-  </a>
-  <span>Retail Hours: Thursdays 5–7PM & Saturdays 11–2PM</span>
-  <span>Film Drop Box - 24/7</span>
-</div>
+        <div className="mt-8 flex flex-col gap-2 px-1 text-left text-sm leading-relaxed text-slate-600 sm:px-0 sm:text-center">
+          <span className="font-semibold tracking-wide text-[#24324A]">INFO:</span>
+          <a
+            href="http://maps.apple.com/?q=209+N+Gregson+St+Durham+NC+27701"
+            className="text-[#24324A] underline underline-offset-2 hover:no-underline"
+          >
+            209 N. Gregson St. Durham, NC 27701
+          </a>
+          <span>Retail Hours: Thursdays 5-7PM & Saturdays 11-2PM</span>
+          <span>Film Drop Box - 24/7</span>
+        </div>
       </main>
     </div>
   );
