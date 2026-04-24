@@ -20,7 +20,7 @@ import {
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
-import { Hash, Layers, ChevronDown, Calendar, Trash2, ExternalLink, Clock, ChevronRight, Copy, Loader2, RefreshCw, FileText, Pencil } from "lucide-react";
+import { Hash, Layers, ChevronDown, Calendar, Trash2, ExternalLink, Clock, ChevronRight, Copy, Loader2, RefreshCw, FileText, Pencil, Mail } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import StatusBadge from "./StatusBadge";
@@ -46,9 +46,10 @@ interface Props {
   onStatusChange: (id: string, status: string, wetransferLink?: string, force?: boolean, sendEmail?: boolean) => Promise<void>;
   onDelete: (id: string) => void;
   onOrderUpdated?: () => void;
+  showQuestionsButton?: boolean;
 }
 
-export default function OrderCard({ order, onStatusChange, onDelete, onOrderUpdated }: Props) {
+export default function OrderCard({ order, onStatusChange, onDelete, onOrderUpdated, showQuestionsButton = false }: Props) {
   const [showLinkDialog, setShowLinkDialog] = useState(false);
   const [showForceDialog, setShowForceDialog] = useState(false);
   const [pendingStatus, setPendingStatus] = useState<string | null>(null);
@@ -341,16 +342,27 @@ export default function OrderCard({ order, onStatusChange, onDelete, onOrderUpda
           )}
         </div>
 
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="mb-4 h-8 w-full justify-center border-[var(--border-soft)] text-xs text-slate-600 hover:border-[var(--accent-purple)]/40 hover:bg-[var(--accent-purple)]/10 hover:text-[#806A91]"
-          onClick={() => setDetailsOpen(true)}
-        >
-          <FileText className="mr-1.5 h-3.5 w-3.5" />
-          View details
-        </Button>
+        <div className={`mb-4 ${showQuestionsButton ? "flex gap-2" : ""}`}>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className={`h-8 justify-center border-[var(--border-soft)] text-xs text-slate-600 hover:border-[var(--accent-purple)]/40 hover:bg-[var(--accent-purple)]/10 hover:text-[#806A91] ${showQuestionsButton ? "flex-1" : "w-full"}`}
+            onClick={() => setDetailsOpen(true)}
+          >
+            <FileText className="mr-1.5 h-3.5 w-3.5" />
+            View details
+          </Button>
+          {showQuestionsButton && (
+            <a
+              href={`mailto:hello@yoursdurham.com?subject=Order%20%23${order.order_number}`}
+              className="flex items-center justify-center h-8 px-3 flex-1 rounded-lg border border-[var(--border-soft)] bg-white text-xs text-slate-600 hover:border-[var(--accent-green)]/40 hover:bg-[var(--accent-green)]/10 hover:text-[#5E8068] transition-colors"
+            >
+              <Mail className="mr-1.5 h-3.5 w-3.5" />
+              Questions?
+            </a>
+          )}
+        </div>
 
         {order.status_history && order.status_history.length > 0 && (
           <Collapsible open={historyOpen} onOpenChange={setHistoryOpen} className="mb-4">

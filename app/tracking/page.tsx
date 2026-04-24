@@ -480,6 +480,16 @@ export default function Tracking() {
                         </a>
                       </div>
                     ) : null}
+
+                    <div className="mt-4 border-t border-slate-100 pt-4">
+                      <a
+                        href={`mailto:hello@yoursdurham.com?subject=Order%20%23${order.order_number}`}
+                        className="flex items-center justify-center gap-2 rounded-lg bg-[var(--accent-green)] px-4 py-3 font-medium text-white shadow-md transition-all hover:bg-[#7D9E88] hover:shadow-lg"
+                      >
+                        <Mail className="h-5 w-5" />
+                        Questions about this order?
+                      </a>
+                    </div>
                   </CardContent>
                 </Card>
               ))}
