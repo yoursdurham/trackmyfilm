@@ -28,6 +28,7 @@ type SortDir = "asc" | "desc";
 const PAGE_SIZE = 50;
 const FILM_TYPES: FilmType[] = ["35mm", "120"];
 const FILM_PROCESSES: FilmProcess[] = ["Color", "Black & White", "Both"];
+const SCAN_SIZES = ["Standard", "High-Res", "TIFF", "Process Only"] as const;
 
 type OrderDraft = {
   order_number: string;
@@ -837,6 +838,19 @@ export default function Customers() {
                             placeholder="Cinestill 800T"
                             className="border-stone-200"
                           />
+                        </div>
+                        <div>
+                          <label className="mb-1 block text-xs text-slate-500">Scan Size</label>
+                          <select
+                            value={roll.scan_size ?? ""}
+                            onChange={(e) => updateRollDraft(index, "scan_size", e.target.value || undefined)}
+                            className="h-8 w-full rounded-lg border border-stone-200 bg-white px-2.5 text-sm text-slate-700 outline-none focus:border-[var(--accent-purple)] focus:ring-2 focus:ring-[var(--accent-purple)]/20"
+                          >
+                            <option value="">None</option>
+                            {SCAN_SIZES.map((size) => (
+                              <option key={size} value={size}>{size}</option>
+                            ))}
+                          </select>
                         </div>
                         <label className="flex items-end gap-2 pb-1 text-sm text-slate-600">
                           <input

@@ -35,7 +35,7 @@ const FILM_STOCKS = [
 
 const FILM_TYPES: FilmType[] = ["35mm", "120"];
 const FILM_PROCESSES: FilmProcess[] = ["Color", "Black & White"];
-const SCAN_SIZES = ["Standard", "High-Res", "TIFF"] as const;
+const SCAN_SIZES = ["Standard", "High-Res", "TIFF", "Process Only"] as const;
 
 type ScanSize = (typeof SCAN_SIZES)[number];
 

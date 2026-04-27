@@ -8,7 +8,7 @@ export interface RollDetail {
   film_process: FilmProcess;
   film_stock?: string;
   prints_4x6?: boolean;
-  scan_size?: "Standard" | "High-Res" | "TIFF";
+  scan_size?: "Standard" | "High-Res" | "TIFF" | "Process Only";
 }
 
 export interface StatusHistoryEntry {

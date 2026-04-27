@@ -18,6 +18,7 @@ interface ReportMetrics {
   total120Rolls: number;
   total4x6Prints: number;
   filmStockUsage: { stock: string; count: number }[];
+  scanResolutionUsage: { resolution: string; count: number }[];
 }
 
 type TimeFrameKey = "all" | "7d" | "30d" | "90d" | "365d";
@@ -60,6 +61,7 @@ export default function Reports() {
   const calculateMetrics = (orderList: FilmOrder[] = orders): ReportMetrics => {
     const uniqueCustomerIds = new Set<string>();
     const filmStockMap = new Map<string, number>();
+    const scanResolutionMap = new Map<string, number>();
     let totalBWRolls = 0;
     let totalColorRolls = 0;
     let total35mmRolls = 0;
@@ -79,6 +81,9 @@ export default function Reports() {
           if (roll.film_stock) {
             filmStockMap.set(roll.film_stock, (filmStockMap.get(roll.film_stock) || 0) + 1);
           }
+          if (roll.scan_size) {
+            scanResolutionMap.set(roll.scan_size, (scanResolutionMap.get(roll.scan_size) || 0) + 1);
+          }
         });
       } else {
         // Fallback to legacy single film type/process
@@ -97,6 +102,10 @@ export default function Reports() {
       .map(([stock, count]) => ({ stock, count }))
       .sort((a, b) => b.count - a.count);
 
+    const scanResolutionUsage = Array.from(scanResolutionMap.entries())
+      .map(([resolution, count]) => ({ resolution, count }))
+      .sort((a, b) => b.count - a.count);
+
     return {
       totalCustomers: uniqueCustomerIds.size,
       totalBWRolls,
@@ -105,6 +114,7 @@ export default function Reports() {
       total120Rolls,
       total4x6Prints,
       filmStockUsage,
+      scanResolutionUsage,
     };
   };
 
@@ -114,6 +124,12 @@ export default function Reports() {
     { name: "Color", value: metrics.totalColorRolls, fill: "#F59E0B" },
     { name: "B/W", value: metrics.totalBWRolls, fill: "#6B7280" },
   ];
+
+  const scanResolutionData = metrics.scanResolutionUsage.map((item, index) => ({
+    name: item.resolution,
+    value: item.count,
+    fill: ["#3B82F6", "#10B981", "#F59E0B"][index % 3], // Cycle through colors
+  }));
 
   const handleExport = () => {
     const reportData = {
@@ -137,6 +153,10 @@ export default function Reports() {
       "FILM STOCK USAGE",
       "Film Stock,Count",
       ...metrics.filmStockUsage.map((fs) => `${fs.stock},${fs.count}`),
+      "",
+      "SCAN RESOLUTION USAGE",
+      "Resolution,Count",
+      ...metrics.scanResolutionUsage.map((sr) => `${sr.resolution},${sr.count}`),
     ].join("\n");
 
     const blob = new Blob([csvContent], { type: "text/csv" });
@@ -326,6 +346,35 @@ export default function Reports() {
                   <Tooltip />
                 </PieChart>
               </ResponsiveContainer>
+            </CardContent>
+          </Card>
+
+          <Card className="border border-stone-100">
+            <CardContent className="p-6">
+              <h3 className="text-lg font-semibold text-slate-800 mb-4">Scan Resolution Breakdown</h3>
+              {scanResolutionData.length > 0 ? (
+                <ResponsiveContainer width="100%" height={300}>
+                  <PieChart>
+                    <Pie
+                      data={scanResolutionData}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      label={({ name, value }) => `${name}: ${value}`}
+                      outerRadius={80}
+                      fill="#8884d8"
+                      dataKey="value"
+                    >
+                      {scanResolutionData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.fill} />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                  </PieChart>
+                </ResponsiveContainer>
+              ) : (
+                <p className="text-slate-500">No scan resolution data available</p>
+              )}
             </CardContent>
           </Card>
         </div>

@@ -462,17 +462,22 @@ export default function Tracking() {
                       </div>
                     ) : null}
 
-                    <div className="mt-4 border-t border-slate-100 pt-4">
-                      <a
-                        href="https://www.yoursdurham.com/filmdev/4x6-prints"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center justify-center gap-2 rounded-lg bg-[var(--accent-purple)] px-4 py-3 font-medium text-white shadow-md transition-all hover:bg-[#6f5a94] hover:shadow-lg"
-                      >
-                        <Printer className="h-5 w-5" />
-                        Want to add prints?
-                      </a>
-                    </div>
+                    {(() => {
+                      const hasPrints = order.roll_details?.some(roll => roll.prints_4x6) || order.prints_4x6;
+                      return !hasPrints ? (
+                        <div className="mt-4 border-t border-slate-100 pt-4">
+                          <a
+                            href="https://www.yoursdurham.com/filmdev/4x6-prints"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center justify-center gap-2 rounded-lg bg-[var(--accent-purple)] px-4 py-3 font-medium text-white shadow-md transition-all hover:bg-[#6f5a94] hover:shadow-lg"
+                          >
+                            <Printer className="h-5 w-5" />
+                            Want to add prints?
+                          </a>
+                        </div>
+                      ) : null;
+                    })()}
 
                     {order.status === "Scans Sent" && order.wetransfer_link ? (
                       <div className="mt-4 border-t border-slate-100 pt-4">
