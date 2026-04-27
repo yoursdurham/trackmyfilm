@@ -412,6 +412,11 @@ export default function Tracking() {
                             <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">
                               {roll.film_process}
                             </span>
+                            {roll.scan_size ? (
+                              <span className="rounded-full bg-violet-100 px-2 py-0.5 text-xs font-medium text-violet-700">
+                                {roll.scan_size}
+                              </span>
+                            ) : null}
                             {roll.film_stock ? (
                               <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
                                 {roll.film_stock}
@@ -457,14 +462,17 @@ export default function Tracking() {
                       </div>
                     ) : null}
 
-                    {order.notes ? (
-                      <div className="mt-4 border-t border-slate-100 pt-4">
-                        <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                          Order Notes
-                        </p>
-                        <p className="text-sm italic text-slate-600">{order.notes}</p>
-                      </div>
-                    ) : null}
+                    <div className="mt-4 border-t border-slate-100 pt-4">
+                      <a
+                        href="https://www.yoursdurham.com/filmdev/4x6-prints"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center justify-center gap-2 rounded-lg bg-[var(--accent-purple)] px-4 py-3 font-medium text-white shadow-md transition-all hover:bg-[#6f5a94] hover:shadow-lg"
+                      >
+                        <Printer className="h-5 w-5" />
+                        Want to add prints?
+                      </a>
+                    </div>
 
                     {order.status === "Scans Sent" && order.wetransfer_link ? (
                       <div className="mt-4 border-t border-slate-100 pt-4">

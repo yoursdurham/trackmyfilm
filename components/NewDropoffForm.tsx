@@ -34,13 +34,18 @@ const FILM_STOCKS = [
 ];
 
 const FILM_TYPES: FilmType[] = ["35mm", "120", "Disposable Camera"];
-const FILM_PROCESSES: FilmProcess[] = ["Color", "Black & White", "Both"];
+const FILM_PROCESSES: FilmProcess[] = ["Color", "Black & White"];
+const SCAN_SIZES = ["Standard", "High-Res", "TIFF"] as const;
+
+type ScanSize = (typeof SCAN_SIZES)[number];
 
 interface RollState {
   film_type: FilmType | "";
   film_process: FilmProcess | "";
   film_stock: string;       // selected from dropdown (empty = none, "__other__" = custom)
   custom_stock: string;     // shown when film_stock === "__other__"
+  scan_size: ScanSize;
+  prints_4x6: boolean;
 }
 
 const emptyRoll = (): RollState => ({
@@ -48,6 +53,8 @@ const emptyRoll = (): RollState => ({
   film_process: "",
   film_stock: "",
   custom_stock: "",
+  scan_size: "Standard",
+  prints_4x6: false,
 });
 
 const emptyMeta = {
@@ -120,6 +127,8 @@ export default function NewDropoffForm({ open, onOpenChange, onSuccess, customer
         film_process: r.film_process as FilmProcess,
         film_stock: r.film_stock === "__other__" ? r.custom_stock.trim() || undefined
           : r.film_stock || undefined,
+        scan_size: r.scan_size,
+        prints_4x6: r.prints_4x6,
       }));
 
       const res = await fetch("/api/dropoff", {
@@ -311,6 +320,49 @@ export default function NewDropoffForm({ open, onOpenChange, onSuccess, customer
                         <label htmlFor={`fp-${i}-${p}`} className="text-sm font-medium">{p}</label>
                       </div>
                     ))}
+                  </div>
+                </div>
+
+                {/* Scan size */}
+                <div className="space-y-1">
+                  <p className="text-xs font-medium text-slate-600">Scan Size</p>
+                  <div className="flex flex-wrap gap-x-4 gap-y-1">
+                    {SCAN_SIZES.map((size) => (
+                      <div key={size} className="flex items-center space-x-2">
+                        <Checkbox id={`ss-${i}-${size}`} checked={roll.scan_size === size}
+                          onCheckedChange={() => setRoll(i, "scan_size", size)} />
+                        <label htmlFor={`ss-${i}-${size}`} className="text-sm font-medium">{size}</label>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 4x6 Prints */}
+                <div className="space-y-1">
+                  <p className="text-xs font-medium text-slate-600">4x6 Prints</p>
+                  <div className="flex items-center space-x-4">
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="radio"
+                        id={`prints-yes-${i}`}
+                        name={`prints-${i}`}
+                        checked={roll.prints_4x6}
+                        onChange={() => setRoll(i, "prints_4x6", true)}
+                        className="h-4 w-4 text-amber-600 focus:ring-amber-500 border-slate-300"
+                      />
+                      <label htmlFor={`prints-yes-${i}`} className="text-sm font-medium">Yes</label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="radio"
+                        id={`prints-no-${i}`}
+                        name={`prints-${i}`}
+                        checked={!roll.prints_4x6}
+                        onChange={() => setRoll(i, "prints_4x6", false)}
+                        className="h-4 w-4 text-amber-600 focus:ring-amber-500 border-slate-300"
+                      />
+                      <label htmlFor={`prints-no-${i}`} className="text-sm font-medium">No</label>
+                    </div>
                   </div>
                 </div>
 
