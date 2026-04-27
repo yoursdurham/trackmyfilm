@@ -115,7 +115,7 @@ export async function POST(req: Request) {
       order_number:         normalizedOrderNum,
       dropoff_date,
       roll_count,
-      film_type:            film_type as "35mm" | "120",
+      film_type:            film_type as "35mm" | "120" | "Disposable Camera",
       film_process:         film_process as "Color" | "Black & White" | "Both",
       film_stock:           film_stock ?? undefined,
       roll_details:         roll_details ?? undefined,

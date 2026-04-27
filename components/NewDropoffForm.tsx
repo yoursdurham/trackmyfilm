@@ -33,7 +33,7 @@ const FILM_STOCKS = [
   "Lomography Color 400",
 ];
 
-const FILM_TYPES: FilmType[] = ["35mm", "120", "Disposable Camera"];
+const FILM_TYPES: FilmType[] = ["35mm", "120"];
 const FILM_PROCESSES: FilmProcess[] = ["Color", "Black & White"];
 const SCAN_SIZES = ["Standard", "High-Res", "TIFF"] as const;
 

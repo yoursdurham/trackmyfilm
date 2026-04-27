@@ -28,7 +28,7 @@ import { STATUS_FLOW, STATUS_TEMPLATE_MAP } from "@/lib/constants";
 import { isValidWetransferLink, ensureHttps } from "@/lib/validation";
 import type { FilmOrder, FilmProcess, FilmType, OrderStatus, RollDetail } from "@/lib/types";
 
-const FILM_TYPES: FilmType[] = ["35mm", "120", "Disposable Camera"];
+const FILM_TYPES: FilmType[] = ["35mm", "120"];
 const FILM_PROCESSES: FilmProcess[] = ["Color", "Black & White", "Both"];
 
 type OrderDraft = {

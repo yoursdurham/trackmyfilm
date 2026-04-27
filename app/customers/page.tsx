@@ -26,7 +26,7 @@ type SortKey = "email" | "name" | "last_name" | "last_dropoff_date" | "total_rol
 type SortDir = "asc" | "desc";
 
 const PAGE_SIZE = 50;
-const FILM_TYPES: FilmType[] = ["35mm", "120", "Disposable Camera"];
+const FILM_TYPES: FilmType[] = ["35mm", "120"];
 const FILM_PROCESSES: FilmProcess[] = ["Color", "Black & White", "Both"];
 
 type OrderDraft = {

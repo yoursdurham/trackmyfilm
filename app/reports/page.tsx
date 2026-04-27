@@ -14,7 +14,6 @@ interface ReportMetrics {
   totalCustomers: number;
   totalBWRolls: number;
   totalColorRolls: number;
-  totalDisposableCameras: number;
   total35mmRolls: number;
   total120Rolls: number;
   total4x6Prints: number;
@@ -63,7 +62,6 @@ export default function Reports() {
     const filmStockMap = new Map<string, number>();
     let totalBWRolls = 0;
     let totalColorRolls = 0;
-    let totalDisposableCameras = 0;
     let total35mmRolls = 0;
     let total120Rolls = 0;
     let total4x6Prints = 0;
@@ -75,7 +73,6 @@ export default function Reports() {
         order.roll_details.forEach((roll) => {
           if (roll.film_process === "Black & White") totalBWRolls++;
           if (roll.film_process === "Color") totalColorRolls++;
-          if (roll.film_type === "Disposable Camera") totalDisposableCameras++;
           if (roll.film_type === "35mm") total35mmRolls++;
           if (roll.film_type === "120") total120Rolls++;
           if (roll.prints_4x6) total4x6Prints++;
@@ -87,7 +84,6 @@ export default function Reports() {
         // Fallback to legacy single film type/process
         if (order.film_process === "Black & White") totalBWRolls += order.roll_count;
         if (order.film_process === "Color") totalColorRolls += order.roll_count;
-        if (order.film_type === "Disposable Camera") totalDisposableCameras += order.roll_count;
         if (order.film_type === "35mm") total35mmRolls += order.roll_count;
         if (order.film_type === "120") total120Rolls += order.roll_count;
         if (order.prints_4x6) total4x6Prints += order.roll_count;
@@ -105,7 +101,6 @@ export default function Reports() {
       totalCustomers: uniqueCustomerIds.size,
       totalBWRolls,
       totalColorRolls,
-      totalDisposableCameras,
       total35mmRolls,
       total120Rolls,
       total4x6Prints,
@@ -114,12 +109,6 @@ export default function Reports() {
   };
 
   const metrics = calculateMetrics(filteredOrders);
-
-  const filmTypeData = [
-    { name: "35mm", value: metrics.total35mmRolls, fill: "#A77B43" },
-    { name: "120", value: metrics.total120Rolls, fill: "#806A91" },
-    { name: "Disposable", value: metrics.totalDisposableCameras, fill: "#5E8068" },
-  ];
 
   const filmProcessData = [
     { name: "Color", value: metrics.totalColorRolls, fill: "#F59E0B" },
@@ -141,7 +130,6 @@ export default function Reports() {
       `Total Individual Customers,${metrics.totalCustomers}`,
       `Total B/W Rolls,${metrics.totalBWRolls}`,
       `Total Color Rolls,${metrics.totalColorRolls}`,
-      `Total Disposable Cameras,${metrics.totalDisposableCameras}`,
       `Total 35mm Rolls,${metrics.total35mmRolls}`,
       `Total 120 Rolls,${metrics.total120Rolls}`,
       `Total 4x6" Prints Done,${metrics.total4x6Prints}`,
@@ -283,14 +271,10 @@ export default function Reports() {
                   <span className="text-sm text-slate-600">120</span>
                   <span className="text-2xl font-bold text-slate-800">{metrics.total120Rolls}</span>
                 </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-slate-600">Disposable Camera</span>
-                  <span className="text-2xl font-bold text-slate-800">{metrics.totalDisposableCameras}</span>
-                </div>
                 <div className="mt-4 pt-4 border-t border-slate-200 flex items-center justify-between font-semibold">
                   <span className="text-slate-700">Total Rolls</span>
                   <span className="text-2xl text-slate-800">
-                    {metrics.total35mmRolls + metrics.total120Rolls + metrics.totalDisposableCameras}
+                    {metrics.total35mmRolls + metrics.total120Rolls}
                   </span>
                 </div>
               </div>
@@ -320,32 +304,7 @@ export default function Reports() {
 
         {/* Charts */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <Card className="border border-stone-100">
-            <CardContent className="p-6">
-              <h3 className="text-lg font-semibold text-slate-800 mb-4">Film Type Breakdown</h3>
-              <ResponsiveContainer width="100%" height={300}>
-                <PieChart>
-                  <Pie
-                    data={filmTypeData}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    label={({ name, value }) => `${name}: ${value}`}
-                    outerRadius={80}
-                    fill="#8884d8"
-                    dataKey="value"
-                  >
-                    {filmTypeData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.fill} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-
-          <Card className="border border-stone-100">
+            <Card className="border border-stone-100">
             <CardContent className="p-6">
               <h3 className="text-lg font-semibold text-slate-800 mb-4">Film Process Breakdown</h3>
               <ResponsiveContainer width="100%" height={300}>
