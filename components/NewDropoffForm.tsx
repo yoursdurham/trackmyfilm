@@ -326,15 +326,15 @@ export default function NewDropoffForm({ open, onOpenChange, onSuccess, customer
                 {/* Scan size */}
                 <div className="space-y-1">
                   <p className="text-xs font-medium text-slate-600">Scan Size</p>
-                  <div className="flex flex-wrap gap-x-4 gap-y-1">
+                  <select
+                    value={roll.scan_size}
+                    onChange={(e) => setRoll(i, "scan_size", e.target.value as ScanSize)}
+                    className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  >
                     {SCAN_SIZES.map((size) => (
-                      <div key={size} className="flex items-center space-x-2">
-                        <Checkbox id={`ss-${i}-${size}`} checked={roll.scan_size === size}
-                          onCheckedChange={() => setRoll(i, "scan_size", size)} />
-                        <label htmlFor={`ss-${i}-${size}`} className="text-sm font-medium">{size}</label>
-                      </div>
+                      <option key={size} value={size}>{size}</option>
                     ))}
-                  </div>
+                  </select>
                 </div>
 
                 {/* 4x6 Prints */}

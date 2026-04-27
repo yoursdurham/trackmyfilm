@@ -28,7 +28,11 @@ type SortDir = "asc" | "desc";
 const PAGE_SIZE = 50;
 const FILM_TYPES: FilmType[] = ["35mm", "120"];
 const FILM_PROCESSES: FilmProcess[] = ["Color", "Black & White", "Both"];
-const SCAN_SIZES = ["Standard", "High-Res", "TIFF", "Process Only"] as const;
+type ScanSize = NonNullable<RollDetail["scan_size"]>;
+const SCAN_SIZES = ["Standard", "High-Res", "TIFF", "Process Only"] as const satisfies readonly ScanSize[];
+
+const isScanSize = (value: string): value is ScanSize =>
+  SCAN_SIZES.includes(value as ScanSize);
 
 type OrderDraft = {
   order_number: string;
@@ -843,11 +847,18 @@ export default function Customers() {
                           <label className="mb-1 block text-xs text-slate-500">Scan Size</label>
                           <select
                             value={roll.scan_size ?? ""}
-                            onChange={(e) => updateRollDraft(
-                              index,
-                              "scan_size",
-                              (e.target.value || undefined) as RollDetail["scan_size"]
-                            )}
+                            onChange={(e) =>
+  updateRollDraft(
+    index,
+    "scan_size",
+    (e.target.value || undefined) as
+      | "Standard"
+      | "High-Res"
+      | "TIFF"
+      | "Process Only"
+      | undefined
+  )
+}
                             className="h-8 w-full rounded-lg border border-stone-200 bg-white px-2.5 text-sm text-slate-700 outline-none focus:border-[var(--accent-purple)] focus:ring-2 focus:ring-[var(--accent-purple)]/20"
                           >
                             <option value="">None</option>

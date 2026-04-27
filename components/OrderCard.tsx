@@ -619,7 +619,13 @@ export default function OrderCard({ order, onStatusChange, onDelete, onOrderUpda
                           <label className="mb-1 block text-xs text-slate-500">Scan Size</label>
                           <select
                             value={roll.scan_size ?? ""}
-                            onChange={(event) => updateRollDraft(index, "scan_size", event.target.value || undefined)}
+                            onChange={(event) =>
+                              updateRollDraft(
+                                index,
+                                "scan_size",
+                                (event.target.value || undefined) as RollDetail["scan_size"]
+                              )
+                            }
                             className="h-8 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-sm text-slate-700 outline-none focus:border-[var(--accent-purple)] focus:ring-2 focus:ring-[var(--accent-purple)]/20"
                           >
                             <option value="">None</option>
