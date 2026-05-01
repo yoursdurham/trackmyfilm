@@ -54,21 +54,23 @@ export function normalizeOrderNumber(num: string): string {
 }
 
 /**
- * Returns true if `url` is a valid WeTransfer link.
- * Checks the actual hostname — not just whether "wetransfer.com" appears anywhere in the string.
+ * Returns true if `url` is a valid http(s) URL.
+ * If no scheme is provided, https:// is assumed before validation.
  */
-export function isValidWetransferLink(url: string): boolean {
+export function isValidUrl(url: string): boolean {
   try {
     let normalized = url.trim();
     if (!normalized.startsWith("http://") && !normalized.startsWith("https://")) {
       normalized = "https://" + normalized;
     }
-    const { hostname } = new URL(normalized);
-    return hostname === "wetransfer.com" || hostname.endsWith(".wetransfer.com");
+    const parsedUrl = new URL(normalized);
+    return ["http:", "https:"].includes(parsedUrl.protocol) && Boolean(parsedUrl.hostname);
   } catch {
     return false;
   }
 }
+
+export const isValidWetransferLink = isValidUrl;
 
 /**
  * Prepends https:// to a URL if no scheme is present.

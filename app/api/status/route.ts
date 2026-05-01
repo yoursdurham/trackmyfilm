@@ -7,7 +7,7 @@
 import { NextResponse } from "next/server";
 import { getOrderById, updateOrder } from "@/lib/db";
 import { STATUS_TEMPLATE_MAP, STATUS_FLOW } from "@/lib/constants";
-import { isValidTransition, isKnownStatus, isValidWetransferLink, ensureHttps } from "@/lib/validation";
+import { isValidTransition, isKnownStatus, isValidUrl, ensureHttps } from "@/lib/validation";
 import { requireAuth } from "@/lib/api-auth";
 import type { OrderStatus, StatusHistoryEntry } from "@/lib/types";
 
@@ -54,11 +54,11 @@ export async function POST(req: Request) {
       }, { status: 422 });
     }
 
-    // Validate WeTransfer link only if one was provided
+    // Validate download link only if one was provided
     if (new_status === "Scans Sent" && wetransfer_link) {
-      if (!isValidWetransferLink(wetransfer_link)) {
+      if (!isValidUrl(wetransfer_link)) {
         return NextResponse.json(
-          { error: "WeTransfer link must be from wetransfer.com" },
+          { error: "Please enter a valid link" },
           { status: 400 }
         );
       }

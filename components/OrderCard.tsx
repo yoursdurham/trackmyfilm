@@ -20,17 +20,61 @@ import {
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
-import { Hash, Layers, ChevronDown, Calendar, Trash2, ExternalLink, Clock, ChevronRight, Copy, Loader2, RefreshCw, FileText, Pencil, Mail } from "lucide-react";
+import { Layers, ChevronDown, Calendar, Trash2, ExternalLink, Clock, ChevronRight, Copy, Loader2, RefreshCw, FileText, Pencil, Mail } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import StatusBadge from "./StatusBadge";
 import { STATUS_FLOW, STATUS_TEMPLATE_MAP } from "@/lib/constants";
-import { isValidWetransferLink, ensureHttps } from "@/lib/validation";
+import { isValidUrl, ensureHttps } from "@/lib/validation";
 import type { FilmOrder, FilmProcess, FilmType, OrderStatus, RollDetail } from "@/lib/types";
 
 const FILM_TYPES: FilmType[] = ["35mm", "120"];
 const FILM_PROCESSES: FilmProcess[] = ["Color", "Black & White", "Both"];
 const SCAN_SIZES = ["Standard", "High-Res", "TIFF", "Process Only"] as const;
+
+type NormalizedFilmProcess = "black-and-white" | "color" | null;
+
+const normalizeFilmProcess = (process?: string | null): NormalizedFilmProcess => {
+  if (!process) return null;
+
+  const compactProcess = process
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z]/g, "");
+
+  if (compactProcess.includes("blackandwhite") || compactProcess.includes("bw")) return "black-and-white";
+  if (compactProcess === "color" || compactProcess === "c41") return "color";
+
+  return null;
+};
+
+function FilmProcessBadge({ process }: { process: string }) {
+  const normalizedProcess = normalizeFilmProcess(process);
+
+  if (normalizedProcess === "black-and-white") {
+    return (
+      <span className="inline-flex rounded-full bg-black px-2 py-1 text-xs font-medium text-white">
+        {process}
+      </span>
+    );
+  }
+
+  if (normalizedProcess === "color") {
+    return (
+      <span className="inline-flex rounded-full bg-white px-2 py-0.5 text-xs font-semibold ring-1 ring-slate-200">
+        <span className="bg-gradient-to-r from-red-500 via-yellow-400 to-blue-500 bg-clip-text text-transparent">
+          {process}
+        </span>
+      </span>
+    );
+  }
+
+  return (
+    <span className="inline-flex rounded-full bg-[var(--accent-purple)] px-2 py-0.5 text-xs font-medium text-white">
+      {process}
+    </span>
+  );
+}
 
 type OrderDraft = {
   order_number: string;
@@ -67,6 +111,18 @@ export default function OrderCard({ order, onStatusChange, onDelete, onOrderUpda
   const [isSavingNotes, setIsSavingNotes] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
   const [isRetryingEmail, setIsRetryingEmail] = useState(false);
+  const [copiedField, setCopiedField] = useState<"name" | "email" | null>(null);
+
+  const copyToClipboard = async (text: string, field: "name" | "email") => {
+    try {
+      await navigator.clipboard.writeText(text);
+      console.log("Copied:", text);
+      setCopiedField(field);
+      window.setTimeout(() => setCopiedField(null), 1500);
+    } catch (err) {
+      console.error("Copy failed", err);
+    }
+  };
 
   const handleRetryEmail = async () => {
     setIsRetryingEmail(true);
@@ -115,6 +171,7 @@ export default function OrderCard({ order, onStatusChange, onDelete, onOrderUpda
           },
         ]
       : [];
+  const hasPrints4x6 = rollDetails.some((roll) => roll.prints_4x6);
 
   const buildOrderDraft = (): OrderDraft => ({
     order_number: order.order_number,
@@ -203,7 +260,7 @@ export default function OrderCard({ order, onStatusChange, onDelete, onOrderUpda
       return;
     }
 
-    // Scans Sent — open dialog for optional WeTransfer link + email toggle
+    // Scans Sent — open dialog for optional download link + email toggle
     if (status === "Scans Sent") {
       setWetransferLink(order.wetransfer_link || "");
       setSendScanEmail(true);
@@ -226,7 +283,7 @@ export default function OrderCard({ order, onStatusChange, onDelete, onOrderUpda
 
   const handleSaveLinkAndStatus = async () => {
     const raw = wetransferLink.trim();
-    if (raw && !isValidWetransferLink(raw)) { toast.error("Please enter a valid WeTransfer link (wetransfer.com)"); return; }
+    if (raw && !isValidUrl(raw)) { toast.error("Please enter a valid link"); return; }
     setShowLinkDialog(false);
     await doStatusChange("Scans Sent", raw ? ensureHttps(raw) : undefined, undefined, sendScanEmail);
   };
@@ -269,9 +326,37 @@ export default function OrderCard({ order, onStatusChange, onDelete, onOrderUpda
         <div className="mb-4">
           <div className="flex items-start justify-between mb-2">
             <div className="flex-1 min-w-0">
-              <h3 className="font-semibold text-slate-800 text-base truncate">{order.customer_name}</h3>
+              <div className="flex flex-wrap items-baseline gap-x-2">
+                <span className="text-xs font-medium uppercase tracking-widest text-slate-400">Order #</span>
+                <h2 className="text-2xl font-bold tracking-tight text-slate-900">{order.order_number}</h2>
+              </div>
+              <div className="flex items-center gap-2">
+                <h3 className="min-w-0 truncate text-base font-semibold text-slate-800">{order.customer_name}</h3>
+                <button
+                  type="button"
+                  onClick={() => copyToClipboard(order.customer_name, "name")}
+                  className="inline-flex h-6 shrink-0 items-center gap-1 rounded-full px-1.5 text-xs text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+                  aria-label="Copy customer name"
+                  title="Copy customer name"
+                >
+                  <Copy className="h-3 w-3" />
+                  {copiedField === "name" ? <span>Copied</span> : null}
+                </button>
+              </div>
               {order.customer_email && (
-                <p className="text-xs text-slate-500 truncate">{order.customer_email}</p>
+                <div className="flex items-center gap-2">
+                  <p className="min-w-0 truncate text-xs text-slate-500">{order.customer_email}</p>
+                  <button
+                    type="button"
+                    onClick={() => copyToClipboard(order.customer_email!, "email")}
+                    className="inline-flex h-6 shrink-0 items-center gap-1 rounded-full px-1.5 text-xs text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+                    aria-label="Copy customer email"
+                    title="Copy customer email"
+                  >
+                    <Copy className="h-3 w-3" />
+                    {copiedField === "email" ? <span>Copied</span> : null}
+                  </button>
+                </div>
               )}
             </div>
             <StatusBadge status={order.status} />
@@ -279,10 +364,6 @@ export default function OrderCard({ order, onStatusChange, onDelete, onOrderUpda
         </div>
 
         <div className="space-y-2 mb-4">
-          <div className="flex items-center gap-2 text-sm text-slate-600">
-            <Hash className="w-3.5 h-3.5 text-slate-400" />
-            <span className="font-medium">{order.order_number}</span>
-          </div>
           {order.dropoff_date && (
             <div className="flex items-center gap-2 text-sm text-slate-600">
               <Calendar className="w-3.5 h-3.5 text-slate-400" />
@@ -294,10 +375,15 @@ export default function OrderCard({ order, onStatusChange, onDelete, onOrderUpda
             <span>{order.roll_count} roll{order.roll_count > 1 ? "s" : ""}</span>
             {order.film_type && <span className="text-slate-400">• {order.film_type}</span>}
           </div>
-          {order.film_process && (
+          {(order.film_process || hasPrints4x6) && (
             <div className="flex items-center gap-2 text-sm text-slate-600">
               <span className="text-slate-400">Process:</span>
-              <span>{order.film_process}</span>
+              {order.film_process ? <FilmProcessBadge process={order.film_process} /> : null}
+              {hasPrints4x6 ? (
+                <span className="inline-flex rounded-full bg-[var(--accent-green)] px-2 py-0.5 text-xs font-medium text-white">
+                  4x6 Prints
+                </span>
+              ) : null}
             </div>
           )}
           {lastUpdated && (
@@ -337,7 +423,7 @@ export default function OrderCard({ order, onStatusChange, onDelete, onOrderUpda
               </div>
             ) : (
               <div className="bg-amber-50 border border-amber-200 rounded-lg px-2 py-1.5">
-                <p className="text-xs text-amber-800">⚠️ Missing WeTransfer link</p>
+                <p className="text-xs text-amber-800">⚠️ Missing download link</p>
               </div>
             )
           )}
@@ -652,13 +738,13 @@ export default function OrderCard({ order, onStatusChange, onDelete, onOrderUpda
               </section>
 
               <div>
-                <label className="mb-1 block text-xs font-medium text-slate-500">WeTransfer Link</label>
+                <label className="mb-1 block text-xs font-medium text-slate-500">Download Link</label>
                 <Input
                   value={orderDraft.wetransfer_link}
                   onChange={(event) =>
                     setOrderDraft((draft) => draft ? { ...draft, wetransfer_link: event.target.value } : draft)
                   }
-                  placeholder="https://wetransfer.com/..."
+                  placeholder="https://we.tl/..."
                   className="border-slate-200"
                 />
               </div>
@@ -766,9 +852,7 @@ export default function OrderCard({ order, onStatusChange, onDelete, onOrderUpda
                           </span>
                         ) : null}
                         {roll.film_process ? (
-                          <span className="rounded-full bg-[var(--accent-purple)] px-2 py-0.5 text-xs font-medium text-white">
-                            {roll.film_process}
-                          </span>
+                          <FilmProcessBadge process={roll.film_process} />
                         ) : null}
                         {roll.film_stock ? (
                           <span className="rounded-full bg-slate-200 px-2 py-0.5 text-xs text-slate-700">
@@ -884,7 +968,7 @@ export default function OrderCard({ order, onStatusChange, onDelete, onOrderUpda
               </div>
               {order.wetransfer_link ? (
                 <div className="sm:col-span-2">
-                  <p className="text-xs font-medium uppercase tracking-wide text-slate-400">WeTransfer Link</p>
+                  <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Download Link</p>
                   <a
                     href={order.wetransfer_link}
                     target="_blank"
@@ -933,15 +1017,15 @@ export default function OrderCard({ order, onStatusChange, onDelete, onOrderUpda
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Mark as Scans Sent</DialogTitle>
-            <DialogDescription>Optionally add a WeTransfer link for the customer</DialogDescription>
+            <DialogDescription>Optionally add a download link for the customer</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="wetransfer">WeTransfer Link <span className="text-slate-400 font-normal">(optional)</span></Label>
+              <Label htmlFor="wetransfer">Download Link <span className="text-slate-400 font-normal">(optional)</span></Label>
               <Input id="wetransfer" value={wetransferLink}
                 onChange={(e) => setWetransferLink(e.target.value)}
-                placeholder="https://wetransfer.com/..." />
-              <p className="text-xs text-slate-500">Must be from wetransfer.com if provided</p>
+                placeholder="https://we.tl/..." />
+              <p className="text-xs text-slate-500">Any valid URL is accepted</p>
             </div>
             <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
               <Checkbox id="scan-email" checked={sendScanEmail} onCheckedChange={(v) => setSendScanEmail(!!v)} />

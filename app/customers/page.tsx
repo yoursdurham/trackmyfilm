@@ -883,11 +883,11 @@ export default function Customers() {
               </div>
 
               <div>
-                <label className="mb-1 block text-xs font-medium text-slate-500">WeTransfer Link</label>
+                <label className="mb-1 block text-xs font-medium text-slate-500">Download Link</label>
                 <Input
                   value={orderDraft.wetransfer_link}
                   onChange={(e) => setOrderDraft((draft) => draft ? { ...draft, wetransfer_link: e.target.value } : draft)}
-                  placeholder="https://wetransfer.com/..."
+                  placeholder="https://we.tl/..."
                   className="border-stone-200"
                 />
               </div>

@@ -6,7 +6,7 @@ import {
   normalizeCustomerName,
   normalizeEmail,
   normalizeOrderNumber,
-  isValidWetransferLink,
+  isValidUrl,
   ensureHttps,
 } from "../lib/validation";
 
@@ -181,51 +181,43 @@ describe("normalizeOrderNumber", () => {
   });
 });
 
-// ─── WeTransfer link validation ───────────────────────────────────────────────
+// ─── URL validation ──────────────────────────────────────────────────────────
 
-describe("isValidWetransferLink", () => {
+describe("isValidUrl", () => {
   it("accepts a full https wetransfer.com URL", () => {
-    expect(isValidWetransferLink("https://wetransfer.com/downloads/abc123")).toBe(true);
+    expect(isValidUrl("https://wetransfer.com/downloads/abc123")).toBe(true);
+  });
+
+  it("accepts a shortened we.tl URL", () => {
+    expect(isValidUrl("https://we.tl/abc123")).toBe(true);
   });
 
   it("accepts a URL without scheme (adds https://)", () => {
-    expect(isValidWetransferLink("wetransfer.com/downloads/xyz")).toBe(true);
+    expect(isValidUrl("wetransfer.com/downloads/xyz")).toBe(true);
   });
 
-  it("accepts http:// wetransfer URLs", () => {
-    expect(isValidWetransferLink("http://wetransfer.com/downloads/abc")).toBe(true);
+  it("accepts http:// URLs", () => {
+    expect(isValidUrl("http://wetransfer.com/downloads/abc")).toBe(true);
   });
 
-  it("accepts test URL used in development", () => {
-    expect(isValidWetransferLink("https://wetransfer.com/downloads/test123abc")).toBe(true);
+  it("accepts google drive URL", () => {
+    expect(isValidUrl("https://drive.google.com/file/abc")).toBe(true);
   });
 
-  it("rejects google drive URL", () => {
-    expect(isValidWetransferLink("https://drive.google.com/file/abc")).toBe(false);
+  it("accepts dropbox URL", () => {
+    expect(isValidUrl("https://dropbox.com/s/abc")).toBe(true);
   });
 
-  it("rejects dropbox URL", () => {
-    expect(isValidWetransferLink("https://dropbox.com/s/abc")).toBe(false);
+  it("accepts a different valid domain", () => {
+    expect(isValidUrl("https://example.com/download")).toBe(true);
   });
 
   it("rejects empty string", () => {
-    expect(isValidWetransferLink("")).toBe(false);
-  });
-
-  it("rejects completely random domain", () => {
-    expect(isValidWetransferLink("https://evil.com")).toBe(false);
-  });
-
-  it("rejects URL that contains wetransfer.com in path (smuggling attempt)", () => {
-    expect(isValidWetransferLink("https://evil.com/wetransfer.com")).toBe(false);
-  });
-
-  it("rejects URL that has wetransfer.com in query string", () => {
-    expect(isValidWetransferLink("https://evil.com?redirect=wetransfer.com")).toBe(false);
+    expect(isValidUrl("")).toBe(false);
   });
 
   it("rejects plain text (no URL)", () => {
-    expect(isValidWetransferLink("not a url at all")).toBe(false);
+    expect(isValidUrl("not a url at all")).toBe(false);
   });
 });
 

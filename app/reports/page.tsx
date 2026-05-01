@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Download, LogOut, Users, Film, Layers } from "lucide-react";
@@ -120,23 +119,12 @@ export default function Reports() {
 
   const metrics = calculateMetrics(filteredOrders);
 
-  const filmProcessData = [
-    { name: "Color", value: metrics.totalColorRolls, fill: "#F59E0B" },
-    { name: "B/W", value: metrics.totalBWRolls, fill: "#6B7280" },
-  ];
-
-  const scanResolutionData = metrics.scanResolutionUsage.map((item, index) => ({
-    name: item.resolution,
-    value: item.count,
-    fill: ["#3B82F6", "#10B981", "#F59E0B"][index % 3], // Cycle through colors
-  }));
+  const totalScanResolutionRolls = metrics.scanResolutionUsage.reduce(
+    (total, item) => total + item.count,
+    0
+  );
 
   const handleExport = () => {
-    const reportData = {
-      generatedAt: new Date().toISOString(),
-      metrics,
-    };
-
     const csvContent = [
       "TrackMyFilm Report",
       `Generated: ${new Date().toLocaleString()}`,
@@ -268,7 +256,7 @@ export default function Reports() {
             <CardContent className="p-5">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-xs text-slate-500 uppercase tracking-wide">4x6" Prints</p>
+                  <p className="text-xs text-slate-500 uppercase tracking-wide">4x6&quot; Prints</p>
                   <p className="text-3xl font-bold text-purple-600">{metrics.total4x6Prints}</p>
                 </div>
                 <Layers className="w-8 h-8 text-purple-500 opacity-20" />
@@ -322,56 +310,24 @@ export default function Reports() {
           </Card>
         </div>
 
-        {/* Charts */}
+        {/* Scan Resolution Breakdown */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Card className="border border-stone-100">
-            <CardContent className="p-6">
-              <h3 className="text-lg font-semibold text-slate-800 mb-4">Film Process Breakdown</h3>
-              <ResponsiveContainer width="100%" height={300}>
-                <PieChart>
-                  <Pie
-                    data={filmProcessData}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    label={({ name, value }) => `${name}: ${value}`}
-                    outerRadius={80}
-                    fill="#8884d8"
-                    dataKey="value"
-                  >
-                    {filmProcessData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.fill} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-
           <Card className="border border-stone-100">
             <CardContent className="p-6">
               <h3 className="text-lg font-semibold text-slate-800 mb-4">Scan Resolution Breakdown</h3>
-              {scanResolutionData.length > 0 ? (
-                <ResponsiveContainer width="100%" height={300}>
-                  <PieChart>
-                    <Pie
-                      data={scanResolutionData}
-                      cx="50%"
-                      cy="50%"
-                      labelLine={false}
-                      label={({ name, value }) => `${name}: ${value}`}
-                      outerRadius={80}
-                      fill="#8884d8"
-                      dataKey="value"
-                    >
-                      {scanResolutionData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.fill} />
-                      ))}
-                    </Pie>
-                    <Tooltip />
-                  </PieChart>
-                </ResponsiveContainer>
+              {metrics.scanResolutionUsage.length > 0 ? (
+                <div className="space-y-3">
+                  {metrics.scanResolutionUsage.map((item) => (
+                    <div key={item.resolution} className="flex items-center justify-between">
+                      <span className="text-sm text-slate-600">{item.resolution}</span>
+                      <span className="text-2xl font-bold text-slate-800">{item.count}</span>
+                    </div>
+                  ))}
+                  <div className="mt-4 pt-4 border-t border-slate-200 flex items-center justify-between font-semibold">
+                    <span className="text-slate-700">Total Rolls</span>
+                    <span className="text-2xl text-slate-800">{totalScanResolutionRolls}</span>
+                  </div>
+                </div>
               ) : (
                 <p className="text-slate-500">No scan resolution data available</p>
               )}
