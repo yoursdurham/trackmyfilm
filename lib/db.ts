@@ -53,6 +53,21 @@ export async function getOrderByNumber(orderNumber: string): Promise<FilmOrder |
   return data as FilmOrder | null;
 }
 
+export async function getOrderByNumberAndEmail(
+  orderNumber: string,
+  email: string
+): Promise<FilmOrder | null> {
+  const { data, error } = await getSupabase()
+    .from("film_orders")
+    .select("*")
+    .eq("order_number", orderNumber)
+    .ilike("customer_email", email)
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return data as FilmOrder | null;
+}
+
 export async function getOrdersByCustomerId(customerId: string): Promise<FilmOrder[]> {
   const { data, error } = await getSupabase()
     .from("film_orders")

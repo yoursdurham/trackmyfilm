@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { AnimatePresence, motion } from "framer-motion";
@@ -8,8 +8,6 @@ import {
   Calendar,
   CheckCircle,
   Clock,
-  Download,
-  ExternalLink,
   Film,
   Layers,
   Loader2,
@@ -21,6 +19,7 @@ import {
 import Image from "next/image";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import FilmProcessBadge from "@/components/FilmProcessBadge";
 import type { FilmOrder, OrderStatus, StatusHistoryEntry } from "@/lib/types";
 
 type StatusStep = {
@@ -41,6 +40,8 @@ type TrackingResult = {
   customerName: string | null;
   orders: FilmOrder[];
 };
+
+const RESEND_LINK_COOLDOWN_SECONDS = 20;
 
 const statusSteps: StatusStep[] = [
   {
@@ -189,6 +190,9 @@ async function fetchTrackedOrders(search: CommittedSearch): Promise<TrackingResu
 export default function Tracking() {
   const [searchTerm, setSearchTerm] = useState("");
   const [committed, setCommitted] = useState<CommittedSearch | null>(null);
+  const [resendingOrderId, setResendingOrderId] = useState<string | null>(null);
+  const [resendCooldowns, setResendCooldowns] = useState<Record<string, number>>({});
+  const [resendMessages, setResendMessages] = useState<Record<string, string>>({});
 
   const normalizedSearchTerm = searchTerm.trim();
   const hasSearched = committed !== null;
@@ -206,6 +210,23 @@ export default function Tracking() {
   const orders = data?.orders ?? [];
   const customerName = data?.customerName ?? null;
 
+  useEffect(() => {
+    const hasActiveCooldown = Object.values(resendCooldowns).some((seconds) => seconds > 0);
+    if (!hasActiveCooldown) return;
+
+    const timer = window.setInterval(() => {
+      setResendCooldowns((current) => {
+        const next: Record<string, number> = {};
+        for (const [orderId, seconds] of Object.entries(current)) {
+          next[orderId] = Math.max(0, seconds - 1);
+        }
+        return next;
+      });
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, [resendCooldowns]);
+
   const handleSearch = (type: "order" | "email") => {
     if (!normalizedSearchTerm) return;
     setCommitted({ term: normalizedSearchTerm, type });
@@ -219,6 +240,42 @@ export default function Tracking() {
   const handleReset = () => {
     setSearchTerm("");
     setCommitted(null);
+    setResendMessages({});
+    setResendCooldowns({});
+  };
+
+  const handleResendDownloadLink = async (order: FilmOrder) => {
+    if ((resendCooldowns[order.id] ?? 0) > 0) return;
+
+    const email = order.customer_email || (committed?.type === "email" ? committed.term : "");
+    setResendingOrderId(order.id);
+    setResendMessages((current) => ({ ...current, [order.id]: "" }));
+
+    try {
+      await fetch("/api/resend-link", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          orderNumber: order.order_number,
+          email,
+        }),
+      });
+
+      setResendMessages((current) => ({ ...current, [order.id]: "Link sent" }));
+      setResendCooldowns((current) => ({
+        ...current,
+        [order.id]: RESEND_LINK_COOLDOWN_SECONDS,
+      }));
+    } catch {
+      setResendMessages((current) => ({
+        ...current,
+        [order.id]: "Unable to send right now. Please try again soon.",
+      }));
+    } finally {
+      setResendingOrderId(null);
+    }
   };
 
   return (
@@ -409,9 +466,10 @@ export default function Tracking() {
                             <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
                               {roll.film_type}
                             </span>
-                            <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">
-                              {roll.film_process}
-                            </span>
+                            <FilmProcessBadge
+                              process={roll.film_process}
+                              className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700"
+                            />
                             {roll.scan_size ? (
                               <span className="rounded-full bg-violet-100 px-2 py-0.5 text-xs font-medium text-violet-700">
                                 {roll.scan_size}
@@ -443,9 +501,10 @@ export default function Tracking() {
                             </span>
                           ) : null}
                           {order.film_process ? (
-                            <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">
-                              {order.film_process}
-                            </span>
+                            <FilmProcessBadge
+                              process={order.film_process}
+                              className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700"
+                            />
                           ) : null}
                           {order.film_stock ? (
                             <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
@@ -479,18 +538,40 @@ export default function Tracking() {
                       ) : null;
                     })()}
 
-                    {order.status === "Scans Sent" && order.wetransfer_link ? (
-                      <div className="mt-4 border-t border-slate-100 pt-4">
-                        <a
-                          href={order.wetransfer_link}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center justify-center gap-2 rounded-lg bg-[var(--accent-green)] px-4 py-3 font-medium text-white shadow-md transition-all hover:bg-[#7D9E88] hover:shadow-lg"
+                    {order.status === "Scans Sent" ? (
+                      <div className="mt-4 space-y-3 border-t border-slate-100 pt-4">
+                        <div className="rounded-lg bg-[var(--accent-green)]/10 px-4 py-3 text-center text-sm font-medium text-[#5E8068]">
+                          Your download link was sent to your email
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleResendDownloadLink(order)}
+                          disabled={
+                            resendingOrderId === order.id ||
+                            (resendCooldowns[order.id] ?? 0) > 0
+                          }
+                          className="flex w-full items-center justify-center gap-2 rounded-lg border border-[var(--border-soft)] bg-white px-4 py-3 font-medium text-slate-700 shadow-sm transition-all hover:border-[var(--accent-green)]/40 hover:bg-[var(--accent-green)]/10 hover:text-[#5E8068] disabled:cursor-not-allowed disabled:opacity-60"
                         >
-                          <Download className="h-5 w-5" />
-                          Download Your Scans
-                          <ExternalLink className="h-4 w-4" />
-                        </a>
+                          {resendingOrderId === order.id ? (
+                            <Loader2 className="h-5 w-5 animate-spin" />
+                          ) : (
+                            <Mail className="h-5 w-5" />
+                          )}
+                          {(resendCooldowns[order.id] ?? 0) > 0
+                            ? `Resend in ${resendCooldowns[order.id]}s`
+                            : "Resend Download Link"}
+                        </button>
+                        {resendMessages[order.id] ? (
+                          <p
+                            className={`text-center text-sm font-medium ${
+                              resendMessages[order.id] === "Link sent"
+                                ? "text-[#5E8068]"
+                                : "text-red-500"
+                            }`}
+                          >
+                            {resendMessages[order.id]}
+                          </p>
+                        ) : null}
                       </div>
                     ) : null}
 

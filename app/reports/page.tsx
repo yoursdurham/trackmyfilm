@@ -2,11 +2,13 @@
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Download, LogOut, Users, Film, Layers } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
+import FilmProcessBadge from "@/components/FilmProcessBadge";
 import type { FilmOrder } from "@/lib/types";
 
 interface ReportMetrics {
@@ -29,6 +31,53 @@ const TIME_FRAMES: { key: TimeFrameKey; label: string; days?: number }[] = [
   { key: "90d", label: "Last 90 days", days: 90 },
   { key: "365d", label: "Last 12 months", days: 365 },
 ];
+
+type FilmProcessPieLabelProps = {
+  cx?: number;
+  cy?: number;
+  midAngle?: number;
+  outerRadius?: number;
+  name?: string;
+  value?: number;
+};
+
+function renderFilmProcessPieLabel({
+  cx = 0,
+  cy = 0,
+  midAngle = 0,
+  outerRadius = 0,
+  name = "",
+  value = 0,
+}: FilmProcessPieLabelProps) {
+  const radius = outerRadius + 34;
+  const x = cx + radius * Math.cos(-midAngle * Math.PI / 180);
+  const y = cy + radius * Math.sin(-midAngle * Math.PI / 180);
+  const label = `${name}: ${value}`;
+
+  if (name === "B/W") {
+    return (
+      <g>
+        <rect x={x - 30} y={y - 12} width="60" height="22" rx="11" fill="#000" />
+        <text x={x} y={y + 4} textAnchor="middle" fill="#fff" fontSize="12" fontWeight="600">
+          {label}
+        </text>
+      </g>
+    );
+  }
+
+  return (
+    <text
+      x={x}
+      y={y}
+      textAnchor={x > cx ? "start" : "end"}
+      fill="url(#film-process-color-label)"
+      fontSize="13"
+      fontWeight="700"
+    >
+      {label}
+    </text>
+  );
+}
 
 export default function Reports() {
   const [selectedTimeFrame, setSelectedTimeFrame] = useState<TimeFrameKey>("all");
@@ -119,10 +168,16 @@ export default function Reports() {
 
   const metrics = calculateMetrics(filteredOrders);
 
-  const totalScanResolutionRolls = metrics.scanResolutionUsage.reduce(
-    (total, item) => total + item.count,
-    0
-  );
+  const filmProcessData = [
+    { name: "Color", value: metrics.totalColorRolls, fill: "#F59E0B" },
+    { name: "B/W", value: metrics.totalBWRolls, fill: "#6B7280" },
+  ];
+
+  const scanResolutionData = metrics.scanResolutionUsage.map((item, index) => ({
+    name: item.resolution,
+    value: item.count,
+    fill: ["#3B82F6", "#10B981", "#F59E0B"][index % 3], // Cycle through colors
+  }));
 
   const handleExport = () => {
     const csvContent = [
@@ -294,11 +349,11 @@ export default function Reports() {
               <h3 className="text-lg font-semibold text-slate-800 mb-4">Film Process Distribution</h3>
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-slate-600">Color</span>
+                  <FilmProcessBadge process="Color" className="text-sm text-slate-600" />
                   <span className="text-2xl font-bold text-amber-600">{metrics.totalColorRolls}</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-slate-600">Black & White</span>
+                  <FilmProcessBadge process="Black & White" className="text-sm text-slate-600" />
                   <span className="text-2xl font-bold text-gray-600">{metrics.totalBWRolls}</span>
                 </div>
                 <div className="mt-4 pt-4 border-t border-slate-200 flex items-center justify-between font-semibold">
@@ -310,24 +365,63 @@ export default function Reports() {
           </Card>
         </div>
 
-        {/* Scan Resolution Breakdown */}
+        {/* Charts */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <Card className="border border-stone-100">
+            <CardContent className="p-6">
+              <h3 className="text-lg font-semibold text-slate-800 mb-4">Film Process Breakdown</h3>
+              <ResponsiveContainer width="100%" height={300}>
+                <PieChart>
+                  <defs>
+                    <linearGradient id="film-process-color-label" x1="0" x2="1" y1="0" y2="0">
+                      <stop offset="0%" stopColor="#EF4444" />
+                      <stop offset="50%" stopColor="#FACC15" />
+                      <stop offset="100%" stopColor="#3B82F6" />
+                    </linearGradient>
+                  </defs>
+                  <Pie
+                    data={filmProcessData}
+                    cx="50%"
+                    cy="50%"
+                    labelLine={false}
+                    label={renderFilmProcessPieLabel}
+                    outerRadius={80}
+                    fill="#8884d8"
+                    dataKey="value"
+                  >
+                    {filmProcessData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.fill} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+
           <Card className="border border-stone-100">
             <CardContent className="p-6">
               <h3 className="text-lg font-semibold text-slate-800 mb-4">Scan Resolution Breakdown</h3>
-              {metrics.scanResolutionUsage.length > 0 ? (
-                <div className="space-y-3">
-                  {metrics.scanResolutionUsage.map((item) => (
-                    <div key={item.resolution} className="flex items-center justify-between">
-                      <span className="text-sm text-slate-600">{item.resolution}</span>
-                      <span className="text-2xl font-bold text-slate-800">{item.count}</span>
-                    </div>
-                  ))}
-                  <div className="mt-4 pt-4 border-t border-slate-200 flex items-center justify-between font-semibold">
-                    <span className="text-slate-700">Total Rolls</span>
-                    <span className="text-2xl text-slate-800">{totalScanResolutionRolls}</span>
-                  </div>
-                </div>
+              {scanResolutionData.length > 0 ? (
+                <ResponsiveContainer width="100%" height={300}>
+                  <PieChart>
+                    <Pie
+                      data={scanResolutionData}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      label={({ name, value }) => `${name}: ${value}`}
+                      outerRadius={80}
+                      fill="#8884d8"
+                      dataKey="value"
+                    >
+                      {scanResolutionData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.fill} />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                  </PieChart>
+                </ResponsiveContainer>
               ) : (
                 <p className="text-slate-500">No scan resolution data available</p>
               )}

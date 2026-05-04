@@ -150,7 +150,7 @@ export default function NewDropoffForm({ open, onOpenChange, onSuccess, customer
       });
 
       const data = await res.json() as {
-        success?: boolean;  
+        success?: boolean;
         error?: string;
         customer?: { name: string; isNew: boolean; total_dropoffs: number };
         email?: { sent: boolean; skipped?: boolean; variant?: string; error?: string };

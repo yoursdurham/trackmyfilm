@@ -19,6 +19,7 @@ import { format } from "date-fns";
 import { toast } from "sonner";
 import Link from "next/link";
 import AddCustomerForm from "@/components/AddCustomerForm";
+import CopyField from "@/components/CopyField";
 import type { Customer, FilmOrder, FilmProcess, FilmType, OrderStatus, RollDetail } from "@/lib/types";
 import { STATUS_FLOW, STATUS_TEMPLATE_MAP } from "@/lib/constants";
 
@@ -436,9 +437,21 @@ export default function Customers() {
                           onClick={() => openExpand(customer)}
                         >
                           <TableCell className="text-slate-500 max-w-[180px] truncate">
-                            {customer.email || <span className="text-slate-300 italic">—</span>}
+                            <CopyField
+                              label="Email"
+                              value={customer.email}
+                              compact
+                              valueClassName="text-sm text-slate-500"
+                            />
                           </TableCell>
-                          <TableCell className="font-medium text-slate-800">{customer.name}</TableCell>
+                          <TableCell className="font-medium text-slate-800">
+                            <CopyField
+                              label="Name"
+                              value={customer.name}
+                              compact
+                              valueClassName="text-sm font-medium text-slate-800"
+                            />
+                          </TableCell>
                           <TableCell className="text-slate-600">{customer.last_name || <span className="text-slate-300">—</span>}</TableCell>
                           <TableCell className="text-slate-500 whitespace-nowrap">
                             {customer.last_dropoff_date
@@ -883,11 +896,11 @@ export default function Customers() {
               </div>
 
               <div>
-                <label className="mb-1 block text-xs font-medium text-slate-500">Download Link</label>
+                <label className="mb-1 block text-xs font-medium text-slate-500">WeTransfer Link</label>
                 <Input
                   value={orderDraft.wetransfer_link}
                   onChange={(e) => setOrderDraft((draft) => draft ? { ...draft, wetransfer_link: e.target.value } : draft)}
-                  placeholder="https://we.tl/..."
+                  placeholder="https://wetransfer.com/..."
                   className="border-stone-200"
                 />
               </div>
