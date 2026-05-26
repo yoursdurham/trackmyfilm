@@ -90,7 +90,8 @@ export default function OrderCard({ order, onStatusChange, onDelete, onOrderUpda
       });
       const data = await res.json() as { error?: string; skipped?: boolean };
       if (!res.ok) throw new Error(data.error ?? "Failed to send email");
-      toast.success("Email sent successfully");
+      toast.success(data.skipped ? "Email already sent" : "Email sent successfully");
+      onOrderUpdated?.();
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Failed to send email");
     } finally {
@@ -371,8 +372,18 @@ export default function OrderCard({ order, onStatusChange, onDelete, onOrderUpda
             </div>
           )}
           {order.status === ORDER_STATUS.READY_FOR_PICKUP && processOnlyOrder ? (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 px-2 py-1.5">
+            <div className="flex items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 px-2 py-1.5">
               <p className="text-xs text-amber-800">Negatives ready - no scans included</p>
+              <button
+                onClick={handleRetryEmail}
+                disabled={isRetryingEmail}
+                className="flex shrink-0 items-center gap-1 rounded border border-amber-300 bg-white px-2 py-0.5 text-xs font-medium text-amber-700 transition hover:border-amber-500 hover:bg-amber-100 disabled:opacity-50"
+              >
+                {isRetryingEmail
+                  ? <Loader2 className="h-3 w-3 animate-spin" />
+                  : <Mail className="h-3 w-3" />}
+                Send email
+              </button>
             </div>
           ) : null}
           {order.status === ORDER_STATUS.SCANS_SENT && !processOnlyOrder && (

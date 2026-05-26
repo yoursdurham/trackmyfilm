@@ -10,6 +10,7 @@ import { ORDER_STATUS, STATUS_TEMPLATE_MAP, STATUS_FLOW } from "@/lib/constants"
 import { isProcessOnlyOrder } from "@/lib/order-service";
 import { isValidTransition, isKnownStatus, isValidUrl, ensureHttps } from "@/lib/validation";
 import { requireAuth } from "@/lib/api-auth";
+import { EmailSendError, sendOrderEmail } from "@/lib/email-service";
 import type { OrderStatus, StatusHistoryEntry } from "@/lib/types";
 
 export async function POST(req: Request) {
@@ -42,6 +43,25 @@ export async function POST(req: Request) {
     }
 
     const processOnlyOrder = isProcessOnlyOrder(order);
+    const detectedScanOptions = order.roll_details?.length
+      ? order.roll_details.map((roll) => roll.scan_size ?? "(missing)")
+      : [
+        (order as typeof order & { scan_size?: string | null }).scan_size,
+        (order as typeof order & { scan_type?: string | null }).scan_type,
+        (order as typeof order & { scan_option?: string | null }).scan_option,
+        (order as typeof order & { resolution?: string | null }).resolution,
+      ].filter(Boolean);
+
+    console.log("[status] Status update requested:", {
+      orderId: order_id,
+      orderNumber: order.order_number,
+      previousStatus: order.status,
+      newStatus: new_status,
+      detectedScanOptions,
+      processOnlyOrder,
+      sendEmail: send_email,
+      hasWetransferLink: Boolean(wetransfer_link || order.wetransfer_link),
+    });
 
     if (new_status === ORDER_STATUS.SCANS_SENT && processOnlyOrder) {
       return NextResponse.json(
@@ -106,35 +126,55 @@ export async function POST(req: Request) {
 
     // Trigger email if a template exists and send_email is true
     const template = STATUS_TEMPLATE_MAP[new_status];
+    const processOnlyEmailSelected =
+      processOnlyOrder &&
+      new_status === ORDER_STATUS.READY_FOR_PICKUP &&
+      template === "process_only_finished";
+
+    console.log("[status] Email path decision:", {
+      orderId: order_id,
+      orderNumber: order.order_number,
+      newStatus: new_status,
+      template,
+      processOnlyOrder,
+      processOnlyEmailSelected,
+      sendEmail: send_email,
+    });
+
     if (!template || !send_email) {
       return NextResponse.json({ success: true, order_id, new_status, email_sent: false });
     }
 
     try {
-      const emailRes = await fetch(new URL("/api/email", req.url), {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Cookie": req.headers.get("cookie") || "",
-        },
-        body: JSON.stringify({ order_id, template }),
-      });
-      const emailData = await emailRes.json();
+      const emailData = await sendOrderEmail(order_id, template);
 
       return NextResponse.json({
         success: true,
         order_id,
         new_status,
-        email_sent: !emailData.skipped && emailRes.ok,
+        email_sent: !emailData.skipped,
         emailResult: emailData,
       });
     } catch (emailErr: unknown) {
       // Email failure does not fail the status update
+      console.error("[status] Email trigger failed:", {
+        orderId: order_id,
+        orderNumber: order.order_number,
+        newStatus: new_status,
+        template,
+        error: emailErr instanceof Error ? emailErr.message : "Unknown email error",
+      });
       await updateOrder(order_id, {
         email_status: "failed",
         email_error: emailErr instanceof Error ? emailErr.message : "Unknown email error",
       });
-      return NextResponse.json({ success: true, order_id, new_status, email_sent: false, emailError: String(emailErr) });
+      return NextResponse.json({
+        success: true,
+        order_id,
+        new_status,
+        email_sent: false,
+        emailError: emailErr instanceof EmailSendError ? emailErr.message : String(emailErr),
+      });
     }
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Unknown error";

@@ -47,6 +47,7 @@ create table film_orders (
   email_error              text,
   received_email_sent_at   timestamptz,
   at_lab_email_sent_at     timestamptz,
+  process_only_finished_emailed_at timestamptz,
   scans_sent_email_sent_at timestamptz,
   created_at               timestamptz not null default now()
 );

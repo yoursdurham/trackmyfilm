@@ -31,7 +31,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       roll_details, prints_4x6,
       wetransfer_link: rawWetransferLink,
       received_by_yours_at, at_lab_at, scans_sent_at,
-      received_email_sent_at, at_lab_email_sent_at, scans_sent_email_sent_at,
+      received_email_sent_at, at_lab_email_sent_at, process_only_finished_emailed_at, scans_sent_email_sent_at,
       email_status, email_error,
     } = body;
 
@@ -45,7 +45,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       film_type, film_process, film_stock, roll_count, dropoff_date, dropoff_number,
       roll_details, prints_4x6, wetransfer_link, notes,
       received_by_yours_at, at_lab_at, scans_sent_at,
-      received_email_sent_at, at_lab_email_sent_at, scans_sent_email_sent_at,
+      received_email_sent_at, at_lab_email_sent_at, process_only_finished_emailed_at, scans_sent_email_sent_at,
       email_status, email_error,
     });
     return NextResponse.json(order);
