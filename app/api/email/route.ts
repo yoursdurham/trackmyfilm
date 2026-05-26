@@ -5,6 +5,7 @@
  * Templates:
  *   film_drop_received — confirmation when film is dropped off
  *   film_at_lab        — film has arrived at the lab in Raleigh
+ *   process_only_finished — process-only negatives are ready
  *   scans_sent         — scans ready with WeTransfer link
  *
  * Dedup: each template has a per-order timestamp field. Will not resend within 1 hour.
@@ -19,6 +20,7 @@ import type { FilmOrder } from "@/lib/types";
 const TEMPLATE_IDS: Record<string, string | undefined> = {
   film_drop_received: process.env.RESEND_TEMPLATE_FILM_DROP_RECEIVED,
   film_at_lab:        process.env.RESEND_TEMPLATE_FILM_AT_LAB,
+  process_only_finished: process.env.RESEND_TEMPLATE_PROCESS_ONLY_FINISHED,
   scans_sent:         process.env.RESEND_TEMPLATE_SCANS_SENT,
 };
 
@@ -26,6 +28,7 @@ const TEMPLATE_IDS: Record<string, string | undefined> = {
 const DEDUP_FIELDS: Record<string, keyof FilmOrder> = {
   film_drop_received: "received_email_sent_at",
   film_at_lab:        "at_lab_email_sent_at",
+  process_only_finished: "last_emailed_at",
   scans_sent:         "scans_sent_email_sent_at",
 };
 
@@ -95,13 +98,23 @@ export async function POST(req: Request) {
     variables.wetransfer_link = order.wetransfer_link ?? "";
   }
 
+  if (template === "process_only_finished") {
+    variables.negatives_ready_message =
+      "Your negatives are ready. No scans are included with this Process Only order.";
+    variables.pickup_instructions =
+      "Please reply to this email if you need help coordinating pickup or delivery.";
+  }
+
   // Send via Resend using dashboard template
-  const payload = {
+  const basePayload = {
     from:     process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev",
     to:       [recipientEmail],
     reply_to: process.env.REPLY_TO_EMAIL || "hello@yoursdurham.com",
+  };
+  const payload = {
+    ...basePayload,
     template: {
-      id:        templateId,
+      id: templateId,
       variables,
     },
   };

@@ -21,6 +21,10 @@ describe("isValidTransition", () => {
     expect(isValidTransition("Received at Lab", "Scans Sent")).toBe(true);
   });
 
+  it("allows forward: Received at Lab → Ready for Pickup", () => {
+    expect(isValidTransition("Received at Lab", "Ready for Pickup")).toBe(true);
+  });
+
   it("allows skipping a step forward: Received by Yours → Scans Sent", () => {
     expect(isValidTransition("Received by Yours", "Scans Sent")).toBe(true);
   });
@@ -53,9 +57,10 @@ describe("isValidTransition", () => {
 // ─── Known status guard ───────────────────────────────────────────────────────
 
 describe("isKnownStatus", () => {
-  it("accepts all three valid statuses", () => {
+  it("accepts all valid statuses", () => {
     expect(isKnownStatus("Received by Yours")).toBe(true);
     expect(isKnownStatus("Received at Lab")).toBe(true);
+    expect(isKnownStatus("Ready for Pickup")).toBe(true);
     expect(isKnownStatus("Scans Sent")).toBe(true);
   });
 

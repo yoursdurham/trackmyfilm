@@ -6,7 +6,8 @@
 
 import { NextResponse } from "next/server";
 import { getOrderById, updateOrder } from "@/lib/db";
-import { STATUS_TEMPLATE_MAP, STATUS_FLOW } from "@/lib/constants";
+import { ORDER_STATUS, STATUS_TEMPLATE_MAP, STATUS_FLOW } from "@/lib/constants";
+import { isProcessOnlyOrder } from "@/lib/order-service";
 import { isValidTransition, isKnownStatus, isValidUrl, ensureHttps } from "@/lib/validation";
 import { requireAuth } from "@/lib/api-auth";
 import type { OrderStatus, StatusHistoryEntry } from "@/lib/types";
@@ -40,6 +41,22 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Order not found" }, { status: 404 });
     }
 
+    const processOnlyOrder = isProcessOnlyOrder(order);
+
+    if (new_status === ORDER_STATUS.SCANS_SENT && processOnlyOrder) {
+      return NextResponse.json(
+        { error: "Process Only orders should be marked Ready for Pickup instead." },
+        { status: 400 }
+      );
+    }
+
+    if (new_status === ORDER_STATUS.READY_FOR_PICKUP && !processOnlyOrder) {
+      return NextResponse.json(
+        { error: "Ready for Pickup is only available for Process Only orders." },
+        { status: 400 }
+      );
+    }
+
     // No-op if same status
     if (order.status === new_status) {
       return NextResponse.json({ success: true, order_id, new_status, skipped: true, reason: "Already at this status" });
@@ -55,7 +72,7 @@ export async function POST(req: Request) {
     }
 
     // Validate download link only if one was provided
-    if (new_status === "Scans Sent" && wetransfer_link) {
+    if (new_status === ORDER_STATUS.SCANS_SENT && wetransfer_link) {
       if (!isValidUrl(wetransfer_link)) {
         return NextResponse.json(
           { error: "Please enter a valid link" },
@@ -77,9 +94,9 @@ export async function POST(req: Request) {
       status_updated_at: now,
     };
 
-    if (new_status === "Received by Yours") updateData.received_by_yours_at = now;
-    if (new_status === "Received at Lab")   updateData.at_lab_at = now;
-    if (new_status === "Scans Sent") {
+    if (new_status === ORDER_STATUS.RECEIVED_BY_YOURS) updateData.received_by_yours_at = now;
+    if (new_status === ORDER_STATUS.RECEIVED_AT_LAB)   updateData.at_lab_at = now;
+    if (new_status === ORDER_STATUS.SCANS_SENT) {
       updateData.scans_sent_at = now;
       const rawLink = wetransfer_link || order.wetransfer_link;
       updateData.wetransfer_link = rawLink ? ensureHttps(rawLink) : rawLink;

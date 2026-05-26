@@ -26,13 +26,22 @@ import { format } from "date-fns";
 import StatusBadge from "./StatusBadge";
 import FilmProcessBadge from "./FilmProcessBadge";
 import CopyField from "./CopyField";
-import { STATUS_FLOW, STATUS_TEMPLATE_MAP } from "@/lib/constants";
+import { ORDER_STATUS, STATUS_FLOW, STATUS_TEMPLATE_MAP } from "@/lib/constants";
+import { getUrgentAgeDays, isUrgent } from "@/lib/order-urgency";
+import { getStatusOptionsForOrder, isProcessOnlyOrder } from "@/lib/order-service";
 import { isValidWetransferLink, ensureHttps } from "@/lib/validation";
 import type { FilmOrder, FilmProcess, FilmType, OrderStatus, RollDetail } from "@/lib/types";
 
 const FILM_TYPES: FilmType[] = ["35mm", "120"];
 const FILM_PROCESSES: FilmProcess[] = ["Color", "Black & White", "Both"];
 const SCAN_SIZES = ["Standard", "High-Res", "TIFF", "Process Only"] as const;
+
+function getStatusDotClass(status: OrderStatus) {
+  if (status === ORDER_STATUS.RECEIVED_BY_YOURS) return "bg-[var(--accent-tan)]";
+  if (status === ORDER_STATUS.RECEIVED_AT_LAB) return "bg-[var(--accent-purple)]";
+  if (status === ORDER_STATUS.READY_FOR_PICKUP) return "bg-amber-500";
+  return "bg-[var(--accent-green)]";
+}
 
 type OrderDraft = {
   order_number: string;
@@ -97,6 +106,10 @@ export default function OrderCard({ order, onStatusChange, onDelete, onOrderUpda
   };
 
   const lastUpdated = getLastUpdated();
+  const urgent = isUrgent(order);
+  const urgentAgeDays = getUrgentAgeDays(order);
+  const processOnlyOrder = isProcessOnlyOrder(order);
+  const statusOptions = getStatusOptionsForOrder(order);
 
   const currentIdx = STATUS_FLOW.indexOf(order.status);
 
@@ -117,6 +130,12 @@ export default function OrderCard({ order, onStatusChange, onDelete, onOrderUpda
           },
         ]
       : [];
+  const draftProcessOnly = orderDraft?.roll_details.length
+    ? orderDraft.roll_details.every((roll) => roll.scan_size === "Process Only")
+    : processOnlyOrder;
+  const draftStatusOptions: OrderStatus[] = draftProcessOnly
+    ? [ORDER_STATUS.RECEIVED_BY_YOURS, ORDER_STATUS.RECEIVED_AT_LAB, ORDER_STATUS.READY_FOR_PICKUP]
+    : [ORDER_STATUS.RECEIVED_BY_YOURS, ORDER_STATUS.RECEIVED_AT_LAB, ORDER_STATUS.SCANS_SENT];
 
   const buildOrderDraft = (): OrderDraft => ({
     order_number: order.order_number,
@@ -171,7 +190,7 @@ export default function OrderCard({ order, onStatusChange, onDelete, onOrderUpda
           film_stock: firstRoll?.film_stock || undefined,
           prints_4x6: Boolean(firstRoll?.prints_4x6),
           roll_details: orderDraft.roll_details,
-          wetransfer_link: orderDraft.wetransfer_link.trim() || undefined,
+          wetransfer_link: draftProcessOnly ? undefined : orderDraft.wetransfer_link.trim() || undefined,
           notes: orderDraft.notes.trim() || undefined,
         }),
       });
@@ -205,8 +224,13 @@ export default function OrderCard({ order, onStatusChange, onDelete, onOrderUpda
       return;
     }
 
+    if (status === ORDER_STATUS.READY_FOR_PICKUP) {
+      doStatusChange(status);
+      return;
+    }
+
     // Scans Sent — open dialog for optional WeTransfer link + email toggle
-    if (status === "Scans Sent") {
+    if (status === ORDER_STATUS.SCANS_SENT) {
       setWetransferLink(order.wetransfer_link || "");
       setSendScanEmail(true);
       setPendingStatus(status);
@@ -230,7 +254,7 @@ export default function OrderCard({ order, onStatusChange, onDelete, onOrderUpda
     const raw = wetransferLink.trim();
     if (raw && !isValidWetransferLink(raw)) { toast.error("Please enter a valid WeTransfer link (wetransfer.com)"); return; }
     setShowLinkDialog(false);
-    await doStatusChange("Scans Sent", raw ? ensureHttps(raw) : undefined, undefined, sendScanEmail);
+    await doStatusChange(ORDER_STATUS.SCANS_SENT, raw ? ensureHttps(raw) : undefined, undefined, sendScanEmail);
   };
 
   const handleSaveNotes = async () => {
@@ -278,8 +302,13 @@ export default function OrderCard({ order, onStatusChange, onDelete, onOrderUpda
               className="min-w-0 flex-1"
               valueClassName="text-xl font-bold tracking-tight text-slate-900"
             />
-            <div className="shrink-0">
+            <div className="flex shrink-0 flex-col items-end gap-1">
               <StatusBadge status={order.status} />
+              {urgent ? (
+                <span className="rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-red-700">
+                  Urgent{urgentAgeDays !== null ? ` • ${urgentAgeDays} days` : ""}
+                </span>
+              ) : null}
             </div>
           </div>
           <div className="mt-3 space-y-1.5">
@@ -341,7 +370,12 @@ export default function OrderCard({ order, onStatusChange, onDelete, onOrderUpda
               </button>
             </div>
           )}
-          {order.status === "Scans Sent" && (
+          {order.status === ORDER_STATUS.READY_FOR_PICKUP && processOnlyOrder ? (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-2 py-1.5">
+              <p className="text-xs text-amber-800">Negatives ready - no scans included</p>
+            </div>
+          ) : null}
+          {order.status === ORDER_STATUS.SCANS_SENT && !processOnlyOrder && (
             order.wetransfer_link ? (
               <div className="flex gap-2">
                 <Button size="sm" variant="outline"
@@ -396,10 +430,7 @@ export default function OrderCard({ order, onStatusChange, onDelete, onOrderUpda
             <CollapsibleContent className="mt-2 space-y-1">
               {[...order.status_history].reverse().map((entry, idx) => (
                 <div key={idx} className="flex items-start gap-2 text-xs bg-slate-50 rounded px-2 py-1.5">
-                  <span className={`w-2 h-2 rounded-full mt-1 flex-shrink-0 ${
-                    entry.status === "Received by Yours" ? "bg-[var(--accent-tan)]" :
-                    entry.status === "Received at Lab"   ? "bg-[var(--accent-purple)]" : "bg-[var(--accent-green)]"
-                  }`} />
+                  <span className={`w-2 h-2 rounded-full mt-1 flex-shrink-0 ${getStatusDotClass(entry.status)}`} />
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-slate-700">{entry.status}</p>
                     <p className="text-slate-500">{format(new Date(entry.changed_at), "MMM d, h:mm a")}</p>
@@ -421,16 +452,13 @@ export default function OrderCard({ order, onStatusChange, onDelete, onOrderUpda
               }
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
-              {STATUS_FLOW.map((status) => {
+              {statusOptions.map((status) => {
                 const targetIdx = STATUS_FLOW.indexOf(status);
                 const isBackward = targetIdx < currentIdx;
                 return (
                   <DropdownMenuItem key={status} onClick={() => handleStatusChangeClick(status)}
                     className={order.status === status ? "bg-[var(--accent-tan)]/35 text-slate-800" : ""}>
-                    <span className={`w-2 h-2 rounded-full mr-2 ${
-                      status === "Received by Yours" ? "bg-[var(--accent-tan)]" :
-                      status === "Received at Lab"   ? "bg-[var(--accent-purple)]" : "bg-[var(--accent-green)]"
-                    }`} />
+                    <span className={`w-2 h-2 rounded-full mr-2 ${getStatusDotClass(status)}`} />
                     {status}
                     {isBackward && <span className="ml-auto text-xs text-slate-400">↩ undo</span>}
                   </DropdownMenuItem>
@@ -513,7 +541,7 @@ export default function OrderCard({ order, onStatusChange, onDelete, onOrderUpda
                     }
                     className="h-8 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-sm text-slate-700 outline-none focus:border-[var(--accent-purple)] focus:ring-2 focus:ring-[var(--accent-purple)]/20"
                   >
-                    {STATUS_FLOW.map((status) => (
+                    {draftStatusOptions.map((status) => (
                       <option key={status} value={status}>
                         {status}
                       </option>
@@ -671,17 +699,23 @@ export default function OrderCard({ order, onStatusChange, onDelete, onOrderUpda
                 </div>
               </section>
 
-              <div>
-                <label className="mb-1 block text-xs font-medium text-slate-500">WeTransfer Link</label>
-                <Input
-                  value={orderDraft.wetransfer_link}
-                  onChange={(event) =>
-                    setOrderDraft((draft) => draft ? { ...draft, wetransfer_link: event.target.value } : draft)
-                  }
-                  placeholder="https://wetransfer.com/..."
-                  className="border-slate-200"
-                />
-              </div>
+              {!draftProcessOnly ? (
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-500">Download Link</label>
+                  <Input
+                    value={orderDraft.wetransfer_link}
+                    onChange={(event) =>
+                      setOrderDraft((draft) => draft ? { ...draft, wetransfer_link: event.target.value } : draft)
+                    }
+                    placeholder="https://wetransfer.com/..."
+                    className="border-slate-200"
+                  />
+                </div>
+              ) : (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                  Process Only orders do not need a download link. Use Ready for Pickup when negatives are complete.
+                </div>
+              )}
 
               <div>
                 <label className="mb-1 block text-xs font-medium text-slate-500">Order Notes</label>
@@ -916,7 +950,7 @@ export default function OrderCard({ order, onStatusChange, onDelete, onOrderUpda
                 <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Email status</p>
                 <p className="text-slate-700">{order.email_status ?? "N/A"}</p>
               </div>
-              {order.wetransfer_link ? (
+              {order.wetransfer_link && !processOnlyOrder ? (
                 <div className="sm:col-span-2">
                   <p className="text-xs font-medium uppercase tracking-wide text-slate-400">WeTransfer Link</p>
                   <a
@@ -942,10 +976,7 @@ export default function OrderCard({ order, onStatusChange, onDelete, onOrderUpda
                       key={`${order.id}-detail-history-${index}`}
                       className="flex items-start gap-2 rounded-lg bg-slate-50 px-3 py-2"
                     >
-                      <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${
-                        entry.status === "Received by Yours" ? "bg-[var(--accent-tan)]" :
-                        entry.status === "Received at Lab" ? "bg-[var(--accent-purple)]" : "bg-[var(--accent-green)]"
-                      }`} />
+                      <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${getStatusDotClass(entry.status)}`} />
                       <div>
                         <p className="font-medium text-slate-700">{entry.status}</p>
                         <p className="text-xs text-slate-500">

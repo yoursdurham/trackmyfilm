@@ -5,9 +5,9 @@ import { useQuery } from "@tanstack/react-query";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Download, LogOut, Users, Film, Layers } from "lucide-react";
-import Link from "next/link";
+import { Download, Users, Layers } from "lucide-react";
 import { toast } from "sonner";
+import InternalHeader from "@/components/InternalHeader";
 import FilmProcessBadge from "@/components/FilmProcessBadge";
 import type { FilmOrder } from "@/lib/types";
 
@@ -96,6 +96,8 @@ export default function Reports() {
     return new Date(order.dropoff_date);
   };
 
+  const selectedTimeFrameLabel = TIME_FRAMES.find((frame) => frame.key === selectedTimeFrame)?.label ?? "All time";
+
   const filteredOrders = orders.filter((order) => {
     if (selectedTimeFrame === "all") return true;
     const timeFrame = TIME_FRAMES.find((frame) => frame.key === selectedTimeFrame);
@@ -183,7 +185,7 @@ export default function Reports() {
     const csvContent = [
       "TrackMyFilm Report",
       `Generated: ${new Date().toLocaleString()}`,
-      `Time frame: ${TIME_FRAMES.find((frame) => frame.key === selectedTimeFrame)?.label ?? "All time"}`,
+      `Time frame: ${selectedTimeFrameLabel}`,
       "",
       "METRICS",
       `Total Individual Customers,${metrics.totalCustomers}`,
@@ -216,38 +218,13 @@ export default function Reports() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-stone-50 via-orange-50/30 to-amber-50/20">
-      <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-lg border-b border-stone-200/50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-3">
-              <img src="/logo.png" alt="Yours Durham" className="w-9 h-9 rounded-xl object-cover" />
-              <div>
-                <h1 className="text-lg font-semibold text-slate-800">Reports</h1>
-                <p className="text-xs text-slate-500 hidden sm:block">Film Lab Analytics</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-1 sm:gap-2">
-              <Link href="/dashboard">
-                <Button variant="outline" size="icon" className="border-slate-200 sm:w-auto sm:px-3" title="Dashboard">
-                  <Film className="w-4 h-4" />
-                  <span className="hidden sm:inline ml-2">Dashboard</span>
-                </Button>
-              </Link>
-              <form action="/api/auth/logout" method="POST">
-                <Button type="submit" variant="ghost" size="icon" title="Sign out" className="text-slate-500 hover:text-slate-700">
-                  <LogOut className="w-4 h-4" />
-                </Button>
-              </form>
-            </div>
-          </div>
-        </div>
-      </header>
+      <InternalHeader title="Reports" subtitle="Film Lab Analytics" />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h2 className="text-2xl font-bold text-slate-800">Analytics Dashboard</h2>
-            <p className="text-sm text-slate-500">Showing data for <span className="font-semibold text-slate-700">{TIME_FRAMES.find((frame) => frame.key === selectedTimeFrame)?.label}</span></p>
+            <p className="text-sm text-slate-500">Showing data for <span className="font-semibold text-slate-700">{selectedTimeFrameLabel}</span></p>
           </div>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             <div className="flex flex-wrap gap-2">

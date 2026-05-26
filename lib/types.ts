@@ -1,4 +1,4 @@
-export type OrderStatus = "Received by Yours" | "Received at Lab" | "Scans Sent";
+export type OrderStatus = "Received by Yours" | "Received at Lab" | "Ready for Pickup" | "Scans Sent";
 
 export type FilmType = "35mm" | "120" | "Disposable Camera";
 export type FilmProcess = "Color" | "Black & White" | "Both";

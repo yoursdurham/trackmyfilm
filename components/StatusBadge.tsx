@@ -14,6 +14,11 @@ const statusConfig: Record<OrderStatus, { bg: string; text: string; dot: string 
     text: "text-white",
     dot: "bg-white",
   },
+  "Ready for Pickup": {
+    bg: "bg-amber-500",
+    text: "text-white",
+    dot: "bg-white",
+  },
   "Scans Sent": {
     bg: "bg-[var(--accent-green)]",
     text: "text-white",

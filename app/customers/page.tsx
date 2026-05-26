@@ -12,16 +12,17 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
-  Search, ArrowLeft, Loader2, Trash2, ChevronUp, ChevronDown,
+  Search, Loader2, Trash2, ChevronUp, ChevronDown,
   ChevronsUpDown, UserPlus, ChevronLeft, ChevronRight, ExternalLink, Layers, Calendar, RefreshCw, MailWarning, Pencil,
 } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
-import Link from "next/link";
 import AddCustomerForm from "@/components/AddCustomerForm";
 import CopyField from "@/components/CopyField";
+import InternalHeader from "@/components/InternalHeader";
 import type { Customer, FilmOrder, FilmProcess, FilmType, OrderStatus, RollDetail } from "@/lib/types";
-import { STATUS_FLOW, STATUS_TEMPLATE_MAP } from "@/lib/constants";
+import { ORDER_STATUS, STATUS_TEMPLATE_MAP } from "@/lib/constants";
+import { isProcessOnlyOrder } from "@/lib/order-service";
 
 type SortKey = "email" | "name" | "last_name" | "last_dropoff_date" | "total_rolls" | "total_dropoffs";
 type SortDir = "asc" | "desc";
@@ -31,9 +32,6 @@ const FILM_TYPES: FilmType[] = ["35mm", "120"];
 const FILM_PROCESSES: FilmProcess[] = ["Color", "Black & White", "Both"];
 type ScanSize = NonNullable<RollDetail["scan_size"]>;
 const SCAN_SIZES = ["Standard", "High-Res", "TIFF", "Process Only"] as const satisfies readonly ScanSize[];
-
-const isScanSize = (value: string): value is ScanSize =>
-  SCAN_SIZES.includes(value as ScanSize);
 
 type OrderDraft = {
   order_number: string;
@@ -268,6 +266,13 @@ export default function Customers() {
         }]
   );
 
+  const orderDraftProcessOnly = orderDraft?.roll_details.length
+    ? orderDraft.roll_details.every((roll) => roll.scan_size === "Process Only")
+    : selectedOrder ? isProcessOnlyOrder(selectedOrder) : false;
+  const orderDraftStatusOptions: OrderStatus[] = orderDraftProcessOnly
+    ? [ORDER_STATUS.RECEIVED_BY_YOURS, ORDER_STATUS.RECEIVED_AT_LAB, ORDER_STATUS.READY_FOR_PICKUP]
+    : [ORDER_STATUS.RECEIVED_BY_YOURS, ORDER_STATUS.RECEIVED_AT_LAB, ORDER_STATUS.SCANS_SENT];
+
   const openOrderEditor = (order: FilmOrder) => {
     setSelectedOrder(order);
     setOrderDraft({
@@ -313,7 +318,7 @@ export default function Customers() {
         film_stock: firstRoll?.film_stock || undefined,
         prints_4x6: Boolean(firstRoll?.prints_4x6),
         roll_details: orderDraft.roll_details,
-        wetransfer_link: orderDraft.wetransfer_link.trim() || undefined,
+        wetransfer_link: orderDraftProcessOnly ? undefined : orderDraft.wetransfer_link.trim() || undefined,
         notes: orderDraft.notes.trim() || undefined,
       },
     });
@@ -359,40 +364,23 @@ export default function Customers() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-stone-50 via-orange-50/30 to-amber-50/20">
-      {/* Header */}
-      <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-lg border-b border-stone-200/50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-3">
-              <Link href="/dashboard">
-                <Button variant="ghost" size="icon" className="mr-1"><ArrowLeft className="w-5 h-5" /></Button>
-              </Link>
-              <img
-                src="/logo.png"
-                alt="Yours Durham" className="w-9 h-9 rounded-xl object-cover"
-              />
-              <div>
-                <h1 className="text-lg font-semibold text-slate-800">Customers</h1>
-                <p className="text-xs text-slate-500">{customers.length} total</p>
-              </div>
-            </div>
-            <Button onClick={() => setShowAdd(true)} className="bg-amber-600 hover:bg-amber-700 text-white">
-              <UserPlus className="w-4 h-4 mr-2" /> Add Customer
-            </Button>
-          </div>
-        </div>
-      </header>
+      <InternalHeader title="Customers" subtitle={`${customers.length} total`} />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {/* Search */}
-        <div className="relative max-w-sm mb-4">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-          <Input
-            placeholder="Search by name, email, or order #..."
-            value={search}
-            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-            className="pl-10 bg-white border-stone-200"
-          />
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="relative max-w-sm flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <Input
+              placeholder="Search by name, email, or order #..."
+              value={search}
+              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+              className="pl-10 bg-white border-stone-200"
+            />
+          </div>
+          <Button onClick={() => setShowAdd(true)} className="bg-amber-600 hover:bg-amber-700 text-white">
+            <UserPlus className="w-4 h-4 mr-2" /> Add Customer
+          </Button>
         </div>
 
         {/* Table */}
@@ -577,8 +565,9 @@ export default function Customers() {
                                         <div key={order.id} className="flex flex-wrap items-center gap-3 bg-white rounded-lg px-4 py-2.5 border border-stone-100 text-sm">
                                           <span className="font-mono font-medium text-slate-700">#{order.order_number}</span>
                                           <span className={`text-xs px-2 py-0.5 rounded-full ${
-                                            order.status === "Received by Yours" ? "bg-[var(--accent-tan)] text-[#A77B43]" :
-                                            order.status === "Received at Lab"   ? "bg-[var(--accent-green)] text-white" :
+                                            order.status === ORDER_STATUS.RECEIVED_BY_YOURS ? "bg-[var(--accent-tan)] text-[#A77B43]" :
+                                            order.status === ORDER_STATUS.RECEIVED_AT_LAB ? "bg-[var(--accent-green)] text-white" :
+                                            order.status === ORDER_STATUS.READY_FOR_PICKUP ? "bg-amber-500 text-white" :
                                             "bg-[var(--accent-purple)] text-white"}`}>{order.status}</span>
                                           <span className="flex items-center gap-1 text-slate-500">
                                             <Layers className="w-3.5 h-3.5" /> {order.roll_count} roll{order.roll_count !== 1 ? "s" : ""}
@@ -618,7 +607,7 @@ export default function Customers() {
                                                 Retry email
                                               </button>
                                             )}
-                                            {order.wetransfer_link && (
+                                            {order.wetransfer_link && !isProcessOnlyOrder(order) && (
                                               <a href={order.wetransfer_link} target="_blank" rel="noopener noreferrer"
                                                 onClick={(e) => e.stopPropagation()}
                                                 className="flex items-center gap-1 text-emerald-600 hover:text-emerald-700 font-medium">
@@ -755,7 +744,7 @@ export default function Customers() {
                     onChange={(e) => setOrderDraft((draft) => draft ? { ...draft, status: e.target.value as OrderStatus } : draft)}
                     className="h-8 w-full rounded-lg border border-stone-200 bg-white px-2.5 text-sm text-slate-700 outline-none focus:border-[var(--accent-purple)] focus:ring-2 focus:ring-[var(--accent-purple)]/20"
                   >
-                    {STATUS_FLOW.map((status) => (
+                    {orderDraftStatusOptions.map((status) => (
                       <option key={status} value={status}>{status}</option>
                     ))}
                   </select>
@@ -895,15 +884,21 @@ export default function Customers() {
                 </div>
               </div>
 
-              <div>
-                <label className="mb-1 block text-xs font-medium text-slate-500">WeTransfer Link</label>
-                <Input
-                  value={orderDraft.wetransfer_link}
-                  onChange={(e) => setOrderDraft((draft) => draft ? { ...draft, wetransfer_link: e.target.value } : draft)}
-                  placeholder="https://wetransfer.com/..."
-                  className="border-stone-200"
-                />
-              </div>
+              {!orderDraftProcessOnly ? (
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-500">Download Link</label>
+                  <Input
+                    value={orderDraft.wetransfer_link}
+                    onChange={(e) => setOrderDraft((draft) => draft ? { ...draft, wetransfer_link: e.target.value } : draft)}
+                    placeholder="https://wetransfer.com/..."
+                    className="border-stone-200"
+                  />
+                </div>
+              ) : (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                  Process Only orders do not need a download link. Use Ready for Pickup when negatives are complete.
+                </div>
+              )}
 
               <div>
                 <label className="mb-1 block text-xs font-medium text-slate-500">Order Notes</label>

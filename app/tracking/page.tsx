@@ -9,6 +9,7 @@ import {
   CheckCircle,
   Clock,
   Film,
+  Hand,
   Layers,
   Loader2,
   Mail,
@@ -20,6 +21,7 @@ import Image from "next/image";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import FilmProcessBadge from "@/components/FilmProcessBadge";
+import { isProcessOnlyOrder } from "@/lib/order-service";
 import type { FilmOrder, OrderStatus, StatusHistoryEntry } from "@/lib/types";
 
 type StatusStep = {
@@ -70,6 +72,19 @@ const statusSteps: StatusStep[] = [
   },
 ];
 
+const processOnlyStatusSteps: StatusStep[] = [
+  statusSteps[0],
+  statusSteps[1],
+  {
+    status: "Ready for Pickup",
+    icon: Hand,
+    activeBg: "bg-amber-500",
+    activeRing: "ring-amber-500/35",
+    activeText: "text-amber-700",
+    activeLine: "bg-amber-500",
+  },
+];
+
 function buildTimestampMap(statusHistory?: StatusHistoryEntry[]) {
   if (!statusHistory?.length) return {};
 
@@ -87,6 +102,8 @@ function getStatusBadgeClass(status: OrderStatus) {
       return "bg-[var(--accent-tan)] text-[#A77B43]";
     case "Received at Lab":
       return "bg-[var(--accent-purple)] text-white";
+    case "Ready for Pickup":
+      return "bg-amber-500 text-white";
     case "Scans Sent":
       return "bg-[var(--accent-green)] text-white";
     default:
@@ -97,17 +114,20 @@ function getStatusBadgeClass(status: OrderStatus) {
 function OrderTimeline({
   currentStatus,
   statusHistory,
+  processOnly,
 }: {
   currentStatus: OrderStatus;
   statusHistory?: StatusHistoryEntry[];
+  processOnly?: boolean;
 }) {
-  const currentIndex = statusSteps.findIndex((step) => step.status === currentStatus);
+  const steps = processOnly ? processOnlyStatusSteps : statusSteps;
+  const currentIndex = steps.findIndex((step) => step.status === currentStatus);
   const timestampMap = buildTimestampMap(statusHistory);
 
   return (
     <div className="relative mx-auto mb-8 max-w-2xl px-2 sm:px-6">
       <div className="absolute left-[16.666%] right-[16.666%] top-[18px] z-0 flex -translate-y-1/2 sm:top-6">
-        {statusSteps.slice(0, -1).map((step, index) => (
+        {steps.slice(0, -1).map((step, index) => (
           <div
             key={`${step.status}-line`}
             className={`h-1 flex-1 rounded-full transition-all ${
@@ -118,7 +138,7 @@ function OrderTimeline({
       </div>
 
       <div className="relative z-10 grid grid-cols-3">
-        {statusSteps.map((step, index) => {
+        {steps.map((step, index) => {
           const Icon = step.icon;
           const isActive = index <= currentIndex;
           const isCurrent = index === currentIndex;
@@ -398,7 +418,10 @@ export default function Tracking() {
                 </p>
               ) : null}
 
-              {orders.map((order) => (
+              {orders.map((order) => {
+                const processOnlyOrder = isProcessOnlyOrder(order);
+
+                return (
                 <Card
                   key={order.id}
                   className="overflow-hidden border border-[var(--border-soft)] bg-[var(--card-bg)] shadow-sm ring-0 transition hover:shadow-md"
@@ -423,6 +446,7 @@ export default function Tracking() {
                     <OrderTimeline
                       currentStatus={order.status}
                       statusHistory={order.status_history}
+                      processOnly={processOnlyOrder}
                     />
 
                     <div className="grid grid-cols-1 gap-4 border-t border-slate-100 pt-6 sm:grid-cols-2">
@@ -538,6 +562,12 @@ export default function Tracking() {
                       ) : null;
                     })()}
 
+                    {order.status === "Ready for Pickup" && processOnlyOrder ? (
+                      <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-center text-sm font-medium text-amber-800">
+                        Your negatives are ready. No scans are included with this order. Please check your email for pickup or delivery details.
+                      </div>
+                    ) : null}
+
                     {order.status === "Scans Sent" ? (
                       <div className="mt-4 space-y-3 border-t border-slate-100 pt-4">
                         <div className="rounded-lg bg-[var(--accent-green)]/10 px-4 py-3 text-center text-sm font-medium text-[#5E8068]">
@@ -586,7 +616,8 @@ export default function Tracking() {
                     </div>
                   </CardContent>
                 </Card>
-              ))}
+                );
+              })}
             </motion.div>
           ) : null}
         </AnimatePresence>
