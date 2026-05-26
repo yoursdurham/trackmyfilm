@@ -57,6 +57,7 @@ export interface FilmOrder {
   received_email_sent_at?: string;
   at_lab_email_sent_at?: string;
   scans_sent_email_sent_at?: string;
+  last_emailed_at?: string;
   email_status?: "sent" | "failed";
   email_error?: string | null;
   created_at?: string;

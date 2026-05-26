@@ -4,6 +4,7 @@ import { normalizeEmail, normalizeOrderNumber } from "@/lib/validation";
 
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const MAX_REQUESTS_PER_WINDOW = 3;
+const ORDER_EMAIL_COOLDOWN_MS = 60_000;
 
 type RateLimitEntry = {
   count: number;
@@ -11,6 +12,7 @@ type RateLimitEntry = {
 };
 
 const rateLimit = new Map<string, RateLimitEntry>();
+const orderCooldownFallback = new Map<string, number>();
 
 function successResponse() {
   return NextResponse.json({ success: true });
@@ -40,6 +42,15 @@ function isRateLimited(ip: string) {
   return false;
 }
 
+function isWithinOrderCooldown(orderId: string, lastEmailedAt?: string | null) {
+  const now = Date.now();
+  const fallbackSentAt = orderCooldownFallback.get(orderId);
+  const dbSentAt = lastEmailedAt ? new Date(lastEmailedAt).getTime() : 0;
+  const lastSentAt = Math.max(fallbackSentAt ?? 0, Number.isNaN(dbSentAt) ? 0 : dbSentAt);
+
+  return lastSentAt > 0 && now - lastSentAt < ORDER_EMAIL_COOLDOWN_MS;
+}
+
 export async function POST(req: Request) {
   const ip = getClientIp(req);
   if (isRateLimited(ip)) {
@@ -57,6 +68,11 @@ export async function POST(req: Request) {
 
     const order = await getOrderByNumberAndEmail(orderNumber, email);
     if (!order || order.status !== "Scans Sent" || !order.wetransfer_link) {
+      return successResponse();
+    }
+
+    if (isWithinOrderCooldown(order.id, order.last_emailed_at)) {
+      console.log("[resend-link] Cooldown blocked resend for order:", order.order_number);
       return successResponse();
     }
 
@@ -111,8 +127,12 @@ export async function POST(req: Request) {
       return successResponse();
     }
 
+    const now = new Date();
+    orderCooldownFallback.set(order.id, now.getTime());
+
     await updateOrder(order.id, {
-      scans_sent_email_sent_at: new Date().toISOString(),
+      scans_sent_email_sent_at: now.toISOString(),
+      last_emailed_at: now.toISOString(),
       email_status: "sent",
       email_error: null,
     }).catch((error) => {
