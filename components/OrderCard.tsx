@@ -43,6 +43,14 @@ function getStatusDotClass(status: OrderStatus) {
   return "bg-[var(--accent-green)]";
 }
 
+function ProcessOnlyBadge() {
+  return (
+    <span className="inline-flex h-5 shrink-0 items-center rounded-full border border-sky-200 bg-sky-50 px-2 text-xs font-medium text-slate-700">
+      Process Only
+    </span>
+  );
+}
+
 type OrderDraft = {
   order_number: string;
   status: OrderStatus;
@@ -344,10 +352,14 @@ export default function OrderCard({ order, onStatusChange, onDelete, onOrderUpda
             <span>{order.roll_count} roll{order.roll_count > 1 ? "s" : ""}</span>
             {order.film_type && <span className="text-slate-400">• {order.film_type}</span>}
           </div>
-          {order.film_process && (
-            <div className="flex items-center gap-2 text-sm text-slate-600">
+          {(order.film_process || processOnlyOrder) && (
+            <div className="flex flex-wrap items-center gap-2 text-sm text-slate-600">
               <span className="text-slate-400">Process:</span>
-              <FilmProcessBadge process={order.film_process} />
+              {order.film_process ? <FilmProcessBadge process={order.film_process} /> : null}
+              {order.film_process && processOnlyOrder ? (
+                <span className="text-slate-300">•</span>
+              ) : null}
+              {processOnlyOrder ? <ProcessOnlyBadge /> : null}
             </div>
           )}
           {lastUpdated && (
