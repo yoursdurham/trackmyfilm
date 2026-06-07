@@ -37,7 +37,7 @@ export const KNOWN_EMAIL_TEMPLATES = Object.keys(DEDUP_FIELDS) as TemplateName[]
 
 function getTemplateIds(): Record<TemplateName, string | undefined> {
   return {
-    film_drop_received-2: process.env.RESEND_TEMPLATE_FILM_DROP_RECEIVED,
+    film_drop_received_2: process.env.RESEND_TEMPLATE_FILM_DROP_RECEIVED,
     film_at_lab: process.env.RESEND_TEMPLATE_FILM_AT_LAB,
     process_only_finished: process.env.RESEND_TEMPLATE_PROCESS_ONLY_FINISHED,
     scans_sent: process.env.RESEND_TEMPLATE_SCANS_SENT,
