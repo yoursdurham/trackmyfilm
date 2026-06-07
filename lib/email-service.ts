@@ -55,7 +55,38 @@ function shouldSkipEmail(template: TemplateName, lastSent: string | undefined) {
 
   return isWithinDedupWindow(lastSent);
 }
+function buildFilmDetailsHtml(rollDetails: unknown) {
+  if (!Array.isArray(rollDetails) || rollDetails.length === 0) {
+    return "";
+  }
 
+  return rollDetails
+    .map((roll, index) => {
+      if (!roll || typeof roll !== "object") return "";
+
+      const r = roll as {
+        film_type?: string;
+        film_process?: string;
+        scan_size?: string;
+        film_stock?: string;
+        prints_4x6?: boolean;
+      };
+
+      const parts = [
+        r.film_type,
+        r.film_process,
+        r.scan_size,
+        r.film_stock,
+      ].filter(Boolean);
+
+      if (parts.length === 0) return "";
+
+      const prints = r.prints_4x6 ? " + 4x6 Prints" : "";
+
+      return `<p style="margin:0 0 6px;padding:0;">Roll ${index + 1}: ${parts.join(" / ")}${prints}</p>`;
+    })
+    .join("");
+}
 export async function sendOrderEmail(orderId: string, template: string) {
   if (!orderId || !template) {
     throw new EmailSendError("order_id and template are required", 400);
@@ -152,6 +183,7 @@ const variables: Record<string, string> = {
 
   order_number: order.order_number ?? "",
   roll_count: String(order.roll_count ?? 0),
+  film_details_html: buildFilmDetailsHtml(order.roll_details),
 
   received_by_yours_at: formatDate(order.received_by_yours_at),
   at_lab_at: formatDate(order.at_lab_at),
