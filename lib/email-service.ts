@@ -134,16 +134,28 @@ export async function sendOrderEmail(orderId: string, template: string) {
 
  const nameParts = (order.customer_name || "there").trim().split(" ");
 
+const formatDate = (date?: string | null) =>
+  date
+    ? new Date(date).toLocaleString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+        timeZone: "America/New_York",
+      })
+    : "";
+
 const variables: Record<string, string> = {
   first_name: nameParts[0] ?? "",
-  last_name: nameParts.slice(1).join(" ") ?? "",
+  last_name: nameParts.slice(1).join(" "),
 
   order_number: order.order_number ?? "",
   roll_count: String(order.roll_count ?? 0),
 
-  received_by_yours_at: order.received_by_yours_at ?? "",
-  at_lab_at: order.at_lab_at ?? "",
-  scans_sent_at: order.scans_sent_at ?? "",
+  received_by_yours_at: formatDate(order.received_by_yours_at),
+  at_lab_at: formatDate(order.at_lab_at),
+  scans_sent_at: formatDate(order.scans_sent_at),
 };
 
 console.log("EMAIL VARIABLES", JSON.stringify(variables, null, 2));
