@@ -23,6 +23,7 @@ import {
 } from "@/lib/db";
 import { normalizeEmail, normalizeCustomerName, normalizeOrderNumber } from "@/lib/validation";
 import { requireAuth } from "@/lib/api-auth";
+import { sendOrderEmail } from "@/lib/email-service";
 import type { Customer, RollDetail } from "@/lib/types";
 
 export async function POST(req: Request) {
@@ -161,16 +162,7 @@ export async function POST(req: Request) {
     emailResult.skipped = true;
   } else if (normalizedEmail) {
     try {
-      const emailRes = await fetch(new URL("/api/email", req.url), {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Cookie":        req.headers.get("cookie") || "",
-        },
-        body: JSON.stringify({ order_id: order.id, template: "film_drop_received" }),
-      });
-
-      const emailData = await emailRes.json() as {
+      const emailData = await sendOrderEmail(order.id, "film_drop_received") as {
         success?: boolean;
         skipped?: boolean;
         variant?: string;
@@ -179,10 +171,7 @@ export async function POST(req: Request) {
         details?: unknown;
       };
 
-      if (!emailRes.ok) {
-        emailResult.sent  = false;
-        emailResult.error = emailData.error ?? `Resend returned ${emailRes.status}`;
-      } else if (emailData.skipped) {
+      if (emailData.skipped) {
         emailResult.sent    = false;
         emailResult.skipped = true;
       } else {

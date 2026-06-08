@@ -71,8 +71,16 @@ export default function Dashboard() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id: string) => fetch(`/api/orders/${id}`, { method: "DELETE" }),
+    mutationFn: async (id: string) => {
+      const r = await fetch(`/api/orders/${id}`, { method: "DELETE" });
+      if (!r.ok) {
+        const data = await r.json().catch(() => null) as { error?: string } | null;
+        throw new Error(data?.error ?? "Failed to delete order");
+      }
+      return r.json();
+    },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["filmOrders"] }),
+    onError: (err: Error) => toast.error(err.message),
   });
 
   const handleStatusChange = async (id: string, status: string, wetransferLink?: string, force?: boolean, sendEmail?: boolean) => {

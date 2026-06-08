@@ -185,6 +185,8 @@ const variables: Record<string, string> = {
   roll_count: String(order.roll_count ?? 0),
   film_details_html: buildFilmDetailsHtml(order.roll_details),
 
+  tracking_url: `https://trackmyfilm.com/tracking?order=${encodeURIComponent(order.order_number ?? "")}&email=${encodeURIComponent(order.customer_email ?? "")}`,
+
   received_by_yours_at: formatDate(order.received_by_yours_at),
   at_lab_at: formatDate(order.at_lab_at),
   scans_sent_at: formatDate(order.scans_sent_at),
