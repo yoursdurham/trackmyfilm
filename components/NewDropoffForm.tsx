@@ -74,7 +74,7 @@ export default function NewDropoffForm({ open, onOpenChange, onSuccess, customer
   const [sendEmail, setSendEmail] = useState(true);
   const [formData, setFormData] = useState({
     ...emptyMeta,
-    customer_name: selectedCustomer ? `${selectedCustomer.name} ${selectedCustomer.last_name || ""}`.trim() : "",
+    customer_name: selectedCustomer ? `${selectedCustomer.first_name} ${selectedCustomer.last_name || ""}`.trim() : "",
     customer_email: selectedCustomer?.email || "",
   });
   const [rolls, setRolls] = useState<RollState[]>([emptyRoll()]);
@@ -193,7 +193,7 @@ export default function NewDropoffForm({ open, onOpenChange, onSuccess, customer
     const email = formData.customer_email.toLowerCase();
     if (!name && !email) return false;
     return (
-      (name && (`${c.name} ${c.last_name ?? ""}`.toLowerCase().includes(name))) ||
+      (name && (`${c.first_name} ${c.last_name ?? ""}`.toLowerCase().includes(name))) ||
       (email && c.email?.toLowerCase().includes(email))
     );
   }).slice(0, 5);
@@ -201,7 +201,7 @@ export default function NewDropoffForm({ open, onOpenChange, onSuccess, customer
   const selectCustomer = (c: Customer) => {
     setFormData((prev) => ({
       ...prev,
-      customer_name: `${c.name} ${c.last_name || ""}`.trim(),
+      customer_name: `${c.first_name} ${c.last_name || ""}`.trim(),
       customer_email: c.email || "",
     }));
     setSelectedCustomerId(c.id);
@@ -235,7 +235,7 @@ export default function NewDropoffForm({ open, onOpenChange, onSuccess, customer
                 {suggestions.map((c) => (
                   <button key={c.id} type="button" onClick={() => selectCustomer(c)}
                     className="w-full text-left px-3 py-2 hover:bg-amber-50 border-b border-slate-100 last:border-0">
-                    <p className="font-medium text-sm text-slate-800">{c.name} {c.last_name}</p>
+                    <p className="font-medium text-sm text-slate-800">{c.first_name} {c.last_name}</p>
                     {c.email && <p className="text-xs text-slate-500">{c.email}</p>}
                   </button>
                 ))}

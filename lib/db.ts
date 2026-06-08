@@ -7,6 +7,8 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Customer, FilmOrder } from "./types";
 
+type CustomerInsert = Omit<Customer, "id" | "created_at">;
+
 // Singleton — reuse one client per worker instead of creating a new connection
 // on every DB call. Eliminates repeated TCP handshakes on hot paths.
 let _supabase: SupabaseClient | null = null;
@@ -172,10 +174,26 @@ export async function getCustomerByEmailOrName(
   return null;
 }
 
-export async function createCustomer(data: Omit<Customer, "id">): Promise<Customer> {
+export async function createCustomer(data: CustomerInsert): Promise<Customer> {
+  const {
+    first_name, last_name, email, normalized_name, total_rolls, total_dropoffs,
+    notes, last_dropoff_date, last_order_number, current_rolls,
+  } = data;
+
   const { data: created, error } = await getSupabase()
     .from("customers")
-    .insert(data)
+    .insert({
+      first_name,
+      last_name,
+      email,
+      normalized_name,
+      total_rolls,
+      total_dropoffs,
+      notes,
+      last_dropoff_date,
+      last_order_number,
+      current_rolls,
+    })
     .select()
     .single();
   if (error) throw new Error(error.message);

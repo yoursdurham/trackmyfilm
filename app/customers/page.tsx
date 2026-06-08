@@ -24,7 +24,7 @@ import type { Customer, FilmOrder, FilmProcess, FilmType, OrderStatus, RollDetai
 import { ORDER_STATUS, STATUS_TEMPLATE_MAP } from "@/lib/constants";
 import { isProcessOnlyOrder } from "@/lib/order-service";
 
-type SortKey = "email" | "name" | "last_name" | "last_dropoff_date" | "total_rolls" | "total_dropoffs";
+type SortKey = "email" | "first_name" | "last_name" | "last_dropoff_date" | "total_rolls" | "total_dropoffs";
 type SortDir = "asc" | "desc";
 
 const PAGE_SIZE = 50;
@@ -165,7 +165,7 @@ export default function Customers() {
   });
 
   const isDirty = (draft: Partial<Customer>, original: Customer) =>
-    draft.name              !== original.name ||
+    draft.first_name        !== original.first_name ||
     (draft.last_name        ?? "") !== (original.last_name        ?? "") ||
     (draft.email            ?? "") !== (original.email            ?? "") ||
     (draft.notes            ?? "") !== (original.notes            ?? "") ||
@@ -176,7 +176,7 @@ export default function Customers() {
     (draft.total_dropoffs   ?? 0)  !== (original.total_dropoffs   ?? 0);
 
   const buildPatch = (): Partial<Customer> => ({
-    name:              editDraft.name,
+    first_name:        editDraft.first_name,
     last_name:         editDraft.last_name  || undefined,
     email:             editDraft.email      || undefined,
     notes:             editDraft.notes      || undefined,
@@ -190,7 +190,7 @@ export default function Customers() {
   const doExpand = (customer: Customer) => {
     setExpandedId(customer.id);
     setEditDraft({
-      name:              customer.name,
+      first_name:        customer.first_name,
       last_name:         customer.last_name         ?? "",
       email:             customer.email             ?? "",
       last_dropoff_date: customer.last_dropoff_date ?? "",
@@ -329,7 +329,7 @@ export default function Customers() {
       if (!search) return true;
       const q = search.toLowerCase();
       return (
-        `${c.name} ${c.last_name ?? ""}`.toLowerCase().includes(q) ||
+        `${c.first_name} ${c.last_name ?? ""}`.toLowerCase().includes(q) ||
         c.email?.toLowerCase().includes(q) ||
         c.last_order_number?.toLowerCase().includes(q) ||
         orders.some((o) => o.customer_id === c.id && o.order_number.toLowerCase().includes(q))
@@ -338,7 +338,7 @@ export default function Customers() {
     .sort((a, b) => {
       let av: string | number = "";
       let bv: string | number = "";
-      if (sortKey === "name")               { av = a.name.toLowerCase();              bv = b.name.toLowerCase(); }
+      if (sortKey === "first_name")         { av = a.first_name.toLowerCase();        bv = b.first_name.toLowerCase(); }
       else if (sortKey === "last_name")     { av = (a.last_name ?? "").toLowerCase(); bv = (b.last_name ?? "").toLowerCase(); }
       else if (sortKey === "email")         { av = (a.email ?? "").toLowerCase();     bv = (b.email ?? "").toLowerCase(); }
       else if (sortKey === "last_dropoff_date") { av = a.last_dropoff_date ?? "";     bv = b.last_dropoff_date ?? ""; }
@@ -394,7 +394,7 @@ export default function Customers() {
               <TableHeader>
                 <TableRow className="bg-stone-50 border-b border-stone-200">
                   <TableHead className={th} onClick={() => handleSort("email")}>Email {renderSortIcon("email")}</TableHead>
-                  <TableHead className={th} onClick={() => handleSort("name")}>First Name {renderSortIcon("name")}</TableHead>
+                  <TableHead className={th} onClick={() => handleSort("first_name")}>First Name {renderSortIcon("first_name")}</TableHead>
                   <TableHead className={th} onClick={() => handleSort("last_name")}>Last Name {renderSortIcon("last_name")}</TableHead>
                   <TableHead className={th} onClick={() => handleSort("last_dropoff_date")}>Date {renderSortIcon("last_dropoff_date")}</TableHead>
                   <TableHead className={th}>Order #</TableHead>
@@ -435,7 +435,7 @@ export default function Customers() {
                           <TableCell className="font-medium text-slate-800">
                             <CopyField
                               label="Name"
-                              value={customer.name}
+                              value={customer.first_name}
                               compact
                               valueClassName="text-sm font-medium text-slate-800"
                             />
@@ -486,8 +486,8 @@ export default function Customers() {
                                     </div>
                                     <div>
                                       <label className="text-xs text-slate-500 mb-1 block">First Name</label>
-                                      <Input value={editDraft.name ?? ""}
-                                        onChange={(e) => setEditDraft((d) => ({ ...d, name: e.target.value }))}
+                                      <Input value={editDraft.first_name ?? ""}
+                                        onChange={(e) => setEditDraft((d) => ({ ...d, first_name: e.target.value }))}
                                         onClick={(e) => e.stopPropagation()}
                                         className="bg-white border-stone-200 h-8 text-sm" />
                                     </div>
@@ -632,7 +632,7 @@ export default function Customers() {
                                                 <AlertDialogHeader>
                                                   <AlertDialogTitle>Delete order #{order.order_number}?</AlertDialogTitle>
                                                   <AlertDialogDescription>
-                                                    This permanently deletes this order for {customer.name}.
+                                                    This permanently deletes this order for {customer.first_name}.
                                                   </AlertDialogDescription>
                                                 </AlertDialogHeader>
                                                 <AlertDialogFooter>
@@ -663,7 +663,7 @@ export default function Customers() {
                                     </AlertDialogTrigger>
                                     <AlertDialogContent>
                                       <AlertDialogHeader>
-                                        <AlertDialogTitle>Delete {customer.name}?</AlertDialogTitle>
+                                        <AlertDialogTitle>Delete {customer.first_name}?</AlertDialogTitle>
                                         <AlertDialogDescription>
                                           This permanently deletes this customer. Their drop-off history will remain but will not be linked to anyone.
                                         </AlertDialogDescription>

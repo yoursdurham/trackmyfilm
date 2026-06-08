@@ -22,7 +22,22 @@ export async function POST(req: Request) {
 
   try {
     const body = await req.json();
-    const customer = await createCustomer(body);
+    const {
+      first_name, last_name, email, normalized_name, total_rolls, total_dropoffs,
+      notes, last_dropoff_date, last_order_number, current_rolls,
+    } = body;
+    const customer = await createCustomer({
+      first_name,
+      last_name,
+      email,
+      normalized_name,
+      total_rolls,
+      total_dropoffs,
+      notes,
+      last_dropoff_date,
+      last_order_number,
+      current_rolls,
+    });
     return NextResponse.json(customer, { status: 201 });
   } catch {
     return NextResponse.json({ error: "Failed to create customer" }, { status: 500 });

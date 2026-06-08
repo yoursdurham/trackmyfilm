@@ -18,7 +18,7 @@ export interface StatusHistoryEntry {
 
 export interface Customer {
   id: string;
-  name: string;
+  first_name: string;
   last_name?: string;
   email?: string;
   normalized_name?: string;

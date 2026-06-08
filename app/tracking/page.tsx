@@ -192,7 +192,7 @@ async function fetchTrackedOrders(search: CommittedSearch): Promise<TrackingResu
 
   if (search.type === "email") {
     const customerName = data.customer
-      ? `${data.customer.name} ${data.customer.last_name ?? ""}`.trim()
+      ? `${data.customer.first_name} ${data.customer.last_name ?? ""}`.trim()
       : null;
 
     return {

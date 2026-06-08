@@ -90,7 +90,7 @@ export async function POST(req: Request) {
 
   if (!customer) {
     customer = await createCustomer({
-      name:            firstName,
+      first_name:      firstName,
       last_name:       lastName ?? undefined,
       email:           normalizedEmail ?? undefined,
       normalized_name: normalizedName,
@@ -193,7 +193,7 @@ export async function POST(req: Request) {
     order,
     customer: {
       id:             customer.id,
-      name:           customer.name,
+      name:           `${customer.first_name} ${customer.last_name ?? ""}`.trim(),
       isNew:          newTotalDropoffs === 1,
       total_dropoffs: newTotalDropoffs,
     },

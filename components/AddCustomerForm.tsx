@@ -17,7 +17,7 @@ interface Props {
 
 const emptyForm = {
   email:             "",
-  name:              "",
+  first_name:        "",
   last_name:         "",
   last_dropoff_date: "",
   last_order_number: "",
@@ -45,7 +45,7 @@ export default function AddCustomerForm({ open, onOpenChange, onSuccess }: Props
 
     try {
       const normalizedEmail = formData.email ? normalizeEmail(formData.email) : null;
-      const fullName        = `${formData.name.trim()} ${formData.last_name.trim()}`.trim();
+      const fullName        = `${formData.first_name.trim()} ${formData.last_name.trim()}`.trim();
       const normalizedName  = normalizeCustomerName(fullName);
 
       // Check for duplicates
@@ -55,13 +55,13 @@ export default function AddCustomerForm({ open, onOpenChange, onSuccess }: Props
       if (!lookupRes.ok) throw new Error("Failed to check for existing customer");
       const existing = await lookupRes.json();
       if (existing) {
-        setError(`Customer already exists: ${`${existing.name ?? ""} ${existing.last_name ?? ""}`.trim()}`);
+        setError(`Customer already exists: ${`${existing.first_name ?? ""} ${existing.last_name ?? ""}`.trim()}`);
         setLoading(false);
         return;
       }
 
       const payload = {
-        name:              formData.name.trim(),
+        first_name:        formData.first_name.trim(),
         last_name:         formData.last_name.trim() || null,
         email:             normalizedEmail,
         normalized_name:   normalizedName,
@@ -84,7 +84,7 @@ export default function AddCustomerForm({ open, onOpenChange, onSuccess }: Props
         throw new Error(data.error || "Failed to create customer");
       }
 
-      toast.success(`Customer ${payload.name} added`);
+      toast.success(`Customer ${payload.first_name} added`);
       onSuccess();
       handleClose();
     } catch (err: unknown) {
@@ -122,8 +122,8 @@ export default function AddCustomerForm({ open, onOpenChange, onSuccess }: Props
           {/* First + Last Name */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
-              <Label htmlFor="name" className={labelClass}>First Name *</Label>
-              <Input id="name" value={formData.name} onChange={set("name")}
+              <Label htmlFor="first_name" className={labelClass}>First Name *</Label>
+              <Input id="first_name" value={formData.first_name} onChange={set("first_name")}
                 placeholder="John" required className={fieldClass} />
             </div>
             <div className="space-y-1">
@@ -178,7 +178,7 @@ export default function AddCustomerForm({ open, onOpenChange, onSuccess }: Props
             <Button type="button" variant="outline" className="flex-1" onClick={handleClose} disabled={loading}>
               Cancel
             </Button>
-            <Button type="submit" disabled={loading || !formData.name.trim()}
+            <Button type="submit" disabled={loading || !formData.first_name.trim()}
               className="flex-1 bg-amber-600 hover:bg-amber-700 text-white">
               {loading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Adding...</> : "Add Customer"}
             </Button>
