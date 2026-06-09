@@ -146,7 +146,7 @@ export async function sendOrderEmail(orderId: string, template: string) {
       : undefined,
     templateIdConfigured: Boolean(templateId),
   });
-
+console.log("[email] USING TEMPLATE ID:", templateId);
   if (!templateId) {
     const envVarName = template === "process_only_finished"
       ? "RESEND_TEMPLATE_PROCESS_ONLY_FINISHED"

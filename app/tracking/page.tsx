@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { AnimatePresence, motion } from "framer-motion";
@@ -208,11 +209,33 @@ async function fetchTrackedOrders(search: CommittedSearch): Promise<TrackingResu
 }
 
 export default function Tracking() {
+  const searchParams = useSearchParams();
   const [searchTerm, setSearchTerm] = useState("");
   const [committed, setCommitted] = useState<CommittedSearch | null>(null);
   const [resendingOrderId, setResendingOrderId] = useState<string | null>(null);
   const [resendCooldowns, setResendCooldowns] = useState<Record<string, number>>({});
   const [resendMessages, setResendMessages] = useState<Record<string, string>>({});
+    useEffect(() => {
+    const orderFromUrl = searchParams.get("order");
+    const emailFromUrl = searchParams.get("email");
+
+    if (orderFromUrl) {
+      setSearchTerm(orderFromUrl);
+      setCommitted({
+        term: orderFromUrl,
+        type: "order",
+      });
+      return;
+    }
+
+    if (emailFromUrl) {
+      setSearchTerm(emailFromUrl);
+      setCommitted({
+        term: emailFromUrl,
+        type: "email",
+      });
+    }
+  }, [searchParams]);
 
   const normalizedSearchTerm = searchTerm.trim();
   const hasSearched = committed !== null;
