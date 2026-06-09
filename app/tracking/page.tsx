@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
@@ -208,7 +208,7 @@ async function fetchTrackedOrders(search: CommittedSearch): Promise<TrackingResu
   };
 }
 
-export default function Tracking() {
+function TrackingContent() {
   const searchParams = useSearchParams();
   const [searchTerm, setSearchTerm] = useState("");
   const [committed, setCommitted] = useState<CommittedSearch | null>(null);
@@ -713,5 +713,12 @@ export default function Tracking() {
         </div>
       </main>
     </div>
+  );
+}
+export default function Tracking() {
+  return (
+    <Suspense fallback={null}>
+      <TrackingContent />
+    </Suspense>
   );
 }
