@@ -2,10 +2,13 @@
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Download, Users, Layers } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Clock, Download, Users, Layers } from "lucide-react";
+import {
+  calculateTurnaroundForPeriod,
+  formatTurnaroundDays,
+} from "@/lib/turnaround-time";
 import { toast } from "sonner";
 import InternalHeader from "@/components/InternalHeader";
 import FilmProcessBadge from "@/components/FilmProcessBadge";
@@ -32,55 +35,10 @@ const TIME_FRAMES: { key: TimeFrameKey; label: string; days?: number }[] = [
   { key: "365d", label: "Last 12 months", days: 365 },
 ];
 
-type FilmProcessPieLabelProps = {
-  cx?: number;
-  cy?: number;
-  midAngle?: number;
-  outerRadius?: number;
-  name?: string;
-  value?: number;
-};
-
-function renderFilmProcessPieLabel({
-  cx = 0,
-  cy = 0,
-  midAngle = 0,
-  outerRadius = 0,
-  name = "",
-  value = 0,
-}: FilmProcessPieLabelProps) {
-  const radius = outerRadius + 34;
-  const x = cx + radius * Math.cos(-midAngle * Math.PI / 180);
-  const y = cy + radius * Math.sin(-midAngle * Math.PI / 180);
-  const label = `${name}: ${value}`;
-
-  if (name === "B/W") {
-    return (
-      <g>
-        <rect x={x - 30} y={y - 12} width="60" height="22" rx="11" fill="#000" />
-        <text x={x} y={y + 4} textAnchor="middle" fill="#fff" fontSize="12" fontWeight="600">
-          {label}
-        </text>
-      </g>
-    );
-  }
-
-  return (
-    <text
-      x={x}
-      y={y}
-      textAnchor={x > cx ? "start" : "end"}
-      fill="url(#film-process-color-label)"
-      fontSize="13"
-      fontWeight="700"
-    >
-      {label}
-    </text>
-  );
-}
+const FILM_STOCK_LIST_MAX_HEIGHT_PX = 260;
 
 export default function Reports() {
-  const [selectedTimeFrame, setSelectedTimeFrame] = useState<TimeFrameKey>("all");
+  const [selectedTimeFrame, setSelectedTimeFrame] = useState<TimeFrameKey>("30d");
 
   const { data: orders = [] } = useQuery<FilmOrder[]>({
     queryKey: ["filmOrders"],
@@ -96,7 +54,7 @@ export default function Reports() {
     return new Date(order.dropoff_date);
   };
 
-  const selectedTimeFrameLabel = TIME_FRAMES.find((frame) => frame.key === selectedTimeFrame)?.label ?? "All time";
+  const selectedTimeFrameLabel = TIME_FRAMES.find((frame) => frame.key === selectedTimeFrame)?.label ?? "Last 30 days";
 
   const filteredOrders = orders.filter((order) => {
     if (selectedTimeFrame === "all") return true;
@@ -169,17 +127,8 @@ export default function Reports() {
   };
 
   const metrics = calculateMetrics(filteredOrders);
-
-  const filmProcessData = [
-    { name: "Color", value: metrics.totalColorRolls, fill: "#F59E0B" },
-    { name: "B/W", value: metrics.totalBWRolls, fill: "#6B7280" },
-  ];
-
-  const scanResolutionData = metrics.scanResolutionUsage.map((item, index) => ({
-    name: item.resolution,
-    value: item.count,
-    fill: ["#3B82F6", "#10B981", "#F59E0B"][index % 3], // Cycle through colors
-  }));
+  const turnaround = calculateTurnaroundForPeriod(orders, selectedTimeFrame);
+  const totalScanRolls = metrics.scanResolutionUsage.reduce((sum, item) => sum + item.count, 0);
 
   const handleExport = () => {
     const csvContent = [
@@ -194,6 +143,8 @@ export default function Reports() {
       `Total 35mm Rolls,${metrics.total35mmRolls}`,
       `Total 120 Rolls,${metrics.total120Rolls}`,
       `Total 4x6" Prints Done,${metrics.total4x6Prints}`,
+      `Average Turnaround Time (days),${turnaround.averageDays !== null ? (Math.round(turnaround.averageDays * 10) / 10).toFixed(1) : ""}`,
+      `Completed Orders (turnaround),${turnaround.orderCount}`,
       "",
       "FILM STOCK USAGE",
       "Film Stock,Count",
@@ -247,7 +198,7 @@ export default function Reports() {
         </div>
 
         {/* Key Metrics Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 mb-8">
           <Card className="border border-stone-100">
             <CardContent className="p-5">
               <div className="flex items-center justify-between">
@@ -295,10 +246,26 @@ export default function Reports() {
               </div>
             </CardContent>
           </Card>
+
+          <Card className="border border-stone-100">
+            <CardContent className="p-5">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-slate-500 uppercase tracking-wide">Avg Turnaround</p>
+                  <p className="text-3xl font-bold text-sky-600">{formatTurnaroundDays(turnaround.averageDays)}</p>
+                  <p className="mt-1 text-xs text-slate-500">Received at Lab → Scans Sent</p>
+                  <p className="text-xs text-slate-500">
+                    {turnaround.orderCount} completed order{turnaround.orderCount === 1 ? "" : "s"}
+                  </p>
+                </div>
+                <Clock className="w-8 h-8 text-sky-500 opacity-20" />
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
-        {/* Film Type Breakdown */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        {/* Distribution Breakdown */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
           <Card className="border border-stone-100">
             <CardContent className="p-6">
               <h3 className="text-lg font-semibold text-slate-800 mb-4">Film Type Distribution</h3>
@@ -340,65 +307,23 @@ export default function Reports() {
               </div>
             </CardContent>
           </Card>
-        </div>
-
-        {/* Charts */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Card className="border border-stone-100">
-            <CardContent className="p-6">
-              <h3 className="text-lg font-semibold text-slate-800 mb-4">Film Process Breakdown</h3>
-              <ResponsiveContainer width="100%" height={300}>
-                <PieChart>
-                  <defs>
-                    <linearGradient id="film-process-color-label" x1="0" x2="1" y1="0" y2="0">
-                      <stop offset="0%" stopColor="#EF4444" />
-                      <stop offset="50%" stopColor="#FACC15" />
-                      <stop offset="100%" stopColor="#3B82F6" />
-                    </linearGradient>
-                  </defs>
-                  <Pie
-                    data={filmProcessData}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    label={renderFilmProcessPieLabel}
-                    outerRadius={80}
-                    fill="#8884d8"
-                    dataKey="value"
-                  >
-                    {filmProcessData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.fill} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
 
           <Card className="border border-stone-100">
             <CardContent className="p-6">
-              <h3 className="text-lg font-semibold text-slate-800 mb-4">Scan Resolution Breakdown</h3>
-              {scanResolutionData.length > 0 ? (
-                <ResponsiveContainer width="100%" height={300}>
-                  <PieChart>
-                    <Pie
-                      data={scanResolutionData}
-                      cx="50%"
-                      cy="50%"
-                      labelLine={false}
-                      label={({ name, value }) => `${name}: ${value}`}
-                      outerRadius={80}
-                      fill="#8884d8"
-                      dataKey="value"
-                    >
-                      {scanResolutionData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.fill} />
-                      ))}
-                    </Pie>
-                    <Tooltip />
-                  </PieChart>
-                </ResponsiveContainer>
+              <h3 className="text-lg font-semibold text-slate-800 mb-4">Scan Resolution Distribution</h3>
+              {metrics.scanResolutionUsage.length > 0 ? (
+                <div className="space-y-3">
+                  {metrics.scanResolutionUsage.map((item) => (
+                    <div key={item.resolution} className="flex items-center justify-between">
+                      <span className="text-sm text-slate-600">{item.resolution}</span>
+                      <span className="text-2xl font-bold text-slate-800">{item.count}</span>
+                    </div>
+                  ))}
+                  <div className="mt-4 pt-4 border-t border-slate-200 flex items-center justify-between font-semibold">
+                    <span className="text-slate-700">Total Rolls</span>
+                    <span className="text-2xl text-slate-800">{totalScanRolls}</span>
+                  </div>
+                </div>
               ) : (
                 <p className="text-slate-500">No scan resolution data available</p>
               )}
@@ -407,30 +332,40 @@ export default function Reports() {
         </div>
 
         {/* Film Stock Usage */}
-        <Card className="border border-stone-100 mt-6">
-          <CardContent className="p-6">
-            <h3 className="text-lg font-semibold text-slate-800 mb-4">Film Stock Usage</h3>
+        <Card className="flex h-[340px] max-h-[340px] flex-col gap-0 overflow-hidden border border-stone-100 py-0">
+          <CardHeader className="shrink-0 px-4 py-3">
+            <CardTitle className="text-base font-semibold text-slate-800">Film Stock Usage</CardTitle>
+          </CardHeader>
+
+          <CardContent className="flex min-h-0 flex-1 flex-col p-0">
             {metrics.filmStockUsage.length > 0 ? (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-stone-200">
-                      <th className="text-left py-2 px-3 font-semibold text-slate-600">Film Stock</th>
-                      <th className="text-right py-2 px-3 font-semibold text-slate-600">Times Used</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {metrics.filmStockUsage.map((item, index) => (
-                      <tr key={index} className="border-b border-stone-100 hover:bg-stone-50">
-                        <td className="py-3 px-3 text-slate-700">{item.stock}</td>
-                        <td className="text-right py-3 px-3 font-medium text-slate-800">{item.count}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <>
+                <div className="grid shrink-0 grid-cols-2 border-b border-stone-200 px-4 py-2 text-xs font-medium text-slate-600">
+                  <div>Film Stock</div>
+                  <div className="text-right">Times Used</div>
+                </div>
+
+                <div
+                  className="min-h-0 shrink-0 overflow-y-auto overscroll-contain"
+                  style={{
+                    height: FILM_STOCK_LIST_MAX_HEIGHT_PX,
+                    maxHeight: FILM_STOCK_LIST_MAX_HEIGHT_PX,
+                    overflowY: "auto",
+                  }}
+                >
+                  {metrics.filmStockUsage.map((item, index) => (
+                    <div
+                      key={index}
+                      className="grid grid-cols-2 border-b border-stone-100 px-4 py-1.5 text-xs last:border-b-0"
+                    >
+                      <div className="truncate text-slate-700">{item.stock}</div>
+                      <div className="text-right font-semibold text-slate-800">{item.count}</div>
+                    </div>
+                  ))}
+                </div>
+              </>
             ) : (
-              <p className="text-slate-500">No film stock data available</p>
+              <p className="px-4 py-4 text-xs text-slate-500">No film stock data available</p>
             )}
           </CardContent>
         </Card>

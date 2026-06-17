@@ -6,7 +6,8 @@ type TemplateName =
   | "film_drop_received"
   | "film_at_lab"
   | "process_only_finished"
-  | "scans_sent";
+  | "scans_sent"
+  | "film_delay";
 
 type ResendResponse = {
   id?: string;
@@ -31,6 +32,7 @@ const DEDUP_FIELDS: Record<TemplateName, keyof FilmOrder> = {
   film_at_lab: "at_lab_email_sent_at",
   process_only_finished: "process_only_finished_emailed_at",
   scans_sent: "scans_sent_email_sent_at",
+  film_delay: "film_delay_email_sent_at",
 };
 
 export const KNOWN_EMAIL_TEMPLATES = Object.keys(DEDUP_FIELDS) as TemplateName[];
@@ -41,6 +43,7 @@ function getTemplateIds(): Record<TemplateName, string | undefined> {
     film_at_lab: process.env.RESEND_TEMPLATE_FILM_AT_LAB,
     process_only_finished: process.env.RESEND_TEMPLATE_PROCESS_ONLY_FINISHED,
     scans_sent: process.env.RESEND_TEMPLATE_SCANS_SENT,
+    film_delay: process.env.RESEND_TEMPLATE_FILM_DELAY,
   };
 }
 
@@ -49,7 +52,7 @@ function isKnownEmailTemplate(template: string): template is TemplateName {
 }
 
 function shouldSkipEmail(template: TemplateName, lastSent: string | undefined) {
-  if (template === "process_only_finished") {
+  if (template === "process_only_finished" || template === "film_delay") {
     return Boolean(lastSent);
   }
 
@@ -118,8 +121,8 @@ export async function sendOrderEmail(orderId: string, template: string) {
   const dedupField = DEDUP_FIELDS[template];
   const lastSent = order[dedupField] as string | undefined;
   if (shouldSkipEmail(template, lastSent)) {
-    const reason = template === "process_only_finished"
-      ? "process_only_finished_emailed_at is already set for this order"
+    const reason = template === "process_only_finished" || template === "film_delay"
+      ? `${dedupField} is already set for this order`
       : `${dedupField} is within the one-hour dedup window`;
     console.log("[email] Skipping duplicate send:", {
       orderId,

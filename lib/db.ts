@@ -111,6 +111,16 @@ export async function getDistinctFilmStocks(): Promise<string[]> {
   return stocks.sort();
 }
 
+export async function getOrdersPendingDelayEmail(): Promise<FilmOrder[]> {
+  const { data, error } = await getSupabase()
+    .from("film_orders")
+    .select("*")
+    .eq("status", "Received at Lab")
+    .is("film_delay_email_sent_at", null);
+  if (error) throw new Error(error.message);
+  return data as FilmOrder[];
+}
+
 export async function deleteOrder(id: string): Promise<void> {
   const { error } = await getSupabase()
     .from("film_orders")

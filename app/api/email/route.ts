@@ -7,6 +7,7 @@
  *   film_at_lab        — film has arrived at the lab in Raleigh
  *   process_only_finished — process-only negatives are ready
  *   scans_sent         — scans ready with WeTransfer link
+ *   film_delay         — film has been at the lab 8+ days without movement
  *
  * Dedup: each template has a per-order timestamp field. Will not resend within 1 hour.
  */

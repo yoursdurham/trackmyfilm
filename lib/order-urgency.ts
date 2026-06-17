@@ -33,3 +33,10 @@ export function isUrgent(order: FilmOrder) {
   const ageDays = getUrgentAgeDays(order);
   return ageDays !== null && ageDays >= URGENT_DAYS;
 }
+
+/** Urgent specifically because film has sat at the lab 8+ days without movement. */
+export function isLabDelayUrgent(order: FilmOrder) {
+  if (order.status !== "Received at Lab") return false;
+  const ageDays = getUrgentAgeDays(order);
+  return ageDays !== null && ageDays >= URGENT_DAYS;
+}
