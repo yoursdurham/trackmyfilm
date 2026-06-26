@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,7 +10,9 @@ import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
 import InternalHeader, { openNewDropoffDialog } from "@/components/InternalHeader";
 import OrderCard from "@/components/OrderCard";
+import BulkStatusActionBar from "@/components/BulkStatusActionBar";
 import { getUrgentAgeDays, isUrgent } from "@/lib/order-urgency";
+import { ORDER_STATUS } from "@/lib/constants";
 import type { FilmOrder } from "@/lib/types";
 
 const statusFilters = [
@@ -59,6 +61,7 @@ export default function Dashboard() {
   const [selectedTimeFrame, setSelectedTimeFrame] = useState<TimeFrameKey>("all");
   const [customStartDate, setCustomStartDate] = useState("");
   const [customEndDate, setCustomEndDate] = useState("");
+  const [selectedOrderIds, setSelectedOrderIds] = useState<Set<string>>(new Set());
   const queryClient = useQueryClient();
 
   const { data: orders = [], isLoading } = useQuery<FilmOrder[]>({
@@ -162,11 +165,46 @@ export default function Dashboard() {
     "Scans Sent":        dateFilteredOrders.filter((o) => o.status === "Scans Sent").length,
   };
 
+  const isReceivedTab = activeFilter === ORDER_STATUS.RECEIVED_BY_YOURS;
+  const showBulkSelection = isReceivedTab;
+
+  useEffect(() => {
+    if (!isReceivedTab) setSelectedOrderIds(new Set());
+  }, [isReceivedTab]);
+
+  const visibleOrderIds = filteredOrders.map((order) => order.id);
+  const allVisibleSelected = visibleOrderIds.length > 0 &&
+    visibleOrderIds.every((id) => selectedOrderIds.has(id));
+
+  const toggleOrderSelection = (orderId: string, selected: boolean) => {
+    setSelectedOrderIds((current) => {
+      const next = new Set(current);
+      if (selected) next.add(orderId);
+      else next.delete(orderId);
+      return next;
+    });
+  };
+
+  const handleSelectAllVisible = () => {
+    setSelectedOrderIds(new Set(visibleOrderIds));
+  };
+
+  const handleClearSelection = () => {
+    setSelectedOrderIds(new Set());
+  };
+
+  const handleBulkUpdateComplete = () => {
+    const count = selectedOrderIds.size;
+    setSelectedOrderIds(new Set());
+    queryClient.invalidateQueries({ queryKey: ["filmOrders"] });
+    toast.success(`Updated ${count} order${count === 1 ? "" : "s"} to ${ORDER_STATUS.RECEIVED_AT_LAB}`);
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-stone-50 via-orange-50/30 to-amber-50/20">
       <InternalHeader />
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <main className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 ${showBulkSelection && selectedOrderIds.size > 0 ? "pb-28" : ""}`}>
         <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <p className="text-sm text-slate-500">
@@ -230,6 +268,28 @@ export default function Dashboard() {
           ))}
         </div>
 
+        {showBulkSelection ? (
+          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleSelectAllVisible}
+                disabled={filteredOrders.length === 0}
+                className="border-stone-200 bg-white text-slate-600 hover:bg-stone-50"
+              >
+                {allVisibleSelected ? "All visible selected" : "Select all visible"}
+              </Button>
+              {selectedOrderIds.size > 0 ? (
+                <span className="text-sm text-slate-500">
+                  {selectedOrderIds.size} selected
+                </span>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+
         <div className="flex flex-col sm:flex-row gap-4 mb-6">
           <Tabs value={activeFilter} onValueChange={setActiveFilter} className="w-full sm:w-auto">
             <TabsList className="border border-slate-200 bg-white h-9">
@@ -278,7 +338,10 @@ export default function Dashboard() {
                   exit={{ opacity: 0, scale: 0.95 }} transition={{ duration: 0.2 }}>
                   <OrderCard order={order} onStatusChange={handleStatusChange}
                     onDelete={(id) => deleteMutation.mutate(id)}
-                    onOrderUpdated={() => queryClient.invalidateQueries({ queryKey: ["filmOrders"] })} />
+                    onOrderUpdated={() => queryClient.invalidateQueries({ queryKey: ["filmOrders"] })}
+                    selectable={showBulkSelection}
+                    selected={selectedOrderIds.has(order.id)}
+                    onSelectedChange={(selected) => toggleOrderSelection(order.id, selected)} />
                 </motion.div>
               ))}
             </AnimatePresence>
@@ -286,6 +349,14 @@ export default function Dashboard() {
         )}
       </main>
 
+      {showBulkSelection ? (
+        <BulkStatusActionBar
+          selectedCount={selectedOrderIds.size}
+          selectedOrderIds={[...selectedOrderIds]}
+          onClearSelection={handleClearSelection}
+          onBulkUpdateComplete={handleBulkUpdateComplete}
+        />
+      ) : null}
     </div>
   );
 }

@@ -67,9 +67,21 @@ interface Props {
   onDelete: (id: string) => void;
   onOrderUpdated?: () => void;
   showQuestionsButton?: boolean;
+  selectable?: boolean;
+  selected?: boolean;
+  onSelectedChange?: (selected: boolean) => void;
 }
 
-export default function OrderCard({ order, onStatusChange, onDelete, onOrderUpdated, showQuestionsButton = false }: Props) {
+export default function OrderCard({
+  order,
+  onStatusChange,
+  onDelete,
+  onOrderUpdated,
+  showQuestionsButton = false,
+  selectable = false,
+  selected = false,
+  onSelectedChange,
+}: Props) {
   const [showLinkDialog, setShowLinkDialog] = useState(false);
   const [showForceDialog, setShowForceDialog] = useState(false);
   const [pendingStatus, setPendingStatus] = useState<string | null>(null);
@@ -299,10 +311,19 @@ export default function OrderCard({ order, onStatusChange, onDelete, onOrderUpda
   };
 
   return (
-    <Card className="group bg-white border-0 shadow-sm hover:shadow-md transition-all duration-300">
+    <Card className={`group border-0 shadow-sm transition-all duration-300 hover:shadow-md ${selected ? "bg-amber-50/40 ring-2 ring-amber-400/50" : "bg-white"}`}>
       <CardContent className="p-5">
         <div className="mb-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex min-w-0 flex-1 items-start gap-2">
+              {selectable ? (
+                <Checkbox
+                  checked={selected}
+                  onCheckedChange={(checked) => onSelectedChange?.(checked === true)}
+                  aria-label={`Select order ${order.order_number}`}
+                  className="mt-1 border-stone-300 data-[state=checked]:border-amber-600 data-[state=checked]:bg-amber-600"
+                />
+              ) : null}
             <CopyField
               label="Order #"
               value={order.order_number}
@@ -311,6 +332,7 @@ export default function OrderCard({ order, onStatusChange, onDelete, onOrderUpda
               className="min-w-0 flex-1"
               valueClassName="text-xl font-bold tracking-tight text-slate-900"
             />
+            </div>
             <div className="flex shrink-0 flex-col items-end gap-1">
               <StatusBadge status={order.status} />
               {urgent ? (

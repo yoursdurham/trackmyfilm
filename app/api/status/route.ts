@@ -5,13 +5,13 @@
  */
 
 import { NextResponse } from "next/server";
-import { getOrderById, updateOrder } from "@/lib/db";
-import { ORDER_STATUS, STATUS_TEMPLATE_MAP, STATUS_FLOW } from "@/lib/constants";
+import { getOrderById } from "@/lib/db";
+import { STATUS_FLOW } from "@/lib/constants";
 import { isProcessOnlyOrder } from "@/lib/order-service";
-import { isValidTransition, isKnownStatus, isValidUrl, ensureHttps } from "@/lib/validation";
+import { isKnownStatus } from "@/lib/validation";
 import { requireAuth } from "@/lib/api-auth";
-import { EmailSendError, sendOrderEmail } from "@/lib/email-service";
-import type { OrderStatus, StatusHistoryEntry } from "@/lib/types";
+import { updateOrderStatus } from "@/lib/status-update-service";
+import type { OrderStatus } from "@/lib/types";
 
 export async function POST(req: Request) {
   const auth = await requireAuth();
@@ -63,119 +63,35 @@ export async function POST(req: Request) {
       hasWetransferLink: Boolean(wetransfer_link || order.wetransfer_link),
     });
 
-    if (new_status === ORDER_STATUS.SCANS_SENT && processOnlyOrder) {
-      return NextResponse.json(
-        { error: "Process Only orders should be marked Ready for Pickup instead." },
-        { status: 400 }
-      );
-    }
-
-    if (new_status === ORDER_STATUS.READY_FOR_PICKUP && !processOnlyOrder) {
-      return NextResponse.json(
-        { error: "Ready for Pickup is only available for Process Only orders." },
-        { status: 400 }
-      );
-    }
-
-    // No-op if same status
-    if (order.status === new_status) {
-      return NextResponse.json({ success: true, order_id, new_status, skipped: true, reason: "Already at this status" });
-    }
-
-    // Transition validation — warn on backward, block unless forced
-    if (!isValidTransition(order.status, new_status) && !force) {
-      return NextResponse.json({
-        success: false,
-        error: `Cannot move from "${order.status}" to "${new_status}". Use force: true to override.`,
-        requiresForce: true,
-      }, { status: 422 });
-    }
-
-    // Validate download link only if one was provided
-    if (new_status === ORDER_STATUS.SCANS_SENT && wetransfer_link) {
-      if (!isValidUrl(wetransfer_link)) {
-        return NextResponse.json(
-          { error: "Please enter a valid link" },
-          { status: 400 }
-        );
-      }
-    }
-
-    const now = new Date().toISOString();
-
-    const updatedHistory: StatusHistoryEntry[] = [
-      ...(order.status_history ?? []),
-      { status: new_status, changed_at: now },
-    ];
-
-    const updateData: Partial<typeof order> = {
-      status: new_status,
-      status_history: updatedHistory,
-      status_updated_at: now,
-    };
-
-    if (new_status === ORDER_STATUS.RECEIVED_BY_YOURS) updateData.received_by_yours_at = now;
-    if (new_status === ORDER_STATUS.RECEIVED_AT_LAB)   updateData.at_lab_at = now;
-    if (new_status === ORDER_STATUS.SCANS_SENT) {
-      updateData.scans_sent_at = now;
-      const rawLink = wetransfer_link || order.wetransfer_link;
-      updateData.wetransfer_link = rawLink ? ensureHttps(rawLink) : rawLink;
-    }
-
-    await updateOrder(order_id, updateData);
-
-    // Trigger email if a template exists and send_email is true
-    const template = STATUS_TEMPLATE_MAP[new_status];
-    const processOnlyEmailSelected =
-      processOnlyOrder &&
-      new_status === ORDER_STATUS.READY_FOR_PICKUP &&
-      template === "process_only_finished";
-
-    console.log("[status] Email path decision:", {
-      orderId: order_id,
-      orderNumber: order.order_number,
-      newStatus: new_status,
-      template,
-      processOnlyOrder,
-      processOnlyEmailSelected,
-      sendEmail: send_email,
+    const result = await updateOrderStatus({
+      order_id,
+      new_status,
+      wetransfer_link,
+      force,
+      send_email,
     });
 
-    if (!template || !send_email) {
-      return NextResponse.json({ success: true, order_id, new_status, email_sent: false });
+    if (!result.success) {
+      const statusCode = result.requiresForce ? 422 : 400;
+      if (result.error === "Order not found") {
+        return NextResponse.json({ error: result.error }, { status: 404 });
+      }
+      return NextResponse.json({
+        success: false,
+        error: result.error,
+        requiresForce: result.requiresForce,
+      }, { status: statusCode });
     }
 
-    try {
-      const emailData = await sendOrderEmail(order_id, template);
-
-      return NextResponse.json({
-        success: true,
-        order_id,
-        new_status,
-        email_sent: !emailData.skipped,
-        emailResult: emailData,
-      });
-    } catch (emailErr: unknown) {
-      // Email failure does not fail the status update
-      console.error("[status] Email trigger failed:", {
-        orderId: order_id,
-        orderNumber: order.order_number,
-        newStatus: new_status,
-        template,
-        error: emailErr instanceof Error ? emailErr.message : "Unknown email error",
-      });
-      await updateOrder(order_id, {
-        email_status: "failed",
-        email_error: emailErr instanceof Error ? emailErr.message : "Unknown email error",
-      });
-      return NextResponse.json({
-        success: true,
-        order_id,
-        new_status,
-        email_sent: false,
-        emailError: emailErr instanceof EmailSendError ? emailErr.message : String(emailErr),
-      });
-    }
+    return NextResponse.json({
+      success: true,
+      order_id: result.order_id,
+      new_status: result.new_status,
+      skipped: result.skipped,
+      reason: result.reason,
+      email_sent: result.email_sent,
+      emailError: result.emailError,
+    });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 500 });
