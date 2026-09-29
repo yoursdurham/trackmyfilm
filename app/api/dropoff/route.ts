@@ -124,21 +124,26 @@ export async function POST(req: Request) {
   const isNewCustomer = !customer;
 
   if (!customer) {
-    customer = await createCustomer({
-      user_id:         auth.id,
-      first_name:      firstName,
-      last_name:       lastName ?? undefined,
-      email:           normalizedEmail ?? undefined,
-      normalized_name: normalizedName,
-      total_rolls:     0,
-      total_dropoffs:  0,
-      default_film_type: normalizedFilmType,
-      default_film_process: film_process as Customer["default_film_process"],
-      default_scan_size: roll_details?.[0]?.scan_size,
-    });
-
-    if (!customer) {
-      return NextResponse.json({ error: "Failed to create customer" }, { status: 500 });
+    if (!normalizedEmail) {
+      return NextResponse.json(
+        { error: "Customer email is required when creating a new customer" },
+        { status: 400 }
+      );
+    }
+    try {
+      // Core columns only (001/006). Profile fields (user_id, default_film_*) require migration 010.
+      customer = await createCustomer({
+        first_name:      firstName,
+        last_name:       lastName ?? undefined,
+        email:           normalizedEmail,
+        normalized_name: normalizedName,
+        total_rolls:     0,
+        total_dropoffs:  0,
+      });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "unknown";
+      console.error("[dropoff] createCustomer failed:", message);
+      return NextResponse.json({ error: `Failed to create customer: ${message}` }, { status: 500 });
     }
   }
 
@@ -185,14 +190,6 @@ export async function POST(req: Request) {
       current_rolls:     roll_count,
       last_dropoff_date: dropoff_date,
     };
-
-    if (!isNewCustomer) {
-      customerPatch.default_film_type = normalizedFilmType;
-      customerPatch.default_film_process = film_process as Customer["default_film_process"];
-      if (roll_details?.[0]?.scan_size) {
-        customerPatch.default_scan_size = roll_details[0].scan_size;
-      }
-    }
 
     await updateCustomer(customer.id, customerPatch);
   } catch {

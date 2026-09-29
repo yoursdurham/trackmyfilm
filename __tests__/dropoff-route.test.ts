@@ -50,6 +50,12 @@ describe("POST /api/dropoff — 110 film", () => {
       total_rolls: 0,
       total_dropoffs: 0,
     });
+    mockCreateCustomer.mockResolvedValue({
+      id: "cust-new",
+      first_name: "Jane",
+      total_rolls: 0,
+      total_dropoffs: 0,
+    });
     mockCreateOrder.mockImplementation(async (data: Record<string, unknown>) => ({
       id: "order-1",
       ...data,
@@ -98,6 +104,62 @@ describe("POST /api/dropoff — 110 film", () => {
     const orderArg = mockCreateOrder.mock.calls[0][0];
     expect(orderArg.film_type).toBe("110");
     expect(orderArg.roll_details[0].film_type).toBe("110");
+  });
+
+  it("creates a new customer with core fields only (no migration-010 columns)", async () => {
+    mockGetCustomerByEmailOrName.mockResolvedValue(null);
+
+    const req = new Request("http://localhost/api/dropoff", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ...basePayload,
+        customer_email: "new.person@example.com",
+        order_number: "JE-NEW-001",
+      }),
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(201);
+
+    expect(mockCreateCustomer).toHaveBeenCalledTimes(1);
+    const createArg = mockCreateCustomer.mock.calls[0][0];
+    expect(createArg).toMatchObject({
+      first_name: "Jane",
+      email: "new.person@example.com",
+      normalized_name: "jane doe",
+      total_rolls: 0,
+      total_dropoffs: 0,
+    });
+    expect(createArg).not.toHaveProperty("user_id");
+    expect(createArg).not.toHaveProperty("default_film_type");
+    expect(createArg).not.toHaveProperty("default_film_process");
+    expect(createArg).not.toHaveProperty("default_scan_size");
+
+    const body = await res.json();
+    expect(body.customer.isNew).toBe(true);
+    expect(mockCreateOrder).toHaveBeenCalledTimes(1);
+  });
+
+  it("creates new customer with 2 rolls of 110 film", async () => {
+    mockGetCustomerByEmailOrName.mockResolvedValue(null);
+
+    const req = new Request("http://localhost/api/dropoff", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ...basePayload,
+        customer_email: "new110@example.com",
+        order_number: "JE-NEW-110",
+      }),
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(201);
+    expect(mockCreateCustomer).toHaveBeenCalledTimes(1);
+    const orderArg = mockCreateOrder.mock.calls[0][0];
+    expect(orderArg.film_type).toBe("110");
+    expect(orderArg.roll_count).toBe(2);
   });
 
   it("rejects invalid film_type in roll_details", async () => {

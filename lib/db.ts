@@ -215,34 +215,31 @@ export async function getCustomerByEmailOrName(
 }
 
 export async function createCustomer(data: CustomerInsert): Promise<Customer> {
-  const {
-    user_id, first_name, last_name, email, phone, normalized_name,
-    total_rolls, total_dropoffs, notes, preferred_contact_method,
-    default_film_type, default_film_process, default_scan_size, default_delivery_preference,
-    last_dropoff_date, last_order_number, current_rolls,
-  } = data;
+  const row = Object.fromEntries(
+    Object.entries({
+      user_id: data.user_id,
+      first_name: data.first_name,
+      last_name: data.last_name,
+      email: data.email,
+      phone: data.phone,
+      normalized_name: data.normalized_name,
+      total_rolls: data.total_rolls,
+      total_dropoffs: data.total_dropoffs,
+      notes: data.notes,
+      preferred_contact_method: data.preferred_contact_method,
+      default_film_type: data.default_film_type,
+      default_film_process: data.default_film_process,
+      default_scan_size: data.default_scan_size,
+      default_delivery_preference: data.default_delivery_preference,
+      last_dropoff_date: data.last_dropoff_date,
+      last_order_number: data.last_order_number,
+      current_rolls: data.current_rolls,
+    }).filter(([, value]) => value !== undefined)
+  );
 
   const { data: created, error } = await getSupabase()
     .from("customers")
-    .insert({
-      user_id,
-      first_name,
-      last_name,
-      email,
-      phone,
-      normalized_name,
-      total_rolls,
-      total_dropoffs,
-      notes,
-      preferred_contact_method,
-      default_film_type,
-      default_film_process,
-      default_scan_size,
-      default_delivery_preference,
-      last_dropoff_date,
-      last_order_number,
-      current_rolls,
-    })
+    .insert(row)
     .select()
     .single();
   if (error) throw new Error(error.message);
