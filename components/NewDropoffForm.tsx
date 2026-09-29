@@ -11,7 +11,7 @@ import { User, Calendar, Hash, Layers, Loader2, Film, Mail } from "lucide-react"
 import { format } from "date-fns";
 import { toast } from "sonner";
 import type { Customer, FilmType, FilmProcess } from "@/lib/types";
-import { DROP_OFF_FILM_TYPES } from "@/lib/validation";
+import { DROP_OFF_FILM_TYPES, isValidEmail, normalizeEmail } from "@/lib/validation";
 
 const MAX_ROLLS = 20;
 
@@ -122,6 +122,13 @@ export default function NewDropoffForm({ open, onOpenChange, onSuccess, customer
     setError("");
 
     if (!formData.customer_name.trim()) { toast.error("Customer name is required"); return; }
+    const emailTrimmed = formData.customer_email.trim();
+    if (!selectedCustomerId) {
+      if (!emailTrimmed) { toast.error("Email is required for new customers"); return; }
+      if (!isValidEmail(emailTrimmed)) { toast.error("Enter a valid email address"); return; }
+    } else if (emailTrimmed && !isValidEmail(emailTrimmed)) {
+      toast.error("Enter a valid email address"); return;
+    }
     if (!formData.order_number.trim()) { toast.error("Order number is required"); return; }
     if (!formData.roll_count || formData.roll_count < 1) { toast.error("Roll count must be at least 1"); return; }
 
@@ -149,7 +156,7 @@ export default function NewDropoffForm({ open, onOpenChange, onSuccess, customer
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           customer_name:  formData.customer_name.trim(),
-          customer_email: formData.customer_email.trim() || undefined,
+          customer_email: emailTrimmed ? normalizeEmail(emailTrimmed) : undefined,
           order_number:   formData.order_number.trim(),
           dropoff_date:   formData.dropoff_date,
           roll_count:     Number(formData.roll_count),
@@ -296,8 +303,9 @@ export default function NewDropoffForm({ open, onOpenChange, onSuccess, customer
             <Label htmlFor="customer_email" className="flex items-center gap-2 text-slate-700">
               <Mail className="w-3.5 h-3.5" /> Email {!selectedCustomerId && "*"}
             </Label>
-            <Input id="customer_email" type="email" value={formData.customer_email}
-              placeholder="customer@email.com" required={!selectedCustomerId}
+            <Input id="customer_email" type="text" inputMode="email" autoComplete="email"
+              value={formData.customer_email}
+              placeholder="customer@email.com"
               className="border-slate-200"
               onChange={(e) => { set("customer_email", e.target.value); setShowSuggestions(true); setSelectedCustomerId(null); }}
               onBlur={(e) => { void lookupCustomerByEmail(e.target.value); }} />
