@@ -1,13 +1,16 @@
 import { NextResponse } from "next/server";
-import { getCustomers, createCustomer } from "@/lib/db";
+import { getCustomers, getCustomersWithSummaries, createCustomer } from "@/lib/db";
 import { requireAuth } from "@/lib/api-auth";
+import { isValidEmail, normalizeEmail } from "@/lib/validation";
 
-export async function GET() {
+export async function GET(req: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
 
   try {
-    const customers = await getCustomers();
+    const { searchParams } = new URL(req.url);
+    const withStats = searchParams.get("stats") === "1";
+    const customers = withStats ? await getCustomersWithSummaries() : await getCustomers();
     return NextResponse.json(customers);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Unknown error";
@@ -23,17 +26,31 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
     const {
-      first_name, last_name, email, normalized_name, total_rolls, total_dropoffs,
-      notes, last_dropoff_date, last_order_number, current_rolls,
+      first_name, last_name, email, phone, normalized_name, total_rolls, total_dropoffs,
+      notes, preferred_contact_method, default_film_type, default_film_process,
+      default_scan_size, default_delivery_preference,
+      last_dropoff_date, last_order_number, current_rolls,
     } = body;
+
+    if (email && !isValidEmail(email)) {
+      return NextResponse.json({ error: "Invalid email address" }, { status: 400 });
+    }
+
     const customer = await createCustomer({
+      user_id: auth.id,
       first_name,
       last_name,
-      email,
+      email: email ? normalizeEmail(email) : undefined,
+      phone,
       normalized_name,
       total_rolls,
       total_dropoffs,
       notes,
+      preferred_contact_method,
+      default_film_type,
+      default_film_process,
+      default_scan_size,
+      default_delivery_preference,
       last_dropoff_date,
       last_order_number,
       current_rolls,

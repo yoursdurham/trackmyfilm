@@ -1,20 +1,13 @@
 import { NextResponse } from "next/server";
 import { getOrderByNumber, getCustomerByEmail, getOrdersByCustomerId } from "@/lib/db";
 import { normalizeEmail, normalizeOrderNumber } from "@/lib/validation";
-import type { FilmOrder } from "@/lib/types";
+import { serializeOrderForPublicTracking } from "@/lib/tracking-public";
 
 function hasValidTrackingToken(token: string | null) {
   void token;
   // Future secure-token validation belongs here. Until then, public lookup
   // responses must never expose the download URL.
   return false;
-}
-
-function serializeOrderForTracking(order: FilmOrder, tokenIsValid: boolean) {
-  if (tokenIsValid) return order;
-  const publicOrder: Partial<FilmOrder> = { ...order };
-  delete publicOrder.wetransfer_link;
-  return publicOrder;
 }
 
 export async function GET(req: Request) {
@@ -27,7 +20,7 @@ export async function GET(req: Request) {
     if (orderNumber) {
       const order = await getOrderByNumber(normalizeOrderNumber(orderNumber));
       if (!order) return NextResponse.json([], { status: 200 });
-      return NextResponse.json([serializeOrderForTracking(order, tokenIsValid)]);
+      return NextResponse.json([serializeOrderForPublicTracking(order, tokenIsValid)]);
     }
 
     if (email) {
@@ -37,7 +30,7 @@ export async function GET(req: Request) {
       const orders = await getOrdersByCustomerId(customer.id);
       return NextResponse.json({
         customer,
-        orders: orders.map((order) => serializeOrderForTracking(order, tokenIsValid)),
+        orders: orders.map((order) => serializeOrderForPublicTracking(order, tokenIsValid)),
       });
     }
 

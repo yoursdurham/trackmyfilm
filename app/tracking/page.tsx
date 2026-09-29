@@ -23,6 +23,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import FilmProcessBadge from "@/components/FilmProcessBadge";
 import { isProcessOnlyOrder } from "@/lib/order-service";
+import { getPartialScanProgress, isMixedScanOrder } from "@/lib/scan-batch";
 import type { FilmOrder, OrderStatus, StatusHistoryEntry } from "@/lib/types";
 
 type StatusStep = {
@@ -443,6 +444,8 @@ function TrackingContent() {
 
               {orders.map((order) => {
                 const processOnlyOrder = isProcessOnlyOrder(order);
+                const mixedScanOrder = isMixedScanOrder(order);
+                const partialProgress = mixedScanOrder ? getPartialScanProgress(order) : [];
 
                 return (
                 <Card
@@ -471,6 +474,31 @@ function TrackingContent() {
                       statusHistory={order.status_history}
                       processOnly={processOnlyOrder}
                     />
+
+                    {mixedScanOrder && order.status !== "Scans Sent" && partialProgress.some((p) => p.delivered || !p.delivered) ? (
+                      <div className="mt-6 rounded-lg border border-purple-100 bg-purple-50/60 px-4 py-3 text-sm text-slate-700">
+                        <p className="mb-2 font-semibold text-purple-900">Scan delivery progress</p>
+                        <ul className="space-y-1.5">
+                          {partialProgress.map((item) => (
+                            <li key={item.batch}>
+                              {item.delivered ? (
+                                <span>
+                                  <strong>{item.batch === "Color" ? "Color scans" : "B&W scans"} sent</strong>
+                                  {item.deliveredAt
+                                    ? ` — ${format(new Date(item.deliveredAt), "MMM d")}`
+                                    : ""}
+                                  . Download link was emailed to you.
+                                </span>
+                              ) : (
+                                <span>
+                                  <strong>{item.batch === "Color" ? "Color scans" : "B&W scans"}</strong> still being processed
+                                </span>
+                              )}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : null}
 
                     <div className="grid grid-cols-1 gap-4 border-t border-slate-100 pt-6 sm:grid-cols-2">
                       <div className="flex items-center gap-3">

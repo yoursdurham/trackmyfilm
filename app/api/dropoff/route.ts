@@ -21,10 +21,22 @@ import {
   getCustomerByEmailOrName, createCustomer, updateCustomer,
   createOrder, getOrderByNumber,
 } from "@/lib/db";
-import { normalizeEmail, normalizeCustomerName, normalizeOrderNumber } from "@/lib/validation";
+import { normalizeEmail, normalizeCustomerName, normalizeOrderNumber, isValidEmail } from "@/lib/validation";
 import { requireAuth } from "@/lib/api-auth";
 import { sendOrderEmail } from "@/lib/email-service";
-import type { Customer, RollDetail } from "@/lib/types";
+import type { Customer, FilmProcess, RollDetail } from "@/lib/types";
+
+function deriveOrderFilmProcess(roll_details: RollDetail[] | undefined, fallback: string): FilmProcess {
+  if (!roll_details?.length) return fallback as FilmProcess;
+  const hasColor = roll_details.some(
+    (r) => r.film_process === "Color" || r.film_process === "Both"
+  );
+  const hasBw = roll_details.some(
+    (r) => r.film_process === "Black & White" || r.film_process === "Both"
+  );
+  if (hasColor && hasBw) return "Both";
+  return roll_details[0].film_process;
+}
 
 export async function POST(req: Request) {
   const auth = await requireAuth();
@@ -76,6 +88,10 @@ export async function POST(req: Request) {
   const normalizedOrderNum  = normalizeOrderNumber(order_number);
   const now                 = new Date().toISOString();
 
+  if (normalizedEmail && !isValidEmail(normalizedEmail)) {
+    return NextResponse.json({ error: "Invalid customer email address" }, { status: 400 });
+  }
+
   // ── Duplicate order number check ──────────────────────────────────────
   const existingOrder = await getOrderByNumber(normalizedOrderNum);
   if (existingOrder) {
@@ -85,17 +101,22 @@ export async function POST(req: Request) {
     );
   }
 
-  // ── Find or create customer ───────────────────────────────────────────
+  // ── Find or create customer (email is primary match key) ───────────────
   let customer: Customer | null = await getCustomerByEmailOrName(normalizedEmail, normalizedName);
+  const isNewCustomer = !customer;
 
   if (!customer) {
     customer = await createCustomer({
+      user_id:         auth.id,
       first_name:      firstName,
       last_name:       lastName ?? undefined,
       email:           normalizedEmail ?? undefined,
       normalized_name: normalizedName,
       total_rolls:     0,
       total_dropoffs:  0,
+      default_film_type: film_type as Customer["default_film_type"],
+      default_film_process: film_process as Customer["default_film_process"],
+      default_scan_size: roll_details?.[0]?.scan_size,
     });
 
     if (!customer) {
@@ -105,6 +126,8 @@ export async function POST(req: Request) {
 
   const newTotalRolls    = (customer.total_rolls    || 0) + roll_count;
   const newTotalDropoffs = (customer.total_dropoffs || 0) + 1;
+
+  const resolvedFilmProcess = deriveOrderFilmProcess(roll_details, film_process);
 
   // ── Create order ──────────────────────────────────────────────────────
   let order;
@@ -116,8 +139,8 @@ export async function POST(req: Request) {
       order_number:         normalizedOrderNum,
       dropoff_date,
       roll_count,
-      film_type:            film_type as "35mm" | "120" | "Disposable Camera",
-      film_process:         film_process as "Color" | "Black & White" | "Both",
+      film_type:            film_type as "35mm" | "120" | "110" | "Disposable Camera",
+      film_process:         resolvedFilmProcess,
       film_stock:           film_stock ?? undefined,
       roll_details:         roll_details ?? undefined,
       prints_4x6:           prints_4x6 ?? undefined,
@@ -137,13 +160,23 @@ export async function POST(req: Request) {
 
   // ── Update customer totals ────────────────────────────────────────────
   try {
-    await updateCustomer(customer.id, {
+    const customerPatch: Partial<Customer> = {
       total_rolls:       newTotalRolls,
       total_dropoffs:    newTotalDropoffs,
       last_order_number: normalizedOrderNum,
       current_rolls:     roll_count,
       last_dropoff_date: dropoff_date,
-    });
+    };
+
+    if (!isNewCustomer) {
+      customerPatch.default_film_type = film_type as Customer["default_film_type"];
+      customerPatch.default_film_process = film_process as Customer["default_film_process"];
+      if (roll_details?.[0]?.scan_size) {
+        customerPatch.default_scan_size = roll_details[0].scan_size;
+      }
+    }
+
+    await updateCustomer(customer.id, customerPatch);
   } catch {
     // Order was created successfully — log the failure but don't abort the response
     console.error(`[dropoff] Failed to update totals for customer ${customer.id} on order ${normalizedOrderNum}`);
@@ -194,7 +227,7 @@ export async function POST(req: Request) {
     customer: {
       id:             customer.id,
       name:           `${customer.first_name} ${customer.last_name ?? ""}`.trim(),
-      isNew:          newTotalDropoffs === 1,
+      isNew:          isNewCustomer,
       total_dropoffs: newTotalDropoffs,
     },
     email: emailResult,

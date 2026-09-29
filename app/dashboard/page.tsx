@@ -64,6 +64,12 @@ export default function Dashboard() {
   const [selectedOrderIds, setSelectedOrderIds] = useState<Set<string>>(new Set());
   const queryClient = useQueryClient();
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const initialSearch = params.get("search");
+    if (initialSearch) setSearchQuery(initialSearch);
+  }, []);
+
   const { data: orders = [], isLoading } = useQuery<FilmOrder[]>({
     queryKey: ["filmOrders"],
     queryFn: async () => {

@@ -33,7 +33,7 @@ const FILM_STOCKS = [
   "Lomography Color 400",
 ];
 
-const FILM_TYPES: FilmType[] = ["35mm", "120"];
+const FILM_TYPES: FilmType[] = ["35mm", "120", "110"];
 const FILM_PROCESSES: FilmProcess[] = ["Color", "Black & White"];
 const SCAN_SIZES = ["Standard", "High-Res", "TIFF", "Process Only"] as const;
 
@@ -206,6 +206,41 @@ export default function NewDropoffForm({ open, onOpenChange, onSuccess, customer
     }));
     setSelectedCustomerId(c.id);
     setShowSuggestions(false);
+    applyCustomerDefaults(c);
+  };
+
+  const applyCustomerDefaults = (customer: Customer) => {
+    if (!customer.default_film_type && !customer.default_film_process && !customer.default_scan_size) {
+      return;
+    }
+    setRolls((prev) => prev.map((roll) => ({
+      ...roll,
+      film_type: customer.default_film_type || roll.film_type,
+      film_process: customer.default_film_process || roll.film_process,
+      scan_size: customer.default_scan_size || roll.scan_size,
+    })));
+  };
+
+  const lookupCustomerByEmail = async (email: string) => {
+    const normalized = email.trim().toLowerCase();
+    if (!normalized) return;
+    const match = customers.find((c) => c.email?.toLowerCase() === normalized);
+    if (match) {
+      setSelectedCustomerId(match.id);
+      applyCustomerDefaults(match);
+      return;
+    }
+    try {
+      const response = await fetch(`/api/customers/lookup?email=${encodeURIComponent(normalized)}`);
+      if (!response.ok) return;
+      const found = await response.json() as Customer | null;
+      if (found) {
+        setSelectedCustomerId(found.id);
+        applyCustomerDefaults(found);
+      }
+    } catch {
+      // ignore lookup failures during typing
+    }
   };
 
   return (
@@ -251,7 +286,8 @@ export default function NewDropoffForm({ open, onOpenChange, onSuccess, customer
             <Input id="customer_email" type="email" value={formData.customer_email}
               placeholder="customer@email.com" required={!selectedCustomerId}
               className="border-slate-200"
-              onChange={(e) => { set("customer_email", e.target.value); setShowSuggestions(true); setSelectedCustomerId(null); }} />
+              onChange={(e) => { set("customer_email", e.target.value); setShowSuggestions(true); setSelectedCustomerId(null); }}
+              onBlur={(e) => { void lookupCustomerByEmail(e.target.value); }} />
             <p className="text-xs text-slate-500">Confirmation email will be sent to this address</p>
           </div>
 

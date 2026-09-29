@@ -20,6 +20,7 @@ interface ReportMetrics {
   totalColorRolls: number;
   total35mmRolls: number;
   total120Rolls: number;
+  total110Rolls: number;
   total4x6Prints: number;
   filmStockUsage: { stock: string; count: number }[];
   scanResolutionUsage: { resolution: string; count: number }[];
@@ -74,6 +75,7 @@ export default function Reports() {
     let totalColorRolls = 0;
     let total35mmRolls = 0;
     let total120Rolls = 0;
+    let total110Rolls = 0;
     let total4x6Prints = 0;
 
     orderList.forEach((order) => {
@@ -85,6 +87,7 @@ export default function Reports() {
           if (roll.film_process === "Color") totalColorRolls++;
           if (roll.film_type === "35mm") total35mmRolls++;
           if (roll.film_type === "120") total120Rolls++;
+          if (roll.film_type === "110") total110Rolls++;
           if (roll.prints_4x6) total4x6Prints++;
           if (roll.film_stock) {
             filmStockMap.set(roll.film_stock, (filmStockMap.get(roll.film_stock) || 0) + 1);
@@ -99,6 +102,7 @@ export default function Reports() {
         if (order.film_process === "Color") totalColorRolls += order.roll_count;
         if (order.film_type === "35mm") total35mmRolls += order.roll_count;
         if (order.film_type === "120") total120Rolls += order.roll_count;
+        if (order.film_type === "110") total110Rolls += order.roll_count;
         if (order.prints_4x6) total4x6Prints += order.roll_count;
         if (order.film_stock) {
           filmStockMap.set(order.film_stock, (filmStockMap.get(order.film_stock) || 0) + order.roll_count);
@@ -120,6 +124,7 @@ export default function Reports() {
       totalColorRolls,
       total35mmRolls,
       total120Rolls,
+      total110Rolls,
       total4x6Prints,
       filmStockUsage,
       scanResolutionUsage,
@@ -142,6 +147,7 @@ export default function Reports() {
       `Total Color Rolls,${metrics.totalColorRolls}`,
       `Total 35mm Rolls,${metrics.total35mmRolls}`,
       `Total 120 Rolls,${metrics.total120Rolls}`,
+      `Total 110 Rolls,${metrics.total110Rolls}`,
       `Total 4x6" Prints Done,${metrics.total4x6Prints}`,
       `Average Turnaround Time (days),${turnaround.averageDays !== null ? (Math.round(turnaround.averageDays * 10) / 10).toFixed(1) : ""}`,
       `Completed Orders (turnaround),${turnaround.orderCount}`,
@@ -278,10 +284,14 @@ export default function Reports() {
                   <span className="text-sm text-slate-600">120</span>
                   <span className="text-2xl font-bold text-slate-800">{metrics.total120Rolls}</span>
                 </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-slate-600">110</span>
+                  <span className="text-2xl font-bold text-slate-800">{metrics.total110Rolls}</span>
+                </div>
                 <div className="mt-4 pt-4 border-t border-slate-200 flex items-center justify-between font-semibold">
                   <span className="text-slate-700">Total Rolls</span>
                   <span className="text-2xl text-slate-800">
-                    {metrics.total35mmRolls + metrics.total120Rolls}
+                    {metrics.total35mmRolls + metrics.total120Rolls + metrics.total110Rolls}
                   </span>
                 </div>
               </div>

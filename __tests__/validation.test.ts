@@ -8,6 +8,7 @@ import {
   normalizeOrderNumber,
   isValidUrl,
   ensureHttps,
+  isValidEmail,
 } from "../lib/validation";
 
 // ─── Status transitions ───────────────────────────────────────────────────────
@@ -165,6 +166,24 @@ describe("normalizeEmail", () => {
 
   it("leaves already-normalized email unchanged", () => {
     expect(normalizeEmail("hello@yoursdurham.com")).toBe("hello@yoursdurham.com");
+  });
+});
+
+describe("isValidEmail", () => {
+  it("accepts a standard email", () => {
+    expect(isValidEmail("user@example.com")).toBe(true);
+  });
+
+  it("rejects missing @", () => {
+    expect(isValidEmail("userexample.com")).toBe(false);
+  });
+
+  it("rejects empty string", () => {
+    expect(isValidEmail("")).toBe(false);
+  });
+
+  it("rejects whitespace only", () => {
+    expect(isValidEmail("   ")).toBe(false);
   });
 });
 

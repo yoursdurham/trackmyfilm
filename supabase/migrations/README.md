@@ -6,7 +6,10 @@ Run these in order in: **Supabase Dashboard → SQL Editor → New Query**
 |---|---|---|
 | `001_initial_schema.sql` | Creates tables, indexes, RLS | Yes — run first |
 | `002_import_base44_data.sql` | Imports test data from Base44 exports | Optional — dev/reference only |
-| `008_add_process_only_finished_email_timestamp.sql` | Adds a dedicated Process Only completion email timestamp | Yes — run before deploying this email fix |
+| `009_add_film_delay_email_sent_at.sql` | Adds `film_delay_email_sent_at` to film_orders | Yes |
+| `010_customer_profile_fields.sql` | Adds customer profile/preference columns, email uniqueness, `updated_at` | Yes |
+| `011_backfill_customer_orders.sql` | Backfills customers from unlinked orders by email | Yes — run after 010 |
+| `012_partial_scan_deliveries.sql` | Partial Color/B&W scan links and timestamps on mixed orders | Yes — for partial scan workflow |
 
 ## Notes
 

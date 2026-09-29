@@ -5,7 +5,8 @@
  */
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import type { Customer, FilmOrder } from "./types";
+import type { Customer, CustomerSummary, FilmOrder } from "./types";
+import { buildCustomerStatsMap, computeCustomerStats } from "./customer-stats";
 
 type CustomerInsert = Omit<Customer, "id" | "created_at">;
 
@@ -150,12 +151,41 @@ export async function getCustomerById(id: string): Promise<Customer | null> {
   return data as Customer | null;
 }
 
-export async function getCustomerByEmail(email: string): Promise<Customer | null> {
-  const { data, error } = await getSupabase()
+export async function getCustomersWithSummaries(): Promise<CustomerSummary[]> {
+  const [customers, orders] = await Promise.all([getCustomers(), getOrders("desc")]);
+  const statsMap = buildCustomerStatsMap(orders);
+
+  return customers.map((customer) => {
+    const stats = statsMap.get(customer.id) ?? computeCustomerStats([]);
+    return {
+      ...customer,
+      total_orders: stats.total_orders,
+      last_order_date: stats.last_order_date,
+      common_film_process: stats.common_film_process,
+      common_scan_size: stats.common_scan_size,
+    };
+  });
+}
+
+export async function getCustomerProfile(id: string) {
+  const customer = await getCustomerById(id);
+  if (!customer) return null;
+  const orders = await getOrdersByCustomerId(id);
+  const stats = computeCustomerStats(orders);
+  return { customer, orders, stats };
+}
+
+export async function getCustomerByEmail(email: string, userId?: string | null): Promise<Customer | null> {
+  let query = getSupabase()
     .from("customers")
     .select("*")
-    .ilike("email", email)
-    .maybeSingle();
+    .ilike("email", email);
+
+  if (userId) {
+    query = query.eq("user_id", userId);
+  }
+
+  const { data, error } = await query.maybeSingle();
   if (error) throw new Error(error.message);
   return data as Customer | null;
 }
@@ -186,20 +216,29 @@ export async function getCustomerByEmailOrName(
 
 export async function createCustomer(data: CustomerInsert): Promise<Customer> {
   const {
-    first_name, last_name, email, normalized_name, total_rolls, total_dropoffs,
-    notes, last_dropoff_date, last_order_number, current_rolls,
+    user_id, first_name, last_name, email, phone, normalized_name,
+    total_rolls, total_dropoffs, notes, preferred_contact_method,
+    default_film_type, default_film_process, default_scan_size, default_delivery_preference,
+    last_dropoff_date, last_order_number, current_rolls,
   } = data;
 
   const { data: created, error } = await getSupabase()
     .from("customers")
     .insert({
+      user_id,
       first_name,
       last_name,
       email,
+      phone,
       normalized_name,
       total_rolls,
       total_dropoffs,
       notes,
+      preferred_contact_method,
+      default_film_type,
+      default_film_process,
+      default_scan_size,
+      default_delivery_preference,
       last_dropoff_date,
       last_order_number,
       current_rolls,

@@ -1,6 +1,6 @@
 export type OrderStatus = "Received by Yours" | "Received at Lab" | "Ready for Pickup" | "Scans Sent";
 
-export type FilmType = "35mm" | "120" | "Disposable Camera";
+export type FilmType = "35mm" | "120" | "110" | "Disposable Camera";
 export type FilmProcess = "Color" | "Black & White" | "Both";
 
 export interface RollDetail {
@@ -16,19 +16,37 @@ export interface StatusHistoryEntry {
   changed_at: string; // ISO string
 }
 
+export type ContactMethod = "email" | "phone" | "text";
+export type DeliveryPreference = "pickup" | "ship" | "email";
+
 export interface Customer {
   id: string;
+  user_id?: string;
   first_name: string;
   last_name?: string;
   email?: string;
+  phone?: string;
   normalized_name?: string;
   total_rolls: number;
   total_dropoffs: number;
   notes?: string;
+  preferred_contact_method?: ContactMethod;
+  default_film_type?: FilmType;
+  default_film_process?: FilmProcess;
+  default_scan_size?: RollDetail["scan_size"];
+  default_delivery_preference?: DeliveryPreference;
   last_dropoff_date?: string;  // YYYY-MM-DD
   last_order_number?: string;
   current_rolls?: number;
   created_at?: string;
+  updated_at?: string;
+}
+
+export interface CustomerSummary extends Customer {
+  total_orders: number;
+  last_order_date: string | null;
+  common_film_process: FilmProcess | null;
+  common_scan_size: RollDetail["scan_size"] | null;
 }
 
 export interface FilmOrder {
@@ -49,6 +67,12 @@ export interface FilmOrder {
   dropoff_date: string; // YYYY-MM-DD
   dropoff_number: number;
   wetransfer_link?: string;
+  color_scans_wetransfer_link?: string;
+  color_scans_delivered_at?: string;
+  color_partial_email_sent_at?: string;
+  bw_scans_wetransfer_link?: string;
+  bw_scans_delivered_at?: string;
+  bw_partial_email_sent_at?: string;
   notes?: string;
   customer_notes?: string;
   received_by_yours_at?: string;

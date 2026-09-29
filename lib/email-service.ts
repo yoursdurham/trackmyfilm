@@ -1,5 +1,6 @@
 import { getOrderById, updateOrder } from "@/lib/db";
 import { normalizeEmail, isWithinDedupWindow } from "@/lib/validation";
+import { pendingBatchLabel, type ScanDeliveryBatch } from "@/lib/scan-batch";
 import type { FilmOrder } from "@/lib/types";
 
 type TemplateName =
@@ -7,7 +8,8 @@ type TemplateName =
   | "film_at_lab"
   | "process_only_finished"
   | "scans_sent"
-  | "film_delay";
+  | "film_delay"
+  | "partial_scans_sent";
 
 type ResendResponse = {
   id?: string;
@@ -27,7 +29,7 @@ export class EmailSendError extends Error {
   }
 }
 
-const DEDUP_FIELDS: Record<TemplateName, keyof FilmOrder> = {
+const DEDUP_FIELDS: Record<Exclude<TemplateName, "partial_scans_sent">, keyof FilmOrder> = {
   film_drop_received: "received_email_sent_at",
   film_at_lab: "at_lab_email_sent_at",
   process_only_finished: "process_only_finished_emailed_at",
@@ -35,7 +37,14 @@ const DEDUP_FIELDS: Record<TemplateName, keyof FilmOrder> = {
   film_delay: "film_delay_email_sent_at",
 };
 
-export const KNOWN_EMAIL_TEMPLATES = Object.keys(DEDUP_FIELDS) as TemplateName[];
+function partialEmailDedupField(batch: ScanDeliveryBatch): keyof FilmOrder {
+  return batch === "Color" ? "color_partial_email_sent_at" : "bw_partial_email_sent_at";
+}
+
+export const KNOWN_EMAIL_TEMPLATES: TemplateName[] = [
+  ...Object.keys(DEDUP_FIELDS) as Array<Exclude<TemplateName, "partial_scans_sent">>,
+  "partial_scans_sent",
+];
 
 function getTemplateIds(): Record<TemplateName, string | undefined> {
   return {
@@ -44,6 +53,7 @@ function getTemplateIds(): Record<TemplateName, string | undefined> {
     process_only_finished: process.env.RESEND_TEMPLATE_PROCESS_ONLY_FINISHED,
     scans_sent: process.env.RESEND_TEMPLATE_SCANS_SENT,
     film_delay: process.env.RESEND_TEMPLATE_FILM_DELAY,
+    partial_scans_sent: process.env.RESEND_TEMPLATE_PARTIAL_SCANS_SENT,
   };
 }
 
@@ -90,7 +100,15 @@ function buildFilmDetailsHtml(rollDetails: unknown) {
     })
     .join("");
 }
-export async function sendOrderEmail(orderId: string, template: string) {
+export async function sendPartialScanEmail(orderId: string, batch: ScanDeliveryBatch) {
+  return sendOrderEmail(orderId, "partial_scans_sent", { partialBatch: batch });
+}
+
+export async function sendOrderEmail(
+  orderId: string,
+  template: string,
+  options?: { partialBatch?: ScanDeliveryBatch }
+) {
   if (!orderId || !template) {
     throw new EmailSendError("order_id and template are required", 400);
   }
@@ -100,6 +118,10 @@ export async function sendOrderEmail(orderId: string, template: string) {
       `Unknown template "${template}". Valid: ${KNOWN_EMAIL_TEMPLATES.join(", ")}`,
       400
     );
+  }
+
+  if (template === "partial_scans_sent" && !options?.partialBatch) {
+    throw new EmailSendError("partial_scans_sent requires partialBatch (Color or Black & White)", 400);
   }
 
   const RESEND_API_KEY = process.env.RESEND_API_KEY;
@@ -118,10 +140,17 @@ export async function sendOrderEmail(orderId: string, template: string) {
     throw new EmailSendError("Order has no customer email - cannot send", 400);
   }
 
-  const dedupField = DEDUP_FIELDS[template];
-  const lastSent = order[dedupField] as string | undefined;
-  if (shouldSkipEmail(template, lastSent)) {
-    const reason = template === "process_only_finished" || template === "film_delay"
+  const dedupField =
+    template === "partial_scans_sent" && options?.partialBatch
+      ? partialEmailDedupField(options.partialBatch)
+      : (DEDUP_FIELDS as Record<string, keyof FilmOrder>)[template];
+  const lastSent = dedupField ? (order[dedupField] as string | undefined) : undefined;
+  if (
+    template === "partial_scans_sent"
+      ? Boolean(lastSent)
+      : shouldSkipEmail(template as Exclude<TemplateName, "partial_scans_sent">, lastSent)
+  ) {
+    const reason = template === "partial_scans_sent" || template === "process_only_finished" || template === "film_delay"
       ? `${dedupField} is already set for this order`
       : `${dedupField} is within the one-hour dedup window`;
     console.log("[email] Skipping duplicate send:", {
@@ -198,6 +227,22 @@ const variables: Record<string, string> = {
 console.log("EMAIL VARIABLES", JSON.stringify(variables, null, 2));
   if (template === "scans_sent") {
     variables.wetransfer_link = order.wetransfer_link ?? "";
+    variables.color_wetransfer_link = order.color_scans_wetransfer_link ?? "";
+    variables.bw_wetransfer_link = order.bw_scans_wetransfer_link ?? "";
+  }
+
+  if (template === "partial_scans_sent" && options?.partialBatch) {
+    const batch = options.partialBatch;
+    const batchLink =
+      batch === "Color" ? order.color_scans_wetransfer_link : order.bw_scans_wetransfer_link;
+    const pending = pendingBatchLabel(order, batch);
+    variables.batch_label = batch === "Color" ? "Color" : "Black & White";
+    variables.wetransfer_link = batchLink ?? "";
+    variables.pending_batch_label = pending;
+    variables.partial_message =
+      batch === "Color"
+        ? "Good news — part of your order is ready. Your Color scans are available now. Your B&W film is still being processed and we'll send those scans separately as soon as they're ready."
+        : "Good news — part of your order is ready. Your B&W scans are available now. Any remaining work on your order is complete or was sent in an earlier email.";
   }
 
   if (template === "process_only_finished") {
@@ -282,7 +327,7 @@ console.log("EMAIL VARIABLES", JSON.stringify(variables, null, 2));
 
   const now = new Date().toISOString();
   await updateOrder(orderId, {
-    [dedupField]: now,
+    ...(dedupField ? { [dedupField]: now } : {}),
     email_status: "sent",
     email_error: null,
   });

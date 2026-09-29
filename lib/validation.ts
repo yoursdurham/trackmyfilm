@@ -46,6 +46,17 @@ export function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/**
+ * Returns true for a non-empty, reasonably formatted email address.
+ */
+export function isValidEmail(email: string): boolean {
+  const normalized = email.trim();
+  if (!normalized) return false;
+  return EMAIL_PATTERN.test(normalized);
+}
+
 /**
  * Normalises an order number: trim + uppercase.
  */

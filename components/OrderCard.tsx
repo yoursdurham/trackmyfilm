@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -20,7 +21,7 @@ import {
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
-import { Layers, ChevronDown, Calendar, Trash2, ExternalLink, Clock, ChevronRight, Copy, Loader2, RefreshCw, FileText, Pencil, Mail, User } from "lucide-react";
+import { Layers, ChevronDown, Calendar, Trash2, ExternalLink, Clock, ChevronRight, Copy, Loader2, RefreshCw, FileText, Pencil, Mail, User, Send } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import StatusBadge from "./StatusBadge";
@@ -29,10 +30,16 @@ import CopyField from "./CopyField";
 import { ORDER_STATUS, STATUS_FLOW, STATUS_TEMPLATE_MAP } from "@/lib/constants";
 import { getUrgentAgeDays, isUrgent } from "@/lib/order-urgency";
 import { getStatusOptionsForOrder, isProcessOnlyOrder } from "@/lib/order-service";
+import {
+  getPartialScanProgress,
+  isMixedScanOrder,
+  isPartialScanDeliveryComplete,
+  type ScanDeliveryBatch,
+} from "@/lib/scan-batch";
 import { isValidWetransferLink, ensureHttps } from "@/lib/validation";
 import type { FilmOrder, FilmProcess, FilmType, OrderStatus, RollDetail } from "@/lib/types";
 
-const FILM_TYPES: FilmType[] = ["35mm", "120"];
+const FILM_TYPES: FilmType[] = ["35mm", "120", "110"];
 const FILM_PROCESSES: FilmProcess[] = ["Color", "Black & White", "Both"];
 const SCAN_SIZES = ["Standard", "High-Res", "TIFF", "Process Only"] as const;
 
@@ -87,6 +94,11 @@ export default function OrderCard({
   const [pendingStatus, setPendingStatus] = useState<string | null>(null);
   const [wetransferLink, setWetransferLink] = useState("");
   const [sendScanEmail, setSendScanEmail] = useState(true);
+  const [showPartialDialog, setShowPartialDialog] = useState(false);
+  const [partialBatch, setPartialBatch] = useState<ScanDeliveryBatch>("Color");
+  const [partialLink, setPartialLink] = useState("");
+  const [sendPartialEmail, setSendPartialEmail] = useState(true);
+  const [isSendingPartial, setIsSendingPartial] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [isEditingOrder, setIsEditingOrder] = useState(false);
@@ -151,6 +163,14 @@ export default function OrderCard({
           },
         ]
       : [];
+  const mixedScanOrder = isMixedScanOrder(order);
+  const partialProgress = mixedScanOrder ? getPartialScanProgress(order) : [];
+  const partialDeliveryComplete = !mixedScanOrder || isPartialScanDeliveryComplete(order);
+  const showPartialScanActions =
+    mixedScanOrder &&
+    order.status === ORDER_STATUS.RECEIVED_AT_LAB &&
+    !partialDeliveryComplete;
+
   const draftProcessOnly = orderDraft?.roll_details.length
     ? orderDraft.roll_details.every((roll) => roll.scan_size === "Process Only")
     : processOnlyOrder;
@@ -252,6 +272,13 @@ export default function OrderCard({
 
     // Scans Sent — open dialog for optional WeTransfer link + email toggle
     if (status === ORDER_STATUS.SCANS_SENT) {
+      if (mixedScanOrder && !isPartialScanDeliveryComplete(order)) {
+        toast.error(
+          "Send partial scans for Color and B&W first — use the Send Partial Scans button on this card.",
+          { duration: 6000 }
+        );
+        return;
+      }
       setWetransferLink(order.wetransfer_link || "");
       setSendScanEmail(true);
       setPendingStatus(status);
@@ -274,8 +301,50 @@ export default function OrderCard({
   const handleSaveLinkAndStatus = async () => {
     const raw = wetransferLink.trim();
     if (raw && !isValidWetransferLink(raw)) { toast.error("Please enter a valid WeTransfer link (wetransfer.com)"); return; }
+    if (!mixedScanOrder && !raw) {
+      toast.error("Please enter a WeTransfer link");
+      return;
+    }
     setShowLinkDialog(false);
     await doStatusChange(ORDER_STATUS.SCANS_SENT, raw ? ensureHttps(raw) : undefined, undefined, sendScanEmail);
+  };
+
+  const openPartialDialog = () => {
+    const next = partialProgress.find((p) => !p.delivered);
+    setPartialBatch(next?.batch ?? "Color");
+    setPartialLink("");
+    setSendPartialEmail(true);
+    setShowPartialDialog(true);
+  };
+
+  const handleSendPartialScans = async () => {
+    const raw = partialLink.trim();
+    if (!raw || !isValidWetransferLink(raw)) {
+      toast.error("Please enter a valid WeTransfer link (wetransfer.com)");
+      return;
+    }
+    setIsSendingPartial(true);
+    try {
+      const res = await fetch(`/api/orders/${order.id}/partial-scans`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          batch: partialBatch,
+          wetransfer_link: ensureHttps(raw),
+          send_email: sendPartialEmail,
+        }),
+      });
+      const data = await res.json() as { error?: string; emailError?: string };
+      if (!res.ok) throw new Error(data.error ?? "Failed to record partial scans");
+      toast.success(`${partialBatch} scans marked as sent`);
+      if (data.emailError) toast.error(`Email failed: ${data.emailError}`);
+      setShowPartialDialog(false);
+      onOrderUpdated?.();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to send partial scans");
+    } finally {
+      setIsSendingPartial(false);
+    }
   };
 
   const handleSaveNotes = async () => {
@@ -343,13 +412,26 @@ export default function OrderCard({
             </div>
           </div>
           <div className="mt-3 space-y-1.5">
-            <CopyField
-              label="Name"
-              value={order.customer_name}
-              variant="metadata"
-              icon={User}
-              valueClassName="font-medium text-slate-800"
-            />
+            {order.customer_id ? (
+              <div className="flex items-center gap-2 text-sm text-slate-600">
+                <User className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                <Link
+                  href={`/customers/${order.customer_id}`}
+                  className="truncate font-medium text-amber-700 hover:text-amber-800 hover:underline"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {order.customer_name}
+                </Link>
+              </div>
+            ) : (
+              <CopyField
+                label="Name"
+                value={order.customer_name}
+                variant="metadata"
+                icon={User}
+                valueClassName="font-medium text-slate-800"
+              />
+            )}
             {order.customer_email ? (
               <CopyField
                 label="Email"
@@ -374,6 +456,34 @@ export default function OrderCard({
             <span>{order.roll_count} roll{order.roll_count > 1 ? "s" : ""}</span>
             {order.film_type && <span className="text-slate-400">• {order.film_type}</span>}
           </div>
+          {mixedScanOrder && order.status === ORDER_STATUS.RECEIVED_AT_LAB && partialProgress.length > 0 ? (
+            <div className="space-y-2 rounded-lg border border-purple-100 bg-purple-50/50 px-3 py-2 text-xs">
+              <p className="font-semibold text-purple-900">Partial scan progress</p>
+              {partialProgress.map((item) => (
+                <div key={item.batch} className="flex flex-wrap items-center justify-between gap-2 text-slate-700">
+                  <span>{item.label}</span>
+                  {item.delivered && item.deliveredAt ? (
+                    <span className="font-medium text-[#5E8068]">
+                      Sent {format(new Date(item.deliveredAt), "MMM d")}
+                    </span>
+                  ) : (
+                    <span className="text-slate-500">Waiting</span>
+                  )}
+                </div>
+              ))}
+              {showPartialScanActions ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  className="mt-1 h-8 w-full bg-purple-700 text-xs text-white hover:bg-purple-800"
+                  onClick={openPartialDialog}
+                >
+                  <Send className="mr-1.5 h-3.5 w-3.5" />
+                  Send Partial Scans
+                </Button>
+              ) : null}
+            </div>
+          ) : null}
           {(order.film_process || processOnlyOrder) && (
             <div className="flex flex-wrap items-center gap-2 text-sm text-slate-600">
               <span className="text-slate-400">Process:</span>
@@ -421,7 +531,26 @@ export default function OrderCard({
             </div>
           ) : null}
           {order.status === ORDER_STATUS.SCANS_SENT && !processOnlyOrder && (
-            order.wetransfer_link ? (
+            mixedScanOrder ? (
+              <div className="space-y-2">
+                {partialProgress.map((item) =>
+                  item.wetransferLink ? (
+                    <div key={item.batch} className="flex gap-2">
+                      <Button size="sm" variant="outline"
+                        className="h-7 min-w-0 flex-1 border-[var(--accent-green)]/40 text-xs text-[#5E8068] hover:bg-[var(--accent-green)]/10"
+                        onClick={() => { navigator.clipboard.writeText(item.wetransferLink!); toast.success(`${item.label} link copied!`); }}>
+                        <Copy className="w-3 h-3 mr-1 shrink-0" /> {item.label}
+                      </Button>
+                      <Button size="sm" variant="outline"
+                        className="h-7 w-9 shrink-0 px-0 border-[var(--accent-green)]/40 text-[#5E8068] hover:bg-[var(--accent-green)]/10"
+                        onClick={() => window.open(item.wetransferLink, "_blank")}>
+                        <ExternalLink className="w-3 h-3" />
+                      </Button>
+                    </div>
+                  ) : null
+                )}
+              </div>
+            ) : order.wetransfer_link ? (
               <div className="flex gap-2">
                 <Button size="sm" variant="outline"
                   className="h-7 flex-1 border-[var(--accent-green)]/40 text-xs text-[#5E8068] hover:bg-[var(--accent-green)]/10"
@@ -440,6 +569,17 @@ export default function OrderCard({
               </div>
             )
           )}
+          {mixedScanOrder && order.status === ORDER_STATUS.RECEIVED_AT_LAB ? (
+            <div className="flex flex-wrap gap-2">
+              {partialProgress.filter((p) => p.wetransferLink).map((item) => (
+                <Button key={item.batch} size="sm" variant="outline"
+                  className="h-7 border-[var(--accent-green)]/40 text-xs text-[#5E8068] hover:bg-[var(--accent-green)]/10"
+                  onClick={() => { navigator.clipboard.writeText(item.wetransferLink!); toast.success("Link copied!"); }}>
+                  <Copy className="w-3 h-3 mr-1" /> {item.label}
+                </Button>
+              ))}
+            </div>
+          ) : null}
         </div>
 
         <div className={`mb-4 ${showQuestionsButton ? "flex gap-2" : ""}`}>
@@ -486,6 +626,18 @@ export default function OrderCard({
           </Collapsible>
         )}
 
+        {showPartialScanActions ? (
+          <Button
+            type="button"
+            size="sm"
+            className="mb-3 h-9 w-full bg-purple-700 text-white hover:bg-purple-800"
+            onClick={openPartialDialog}
+          >
+            <Send className="mr-2 h-4 w-4" />
+            Send Partial Scans
+          </Button>
+        ) : null}
+
         <div className="pt-3 border-t border-slate-100 flex gap-2">
           <DropdownMenu>
             <DropdownMenuTrigger
@@ -497,15 +649,39 @@ export default function OrderCard({
               }
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
+              {showPartialScanActions ? (
+                <DropdownMenuItem
+                  onClick={(event) => {
+                    event.preventDefault();
+                    openPartialDialog();
+                  }}
+                >
+                  <Send className="mr-2 h-3.5 w-3.5 text-purple-700" />
+                  Send Partial Scans…
+                </DropdownMenuItem>
+              ) : null}
               {statusOptions.map((status) => {
                 const targetIdx = STATUS_FLOW.indexOf(status);
                 const isBackward = targetIdx < currentIdx;
+                const scansSentBlocked =
+                  status === ORDER_STATUS.SCANS_SENT &&
+                  mixedScanOrder &&
+                  !isPartialScanDeliveryComplete(order);
                 return (
-                  <DropdownMenuItem key={status} onClick={() => handleStatusChangeClick(status)}
-                    className={order.status === status ? "bg-[var(--accent-tan)]/35 text-slate-800" : ""}>
+                  <DropdownMenuItem
+                    key={status}
+                    disabled={scansSentBlocked}
+                    onClick={() => handleStatusChangeClick(status)}
+                    className={order.status === status ? "bg-[var(--accent-tan)]/35 text-slate-800" : ""}
+                  >
                     <span className={`w-2 h-2 rounded-full mr-2 ${getStatusDotClass(status)}`} />
                     {status}
-                    {isBackward && <span className="ml-auto text-xs text-slate-400">↩ undo</span>}
+                    {scansSentBlocked ? (
+                      <span className="ml-auto text-xs text-slate-400">needs both batches</span>
+                    ) : null}
+                    {isBackward && !scansSentBlocked ? (
+                      <span className="ml-auto text-xs text-slate-400">↩ undo</span>
+                    ) : null}
                   </DropdownMenuItem>
                 );
               })}
@@ -1038,16 +1214,83 @@ export default function OrderCard({
         </DialogContent>
       </Dialog>
 
+      {/* Partial scans dialog */}
+      <Dialog open={showPartialDialog} onOpenChange={setShowPartialDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Send Partial Scans</DialogTitle>
+            <DialogDescription>
+              Record one batch without changing the order status. The order stays at Received at Lab until all batches are sent.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Which batch are you sending?</Label>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                {(["Color", "Black & White"] as const).map((batch) => {
+                  const delivered = partialProgress.find((p) => p.batch === batch)?.delivered;
+                  const selected = partialBatch === batch;
+                  return (
+                    <Button
+                      key={batch}
+                      type="button"
+                      variant="outline"
+                      disabled={delivered}
+                      className={`h-10 flex-1 justify-center ${
+                        selected && !delivered
+                          ? "border-purple-600 bg-purple-50 text-purple-900"
+                          : ""
+                      }`}
+                      onClick={() => setPartialBatch(batch)}
+                    >
+                      {batch}
+                      {delivered ? " ✓" : ""}
+                    </Button>
+                  );
+                })}
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="partial-wetransfer">WeTransfer Link</Label>
+              <Input id="partial-wetransfer" value={partialLink}
+                onChange={(e) => setPartialLink(e.target.value)}
+                placeholder="https://wetransfer.com/..." />
+            </div>
+            <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+              <Checkbox id="partial-email" checked={sendPartialEmail} onCheckedChange={(v) => setSendPartialEmail(!!v)} />
+              <label htmlFor="partial-email" className="text-sm font-medium text-slate-700 cursor-pointer">
+                Send partial delivery email to customer
+              </label>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowPartialDialog(false)}>Cancel</Button>
+            <Button onClick={handleSendPartialScans} disabled={isSendingPartial}>
+              {isSendingPartial ? <Loader2 className="h-4 w-4 animate-spin" /> : "Record & send"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Scans Sent dialog */}
       <Dialog open={showLinkDialog} onOpenChange={setShowLinkDialog}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Mark as Scans Sent</DialogTitle>
-            <DialogDescription>Optionally add a WeTransfer link for the customer</DialogDescription>
+            <DialogDescription>
+              {mixedScanOrder
+                ? "Both batches are recorded. Confirm completion — batch links are kept on the order."
+                : "Add a WeTransfer link for the customer"}
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="wetransfer">WeTransfer Link <span className="text-slate-400 font-normal">(optional)</span></Label>
+              <Label htmlFor="wetransfer">
+                WeTransfer Link{" "}
+                <span className="text-slate-400 font-normal">
+                  {mixedScanOrder ? "(optional — batch links already saved)" : "(required)"}
+                </span>
+              </Label>
               <Input id="wetransfer" value={wetransferLink}
                 onChange={(e) => setWetransferLink(e.target.value)}
                 placeholder="https://wetransfer.com/..." />

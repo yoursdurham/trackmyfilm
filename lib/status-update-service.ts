@@ -1,6 +1,7 @@
 import { getOrderById, updateOrder } from "@/lib/db";
 import { ORDER_STATUS, STATUS_TEMPLATE_MAP } from "@/lib/constants";
 import { isProcessOnlyOrder } from "@/lib/order-service";
+import { isMixedScanOrder, isPartialScanDeliveryComplete, scansSentBlockedReason } from "@/lib/scan-batch";
 import { isValidTransition, isKnownStatus, isValidUrl, ensureHttps } from "@/lib/validation";
 import { EmailSendError, sendOrderEmail } from "@/lib/email-service";
 import type { FilmOrder, OrderStatus, StatusHistoryEntry } from "@/lib/types";
@@ -80,6 +81,11 @@ export async function updateOrderStatus({
     };
   }
 
+  const blockedReason = scansSentBlockedReason(order, force);
+  if (new_status === ORDER_STATUS.SCANS_SENT && blockedReason) {
+    return { success: false, order_id, error: blockedReason };
+  }
+
   if (new_status === ORDER_STATUS.SCANS_SENT && wetransfer_link) {
     if (!isValidUrl(wetransfer_link)) {
       return { success: false, order_id, error: "Please enter a valid link" };
@@ -103,8 +109,17 @@ export async function updateOrderStatus({
   if (new_status === ORDER_STATUS.RECEIVED_AT_LAB) updateData.at_lab_at = now;
   if (new_status === ORDER_STATUS.SCANS_SENT) {
     updateData.scans_sent_at = now;
-    const rawLink = wetransfer_link || order.wetransfer_link;
-    updateData.wetransfer_link = rawLink ? ensureHttps(rawLink) : rawLink;
+    if (isMixedScanOrder(order) && isPartialScanDeliveryComplete(order)) {
+      const fallback =
+        order.bw_scans_wetransfer_link ||
+        order.color_scans_wetransfer_link ||
+        order.wetransfer_link;
+      const rawLink = wetransfer_link || fallback;
+      updateData.wetransfer_link = rawLink ? ensureHttps(rawLink) : rawLink;
+    } else {
+      const rawLink = wetransfer_link || order.wetransfer_link;
+      updateData.wetransfer_link = rawLink ? ensureHttps(rawLink) : rawLink;
+    }
   }
 
   await updateOrder(order_id, updateData);
