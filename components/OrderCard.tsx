@@ -70,7 +70,14 @@ type OrderDraft = {
 
 interface Props {
   order: FilmOrder;
-  onStatusChange: (id: string, status: string, wetransferLink?: string, force?: boolean, sendEmail?: boolean) => Promise<void>;
+  onStatusChange: (
+    id: string,
+    status: string,
+    wetransferLink?: string,
+    force?: boolean,
+    sendEmail?: boolean,
+    scanNotes?: string | null,
+  ) => Promise<void>;
   onDelete: (id: string) => void;
   onOrderUpdated?: () => void;
   showQuestionsButton?: boolean;
@@ -93,6 +100,7 @@ export default function OrderCard({
   const [showForceDialog, setShowForceDialog] = useState(false);
   const [pendingStatus, setPendingStatus] = useState<string | null>(null);
   const [wetransferLink, setWetransferLink] = useState("");
+  const [scanNotes, setScanNotes] = useState("");
   const [sendScanEmail, setSendScanEmail] = useState(true);
   const [showPartialDialog, setShowPartialDialog] = useState(false);
   const [partialBatch, setPartialBatch] = useState<ScanDeliveryBatch>("Color");
@@ -280,6 +288,7 @@ export default function OrderCard({
         return;
       }
       setWetransferLink(order.wetransfer_link || "");
+      setScanNotes(order.scan_notes ?? "");
       setSendScanEmail(true);
       setPendingStatus(status);
       setShowLinkDialog(true);
@@ -289,10 +298,16 @@ export default function OrderCard({
     doStatusChange(status);
   };
 
-  const doStatusChange = async (status: string, link?: string, force?: boolean, sendEmail?: boolean) => {
+  const doStatusChange = async (
+    status: string,
+    link?: string,
+    force?: boolean,
+    sendEmail?: boolean,
+    customerScanNotes?: string | null,
+  ) => {
     setIsUpdating(true);
     try {
-      await onStatusChange(order.id, status, link, force, sendEmail);
+      await onStatusChange(order.id, status, link, force, sendEmail, customerScanNotes);
     } finally {
       setIsUpdating(false);
     }
@@ -306,7 +321,13 @@ export default function OrderCard({
       return;
     }
     setShowLinkDialog(false);
-    await doStatusChange(ORDER_STATUS.SCANS_SENT, raw ? ensureHttps(raw) : undefined, undefined, sendScanEmail);
+    await doStatusChange(
+      ORDER_STATUS.SCANS_SENT,
+      raw ? ensureHttps(raw) : undefined,
+      undefined,
+      sendScanEmail,
+      scanNotes,
+    );
   };
 
   const openPartialDialog = () => {
@@ -1295,6 +1316,17 @@ export default function OrderCard({
                 onChange={(e) => setWetransferLink(e.target.value)}
                 placeholder="https://wetransfer.com/..." />
               <p className="text-xs text-slate-500">Must be from wetransfer.com if provided</p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="scan-notes">Notes for Customer (optional)</Label>
+              <Textarea
+                id="scan-notes"
+                value={scanNotes}
+                onChange={(e) => setScanNotes(e.target.value)}
+                placeholder="Anything the customer should know about their scans..."
+                className="border-slate-200 resize-none min-h-[80px]"
+                rows={3}
+              />
             </div>
             <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
               <Checkbox id="scan-email" checked={sendScanEmail} onCheckedChange={(v) => setSendScanEmail(!!v)} />

@@ -18,10 +18,11 @@ export async function POST(req: Request) {
   if (auth instanceof NextResponse) return auth;
 
   try {
-    const { order_id, new_status, wetransfer_link, force = false, send_email = true } = await req.json() as {
+    const { order_id, new_status, wetransfer_link, scan_notes, force = false, send_email = true } = await req.json() as {
       order_id: string;
       new_status: OrderStatus;
       wetransfer_link?: string;
+      scan_notes?: string | null;
       force?: boolean;
       send_email?: boolean;
     };
@@ -67,6 +68,7 @@ export async function POST(req: Request) {
       order_id,
       new_status,
       wetransfer_link,
+      scan_notes,
       force,
       send_email,
     });

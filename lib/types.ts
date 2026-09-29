@@ -75,6 +75,8 @@ export interface FilmOrder {
   bw_partial_email_sent_at?: string;
   notes?: string;
   customer_notes?: string;
+  /** Customer-facing note included in the final scans_sent email only */
+  scan_notes?: string | null;
   received_by_yours_at?: string;
   at_lab_at?: string;
   scans_sent_at?: string;

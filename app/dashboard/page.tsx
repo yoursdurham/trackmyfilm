@@ -92,12 +92,26 @@ export default function Dashboard() {
     onError: (err: Error) => toast.error(err.message),
   });
 
-  const handleStatusChange = async (id: string, status: string, wetransferLink?: string, force?: boolean, sendEmail?: boolean) => {
+  const handleStatusChange = async (
+    id: string,
+    status: string,
+    wetransferLink?: string,
+    force?: boolean,
+    sendEmail?: boolean,
+    scanNotes?: string | null,
+  ) => {
     try {
       const res = await fetch("/api/status", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ order_id: id, new_status: status, wetransfer_link: wetransferLink, force, send_email: sendEmail }),
+        body: JSON.stringify({
+          order_id: id,
+          new_status: status,
+          wetransfer_link: wetransferLink,
+          scan_notes: scanNotes,
+          force,
+          send_email: sendEmail,
+        }),
       });
       const data = await res.json();
       if (data.success) {

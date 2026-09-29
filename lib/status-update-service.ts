@@ -3,6 +3,7 @@ import { ORDER_STATUS, STATUS_TEMPLATE_MAP } from "@/lib/constants";
 import { isProcessOnlyOrder } from "@/lib/order-service";
 import { isMixedScanOrder, isPartialScanDeliveryComplete, scansSentBlockedReason } from "@/lib/scan-batch";
 import { isValidTransition, isKnownStatus, isValidUrl, ensureHttps } from "@/lib/validation";
+import { scanNotesForStorage } from "@/lib/scan-notes";
 import { EmailSendError, sendOrderEmail } from "@/lib/email-service";
 import type { FilmOrder, OrderStatus, StatusHistoryEntry } from "@/lib/types";
 
@@ -22,12 +23,14 @@ export async function updateOrderStatus({
   order_id,
   new_status,
   wetransfer_link,
+  scan_notes,
   force = false,
   send_email = true,
 }: {
   order_id: string;
   new_status: OrderStatus;
   wetransfer_link?: string;
+  scan_notes?: string | null;
   force?: boolean;
   send_email?: boolean;
 }): Promise<StatusUpdateResult> {
@@ -109,6 +112,9 @@ export async function updateOrderStatus({
   if (new_status === ORDER_STATUS.RECEIVED_AT_LAB) updateData.at_lab_at = now;
   if (new_status === ORDER_STATUS.SCANS_SENT) {
     updateData.scans_sent_at = now;
+    if (scan_notes !== undefined) {
+      updateData.scan_notes = scanNotesForStorage(scan_notes);
+    }
     if (isMixedScanOrder(order) && isPartialScanDeliveryComplete(order)) {
       const fallback =
         order.bw_scans_wetransfer_link ||
@@ -122,15 +128,36 @@ export async function updateOrderStatus({
     }
   }
 
-  await updateOrder(order_id, updateData);
+  try {
+    await updateOrder(order_id, updateData);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "";
+    const scanNotesMissing =
+      updateData.scan_notes !== undefined &&
+      message.includes("scan_notes") &&
+      message.includes("schema cache");
+    if (!scanNotesMissing) throw err;
+    console.error(
+      "[status] scan_notes column missing — run migration 014_add_scan_notes.sql. Saving status without scan note."
+    );
+    const { scan_notes: _omit, ...withoutScanNotes } = updateData;
+    await updateOrder(order_id, withoutScanNotes);
+  }
 
   const template = STATUS_TEMPLATE_MAP[new_status];
   if (!template || !send_email) {
     return { success: true, order_id, new_status, email_sent: false };
   }
 
+  const scanNotesForSendEmail =
+    new_status === ORDER_STATUS.SCANS_SENT && scan_notes !== undefined
+      ? scanNotesForStorage(scan_notes)
+      : undefined;
+
   try {
-    const emailData = await sendOrderEmail(order_id, template);
+    const emailData = await sendOrderEmail(order_id, template, {
+      scanNotes: scanNotesForSendEmail,
+    });
     return {
       success: true,
       order_id,

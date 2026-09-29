@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getOrderByNumberAndEmail, updateOrder } from "@/lib/db";
 import { normalizeEmail, normalizeOrderNumber } from "@/lib/validation";
+import { scanNotesForEmail, scanNotesHtml } from "@/lib/scan-notes";
 
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const MAX_REQUESTS_PER_WINDOW = 3;
@@ -88,6 +89,8 @@ export async function POST(req: Request) {
       order_number: order.order_number ?? "",
       roll_count: String(order.roll_count ?? 0),
       wetransfer_link: order.wetransfer_link,
+      scan_notes: scanNotesForEmail(order.scan_notes),
+      scan_notes_html: scanNotesHtml(order.scan_notes),
     };
 
     const payload = {

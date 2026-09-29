@@ -1,6 +1,7 @@
 import { getOrderById, updateOrder } from "@/lib/db";
 import { normalizeEmail, isWithinDedupWindow } from "@/lib/validation";
 import { pendingBatchLabel, type ScanDeliveryBatch } from "@/lib/scan-batch";
+import { scanNotesForEmail, scanNotesHtml } from "@/lib/scan-notes";
 import type { FilmOrder } from "@/lib/types";
 
 type TemplateName =
@@ -107,7 +108,7 @@ export async function sendPartialScanEmail(orderId: string, batch: ScanDeliveryB
 export async function sendOrderEmail(
   orderId: string,
   template: string,
-  options?: { partialBatch?: ScanDeliveryBatch }
+  options?: { partialBatch?: ScanDeliveryBatch; scanNotes?: string | null }
 ) {
   if (!orderId || !template) {
     throw new EmailSendError("order_id and template are required", 400);
@@ -224,12 +225,21 @@ const variables: Record<string, string> = {
   scans_sent_at: formatDate(order.scans_sent_at),
 };
 
-console.log("EMAIL VARIABLES", JSON.stringify(variables, null, 2));
   if (template === "scans_sent") {
     variables.wetransfer_link = order.wetransfer_link ?? "";
     variables.color_wetransfer_link = order.color_scans_wetransfer_link ?? "";
     variables.bw_wetransfer_link = order.bw_scans_wetransfer_link ?? "";
+    const noteSource =
+      options?.scanNotes !== undefined ? options.scanNotes : order.scan_notes;
+    variables.scan_notes = scanNotesForEmail(noteSource);
+    variables.scan_notes_html = scanNotesHtml(noteSource);
   }
+
+  console.log("[email] Template variables (scans_sent includes scan_notes):", {
+    orderId,
+    template,
+    scan_notes: template === "scans_sent" ? variables.scan_notes : undefined,
+  });
 
   if (template === "partial_scans_sent" && options?.partialBatch) {
     const batch = options.partialBatch;

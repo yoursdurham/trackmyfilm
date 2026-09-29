@@ -120,6 +120,8 @@ The system automatically fills in these placeholders when sending. The names mus
 | `{{order_number}}` | The order number (e.g. "JE1234") |
 | `{{roll_count}}` | Number of rolls (e.g. "3") |
 | `{{wetransfer_link}}` | The WeTransfer download URL (scans_sent email only) |
+| `{{scan_notes}}` | Plain-text note from the lab (scans_sent only; empty if none) |
+| `{{scan_notes_html}}` | Same note as HTML paragraph (scans_sent only; empty if none — paste this in HTML templates) |
 
 > If you rename a variable — for example changing `{{first_name}}` to `{{name}}` — the email will send with the literal text `{{name}}` showing instead of the customer's actual name. Don't rename them; only change the text around them.
 
@@ -141,6 +143,8 @@ Great news — your scans for order #{{order_number}} ({{roll_count}} rolls) are
 
 Download your scans here:
 {{wetransfer_link}}
+
+{{scan_notes_html}}
 
 The link expires after 7 days so download soon.
 
