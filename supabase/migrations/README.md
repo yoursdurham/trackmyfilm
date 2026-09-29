@@ -10,7 +10,7 @@ Run these in order in: **Supabase Dashboard → SQL Editor → New Query**
 | `010_customer_profile_fields.sql` | Adds customer profile/preference columns, email uniqueness, `updated_at` | Yes |
 | `011_backfill_customer_orders.sql` | Backfills customers from unlinked orders by email | Yes — run after 010 |
 | `012_partial_scan_deliveries.sql` | Partial Color/B&W scan links and timestamps on mixed orders | Yes — for partial scan workflow |
-| `013_allow_110_film_type.sql` | Extends `film_type` CHECK constraints to include `110` | Run if 110 orders fail DB validation |
+| `013_allow_110_film_type.sql` | Extends `film_type` CHECK on `film_orders` (and `customers` if 010 ran) to include `110` | Run if 110 orders fail DB validation |
 
 ## Notes
 
