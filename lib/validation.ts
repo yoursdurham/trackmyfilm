@@ -4,7 +4,45 @@
  */
 
 import { STATUS_FLOW } from "./constants";
-import type { OrderStatus } from "./types";
+import type { FilmType, OrderStatus, RollDetail } from "./types";
+
+/** Staff-selectable film formats for new drop-offs (excludes legacy-only types). */
+export const DROP_OFF_FILM_TYPES = ["35mm", "120", "110"] as const satisfies readonly FilmType[];
+
+/** All film types stored on orders and customer defaults. */
+export const FILM_TYPES = ["35mm", "120", "110", "Disposable Camera"] as const satisfies readonly FilmType[];
+
+const FILM_TYPE_SET = new Set<string>(FILM_TYPES);
+
+/**
+ * Coerces API/form values to a string film type (e.g. numeric 110 → "110").
+ */
+export function normalizeFilmType(value: unknown): FilmType | null {
+  if (value === null || value === undefined) return null;
+  const asString = typeof value === "number" ? String(value) : String(value).trim();
+  if (!asString) return null;
+  return FILM_TYPE_SET.has(asString) ? (asString as FilmType) : null;
+}
+
+export function isValidFilmType(value: unknown): value is FilmType {
+  return normalizeFilmType(value) !== null;
+}
+
+export function validateRollDetails(roll_details: unknown): string | null {
+  if (roll_details === undefined || roll_details === null) return null;
+  if (!Array.isArray(roll_details)) return "roll_details must be an array";
+  for (let i = 0; i < roll_details.length; i++) {
+    const roll = roll_details[i] as Partial<RollDetail>;
+    const filmType = normalizeFilmType(roll?.film_type);
+    if (!filmType) {
+      return `roll_details[${i}].film_type is invalid (expected one of: ${FILM_TYPES.join(", ")})`;
+    }
+    if (roll.film_process && !["Color", "Black & White", "Both"].includes(roll.film_process)) {
+      return `roll_details[${i}].film_process is invalid`;
+    }
+  }
+  return null;
+}
 
 const ONE_HOUR_MS = 60 * 60 * 1000;
 

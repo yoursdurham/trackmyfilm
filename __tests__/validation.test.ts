@@ -9,6 +9,9 @@ import {
   isValidUrl,
   ensureHttps,
   isValidEmail,
+  normalizeFilmType,
+  isValidFilmType,
+  validateRollDetails,
 } from "../lib/validation";
 
 // ─── Status transitions ───────────────────────────────────────────────────────
@@ -184,6 +187,32 @@ describe("isValidEmail", () => {
 
   it("rejects whitespace only", () => {
     expect(isValidEmail("   ")).toBe(false);
+  });
+});
+
+describe("normalizeFilmType", () => {
+  it("accepts 110 as a string film type", () => {
+    expect(normalizeFilmType("110")).toBe("110");
+    expect(isValidFilmType("110")).toBe(true);
+  });
+
+  it("coerces numeric 110 to string", () => {
+    expect(normalizeFilmType(110)).toBe("110");
+  });
+
+  it("rejects unknown formats", () => {
+    expect(normalizeFilmType("70mm")).toBeNull();
+  });
+});
+
+describe("validateRollDetails", () => {
+  it("accepts two 110 rolls", () => {
+    expect(
+      validateRollDetails([
+        { film_type: "110", film_process: "Color", scan_size: "Standard" },
+        { film_type: "110", film_process: "Color", scan_size: "Standard" },
+      ])
+    ).toBeNull();
   });
 });
 

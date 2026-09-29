@@ -21,7 +21,10 @@ import {
   getCustomerByEmailOrName, createCustomer, updateCustomer,
   createOrder, getOrderByNumber,
 } from "@/lib/db";
-import { normalizeEmail, normalizeCustomerName, normalizeOrderNumber, isValidEmail } from "@/lib/validation";
+import {
+  normalizeEmail, normalizeCustomerName, normalizeOrderNumber, isValidEmail,
+  normalizeFilmType, validateRollDetails,
+} from "@/lib/validation";
 import { requireAuth } from "@/lib/api-auth";
 import { sendOrderEmail } from "@/lib/email-service";
 import type { Customer, FilmProcess, RollDetail } from "@/lib/types";
@@ -80,6 +83,21 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: `Missing required fields: ${missing.join(", ")}` }, { status: 400 });
   }
 
+  const normalizedFilmType = normalizeFilmType(film_type);
+  if (!normalizedFilmType) {
+    return NextResponse.json({ error: `Invalid film_type: ${String(film_type)}` }, { status: 400 });
+  }
+
+  const rollDetailsError = validateRollDetails(roll_details);
+  if (rollDetailsError) {
+    return NextResponse.json({ error: rollDetailsError }, { status: 400 });
+  }
+
+  const normalizedRollDetails = roll_details?.map((roll) => ({
+    ...roll,
+    film_type: normalizeFilmType(roll.film_type) ?? roll.film_type,
+  }));
+
   const normalizedEmail     = customer_email ? normalizeEmail(customer_email) : null;
   const nameParts           = customer_name.trim().split(/\s+/);
   const firstName           = nameParts[0];
@@ -114,7 +132,7 @@ export async function POST(req: Request) {
       normalized_name: normalizedName,
       total_rolls:     0,
       total_dropoffs:  0,
-      default_film_type: film_type as Customer["default_film_type"],
+      default_film_type: normalizedFilmType,
       default_film_process: film_process as Customer["default_film_process"],
       default_scan_size: roll_details?.[0]?.scan_size,
     });
@@ -127,7 +145,7 @@ export async function POST(req: Request) {
   const newTotalRolls    = (customer.total_rolls    || 0) + roll_count;
   const newTotalDropoffs = (customer.total_dropoffs || 0) + 1;
 
-  const resolvedFilmProcess = deriveOrderFilmProcess(roll_details, film_process);
+  const resolvedFilmProcess = deriveOrderFilmProcess(normalizedRollDetails, film_process);
 
   // ── Create order ──────────────────────────────────────────────────────
   let order;
@@ -139,10 +157,10 @@ export async function POST(req: Request) {
       order_number:         normalizedOrderNum,
       dropoff_date,
       roll_count,
-      film_type:            film_type as "35mm" | "120" | "110" | "Disposable Camera",
+      film_type:            normalizedFilmType,
       film_process:         resolvedFilmProcess,
       film_stock:           film_stock ?? undefined,
-      roll_details:         roll_details ?? undefined,
+      roll_details:         normalizedRollDetails ?? undefined,
       prints_4x6:           prints_4x6 ?? undefined,
       dropoff_number:       newTotalDropoffs,
       status:               "Received by Yours",
@@ -169,7 +187,7 @@ export async function POST(req: Request) {
     };
 
     if (!isNewCustomer) {
-      customerPatch.default_film_type = film_type as Customer["default_film_type"];
+      customerPatch.default_film_type = normalizedFilmType;
       customerPatch.default_film_process = film_process as Customer["default_film_process"];
       if (roll_details?.[0]?.scan_size) {
         customerPatch.default_scan_size = roll_details[0].scan_size;

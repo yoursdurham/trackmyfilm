@@ -11,6 +11,7 @@ import { User, Calendar, Hash, Layers, Loader2, Film, Mail } from "lucide-react"
 import { format } from "date-fns";
 import { toast } from "sonner";
 import type { Customer, FilmType, FilmProcess } from "@/lib/types";
+import { DROP_OFF_FILM_TYPES } from "@/lib/validation";
 
 const MAX_ROLLS = 20;
 
@@ -33,9 +34,21 @@ const FILM_STOCKS = [
   "Lomography Color 400",
 ];
 
-const FILM_TYPES: FilmType[] = ["35mm", "120", "110"];
+const FILM_TYPES = DROP_OFF_FILM_TYPES;
 const FILM_PROCESSES: FilmProcess[] = ["Color", "Black & White"];
 const SCAN_SIZES = ["Standard", "High-Res", "TIFF", "Process Only"] as const;
+
+/** Stable DOM ids — avoid ids ending in bare "110" (Safari label/validation quirks). */
+const FILM_TYPE_DOM_ID: Record<(typeof FILM_TYPES)[number], string> = {
+  "35mm": "fmt-35mm",
+  "120": "fmt-120",
+  "110": "fmt-110",
+};
+const FILM_PROCESS_DOM_ID: Record<FilmProcess, string> = {
+  Color: "proc-color",
+  "Black & White": "proc-bw",
+  Both: "proc-both",
+};
 
 type ScanSize = (typeof SCAN_SIZES)[number];
 
@@ -254,7 +267,7 @@ export default function NewDropoffForm({ open, onOpenChange, onSuccess, customer
           <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-2 rounded-lg text-sm">{error}</div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4 pt-2">
+        <form onSubmit={handleSubmit} noValidate className="space-y-4 pt-2">
           {/* Customer name */}
           <div className="space-y-2 relative">
             <Label htmlFor="customer_name" className="flex items-center gap-2 text-slate-700">
@@ -337,9 +350,9 @@ export default function NewDropoffForm({ open, onOpenChange, onSuccess, customer
                   <div className="flex flex-wrap gap-x-4 gap-y-1">
                     {FILM_TYPES.map((t) => (
                       <div key={t} className="flex items-center space-x-2">
-                        <Checkbox id={`ft-${i}-${t}`} checked={roll.film_type === t}
+                        <Checkbox id={`film-type-${i}-${FILM_TYPE_DOM_ID[t]}`} checked={roll.film_type === t}
                           onCheckedChange={() => setRoll(i, "film_type", t)} />
-                        <label htmlFor={`ft-${i}-${t}`} className="text-sm font-medium">{t}</label>
+                        <label htmlFor={`film-type-${i}-${FILM_TYPE_DOM_ID[t]}`} className="text-sm font-medium">{t}</label>
                       </div>
                     ))}
                   </div>
@@ -351,9 +364,9 @@ export default function NewDropoffForm({ open, onOpenChange, onSuccess, customer
                   <div className="flex flex-wrap gap-x-4 gap-y-1">
                     {FILM_PROCESSES.map((p) => (
                       <div key={p} className="flex items-center space-x-2">
-                        <Checkbox id={`fp-${i}-${p}`} checked={roll.film_process === p}
+                        <Checkbox id={`film-process-${i}-${FILM_PROCESS_DOM_ID[p]}`} checked={roll.film_process === p}
                           onCheckedChange={() => setRoll(i, "film_process", p)} />
-                        <label htmlFor={`fp-${i}-${p}`} className="text-sm font-medium">{p}</label>
+                        <label htmlFor={`film-process-${i}-${FILM_PROCESS_DOM_ID[p]}`} className="text-sm font-medium">{p}</label>
                       </div>
                     ))}
                   </div>
