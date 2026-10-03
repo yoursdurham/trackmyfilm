@@ -49,6 +49,24 @@ export interface CustomerSummary extends Customer {
   common_scan_size: RollDetail["scan_size"] | null;
 }
 
+export type IncomingDraftStatus = "pending" | "accepted" | "dismissed";
+
+/** A Squarespace order staged for review. Not a film order until staff submit New Drop-off. */
+export interface IncomingSquarespaceDraft {
+  id: string;
+  squarespace_order_number: string;
+  customer_name: string;
+  customer_email: string | null;
+  dropoff_date: string | null;
+  roll_count: number;
+  roll_details: RollDetail[];
+  notes: string | null;
+  source: string;
+  status: IncomingDraftStatus;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export interface FilmOrder {
   id: string;
   order_number: string;

@@ -5,7 +5,8 @@
  */
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import type { Customer, CustomerSummary, FilmOrder } from "./types";
+import type { Customer, CustomerSummary, FilmOrder, IncomingSquarespaceDraft } from "./types";
+import type { IncomingDraftInput } from "./incoming-drafts";
 import { buildCustomerStatsMap, computeCustomerStats, sortCustomersByLatestOrder } from "./customer-stats";
 
 type CustomerInsert = Omit<Customer, "id" | "created_at">;
@@ -134,6 +135,94 @@ export async function getOrdersPendingDelayEmail(): Promise<FilmOrder[]> {
     .is("film_delay_email_sent_at", null);
   if (error) throw new Error(error.message);
   return data as FilmOrder[];
+}
+
+// ─── Incoming Squarespace drafts ─────────────────────────────────────────────
+// Intake creation uses only these helpers plus orderNumberExists.
+// Do not add customer reads, order creation, or email sends on that path.
+
+export async function orderNumberExists(orderNumber: string): Promise<boolean> {
+  const { data, error } = await getSupabase()
+    .from("film_orders")
+    .select("id")
+    .eq("order_number", orderNumber)
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return data != null;
+}
+
+export async function getPendingIncomingDrafts(): Promise<IncomingSquarespaceDraft[]> {
+  const { data, error } = await getSupabase()
+    .from("incoming_squarespace_drafts")
+    .select("*")
+    .eq("status", "pending")
+    .order("created_at", { ascending: false });
+  if (error) throw new Error(error.message);
+  return data as IncomingSquarespaceDraft[];
+}
+
+export async function getIncomingDraftById(id: string): Promise<IncomingSquarespaceDraft | null> {
+  const { data, error } = await getSupabase()
+    .from("incoming_squarespace_drafts")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return data as IncomingSquarespaceDraft | null;
+}
+
+export async function getIncomingDraftByOrderNumber(
+  orderNumber: string
+): Promise<IncomingSquarespaceDraft | null> {
+  const { data, error } = await getSupabase()
+    .from("incoming_squarespace_drafts")
+    .select("*")
+    .eq("squarespace_order_number", orderNumber)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return data as IncomingSquarespaceDraft | null;
+}
+
+export async function createIncomingDraft(data: IncomingDraftInput): Promise<IncomingSquarespaceDraft> {
+  const { data: created, error } = await getSupabase()
+    .from("incoming_squarespace_drafts")
+    .insert({
+      squarespace_order_number: data.squarespace_order_number,
+      customer_name: data.customer_name,
+      customer_email: data.customer_email,
+      dropoff_date: data.dropoff_date,
+      roll_count: data.roll_count,
+      roll_details: data.roll_details,
+      notes: data.notes,
+      source: data.source,
+      status: "pending",
+    })
+    .select()
+    .single();
+  if (error) {
+    const err = new Error(error.message) as Error & { code?: string };
+    err.code = error.code;
+    throw err;
+  }
+  return created as IncomingSquarespaceDraft;
+}
+
+export async function updateIncomingDraftStatus(
+  id: string,
+  status: "accepted" | "dismissed"
+): Promise<IncomingSquarespaceDraft> {
+  const { data: updated, error } = await getSupabase()
+    .from("incoming_squarespace_drafts")
+    .update({
+      status,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", id)
+    .select()
+    .single();
+  if (error) throw new Error(error.message);
+  return updated as IncomingSquarespaceDraft;
 }
 
 export async function deleteOrder(id: string): Promise<void> {

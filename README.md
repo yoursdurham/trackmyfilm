@@ -34,6 +34,40 @@ Required:
 Optional (needed for emails):
 - `RESEND_API_KEY` + three template IDs
 
+Optional (needed for the Squarespace incoming queue):
+- `SQUARESPACE_INTAKE_SECRET` — bearer token for the assistant that stages drop-offs
+
+The assistant calls `POST /api/incoming-drafts` with `Authorization: Bearer <SQUARESPACE_INTAKE_SECRET>`. That route can only create a pending draft. It cannot create film orders, read customers, or send email. Staff review those drafts on the dashboard and submit them through the existing New Drop-off form (`POST /api/dropoff`), which still handles customer totals, loyalty emails, and duplicate order numbers.
+
+Set the secret in Vercel and in local `.env`. Do not commit it (`.env*` is gitignored), and do not use a `NEXT_PUBLIC_` name.
+
+Example body:
+
+```json
+{
+  "squarespace_order_number": "SQ-1001",
+  "customer_name": "Jane Doe",
+  "customer_email": "jane@example.com",
+  "dropoff_date": "2026-10-03",
+  "roll_count": 1,
+  "roll_details": [
+    {
+      "film_type": "35mm",
+      "film_process": "Color",
+      "scan_size": "Standard",
+      "prints_4x6": false,
+      "film_stock": "Kodak Portra 400"
+    }
+  ],
+  "notes": "optional",
+  "source": "squarespace"
+}
+```
+
+`film_type` is `35mm`, `120`, or `110`. `film_process` is `Color` or `Black & White`. `scan_size` is `Standard`, `High-Res`, `TIFF`, or `Process Only` (defaults to Standard). `roll_count` must match `roll_details` and is capped at 20. A logged-in session cannot call this POST, and the secret cannot list, accept, or dismiss drafts.
+
+Before using the queue, run `supabase/migrations/015_incoming_squarespace_drafts.sql` in the Supabase SQL editor. See `supabase/migrations/README.md`.
+
 ### 3. Database
 
 Run both migration files in **Supabase Dashboard → SQL Editor**:

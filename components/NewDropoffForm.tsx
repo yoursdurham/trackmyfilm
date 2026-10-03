@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { User, Calendar, Hash, Layers, Loader2, Film, Mail } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
-import type { Customer, FilmType, FilmProcess } from "@/lib/types";
+import type { Customer, FilmType, FilmProcess, IncomingSquarespaceDraft, RollDetail } from "@/lib/types";
 import { DROP_OFF_FILM_TYPES, isValidEmail, normalizeEmail } from "@/lib/validation";
 import {
   applyCustomerDefaultsToRolls,
@@ -30,6 +30,8 @@ interface Props {
   onSuccess?: () => void;
   customers?: Customer[];
   selectedCustomer?: Customer | null;
+  /** When set, the dialog reviews a Squarespace draft. Hand-entered drop-offs leave this unset. */
+  incomingDraft?: IncomingSquarespaceDraft | null;
 }
 
 const FILM_STOCKS = [
@@ -57,6 +59,26 @@ const FILM_PROCESS_DOM_ID: Record<FilmProcess, string> = {
   Both: "proc-both",
 };
 
+function rollStateFromDetail(roll: RollDetail): DropoffRollState {
+  const filmType = (FILM_TYPES as readonly string[]).includes(roll.film_type) ? roll.film_type : "";
+  const filmProcess = roll.film_process === "Color" || roll.film_process === "Black & White"
+    ? roll.film_process
+    : "";
+  const scanSize = roll.scan_size && (DROP_OFF_SCAN_SIZES as readonly string[]).includes(roll.scan_size)
+    ? roll.scan_size as DropoffScanSize
+    : "Standard";
+  const stock = roll.film_stock?.trim() ?? "";
+  const knownStock = stock !== "" && (FILM_STOCKS as readonly string[]).includes(stock);
+  return {
+    film_type: filmType,
+    film_process: filmProcess,
+    film_stock: stock === "" ? "" : knownStock ? stock : "__other__",
+    custom_stock: knownStock || stock === "" ? "" : stock,
+    scan_size: scanSize,
+    prints_4x6: roll.prints_4x6 === true,
+  };
+}
+
 const emptyMeta = {
   customer_name: "",
   customer_email: "",
@@ -66,18 +88,42 @@ const emptyMeta = {
   notes: "",
 };
 
-export default function NewDropoffForm({ open, onOpenChange, onSuccess, customers = [], selectedCustomer }: Props) {
+function formStateFromDraft(draft: IncomingSquarespaceDraft) {
+  const details = draft.roll_details.slice(0, MAX_ROLLS);
+  const rolls = details.length > 0 ? details.map(rollStateFromDetail) : [createEmptyDropoffRoll()];
+  return {
+    formData: {
+      customer_name: draft.customer_name,
+      customer_email: draft.customer_email ?? "",
+      order_number: draft.squarespace_order_number,
+      dropoff_date: draft.dropoff_date || format(new Date(), "yyyy-MM-dd"),
+      roll_count: rolls.length,
+      notes: draft.notes ?? "",
+    },
+    rolls,
+  };
+}
+
+export default function NewDropoffForm({
+  open,
+  onOpenChange,
+  onSuccess,
+  customers = [],
+  selectedCustomer,
+  incomingDraft = null,
+}: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(selectedCustomer?.id ?? null);
   const [sendEmail, setSendEmail] = useState(true);
-  const [formData, setFormData] = useState({
+  const draftState = incomingDraft ? formStateFromDraft(incomingDraft) : null;
+  const [formData, setFormData] = useState(draftState?.formData ?? {
     ...emptyMeta,
     customer_name: selectedCustomer ? `${selectedCustomer.first_name} ${selectedCustomer.last_name || ""}`.trim() : "",
     customer_email: selectedCustomer?.email || "",
   });
-  const [rolls, setRolls] = useState<DropoffRollState[]>([createEmptyDropoffRoll()]);
+  const [rolls, setRolls] = useState<DropoffRollState[]>(draftState?.rolls ?? [createEmptyDropoffRoll()]);
   const [customStocks, setCustomStocks] = useState<string[]>([]);
 
   useEffect(() => {
@@ -188,6 +234,27 @@ export default function NewDropoffForm({ open, onOpenChange, onSuccess, customer
       }
 
       toast.success("Drop-off created successfully");
+
+      if (incomingDraft) {
+        try {
+          const acceptRes = await fetch(`/api/incoming-drafts/${incomingDraft.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ status: "accepted" }),
+          });
+          if (!acceptRes.ok) {
+            const acceptBody = await acceptRes.json().catch(() => null) as { error?: string } | null;
+            toast.error(
+              acceptBody?.error
+                ? `Drop-off saved, but the Squarespace draft was not cleared: ${acceptBody.error}`
+                : "Drop-off saved, but the Squarespace draft was not cleared. Dismiss it if it is still in the queue."
+            );
+          }
+        } catch {
+          toast.error("Drop-off saved, but the Squarespace draft was not cleared. Dismiss it if it is still in the queue.");
+        }
+      }
+
       onSuccess?.();
       setFormData({ ...emptyMeta, dropoff_date: format(new Date(), "yyyy-MM-dd") });
       setRolls([createEmptyDropoffRoll()]);
@@ -221,7 +288,7 @@ export default function NewDropoffForm({ open, onOpenChange, onSuccess, customer
     }));
     setSelectedCustomerId(c.id);
     setShowSuggestions(false);
-    applyCustomerDefaults(c);
+    if (!incomingDraft) applyCustomerDefaults(c);
   };
 
   const applyCustomerDefaults = (customer: Customer) => {
@@ -237,7 +304,7 @@ export default function NewDropoffForm({ open, onOpenChange, onSuccess, customer
     const match = customers.find((c) => c.email?.toLowerCase() === normalized);
     if (match) {
       setSelectedCustomerId(match.id);
-      applyCustomerDefaults(match);
+      if (!incomingDraft) applyCustomerDefaults(match);
       return;
     }
     try {
@@ -246,7 +313,7 @@ export default function NewDropoffForm({ open, onOpenChange, onSuccess, customer
       const found = await response.json() as Customer | null;
       if (found) {
         setSelectedCustomerId(found.id);
-        applyCustomerDefaults(found);
+        if (!incomingDraft) applyCustomerDefaults(found);
       }
     } catch {
       // ignore lookup failures during typing
@@ -257,7 +324,14 @@ export default function NewDropoffForm({ open, onOpenChange, onSuccess, customer
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-xl font-semibold text-slate-800">New Film Drop-off</DialogTitle>
+          <DialogTitle className="text-xl font-semibold text-slate-800">
+            {incomingDraft ? "Review Squarespace Drop-off" : "New Film Drop-off"}
+          </DialogTitle>
+          {incomingDraft ? (
+            <p className="text-sm text-slate-500">
+              Imported from Squarespace as {incomingDraft.squarespace_order_number}. Saving uses the normal drop-off flow and clears it from the incoming queue.
+            </p>
+          ) : null}
         </DialogHeader>
 
         {error && (
