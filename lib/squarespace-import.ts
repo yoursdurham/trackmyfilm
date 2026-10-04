@@ -32,6 +32,10 @@ export async function importSquarespaceOrders(
 
   for (const order of orders) {
     const classified = classifySquarespaceOrder(order);
+    if (classified.kind === "skip_pos") {
+      summary.skippedPos += 1;
+      continue;
+    }
     if (classified.kind === "skip_no_film") {
       summary.skippedNoFilm += 1;
       continue;

@@ -42,6 +42,7 @@ import {
   fetchRecentSquarespaceOrders,
   filmTypeFromProductName,
   isFilmProcessingProductName,
+  isSquarespacePosOrder,
   SQUARESPACE_API_KEY_ENV,
   SQUARESPACE_LOOKBACK_DAYS,
   SQUARESPACE_USER_AGENT,
@@ -57,6 +58,8 @@ function filmOrder(overrides: Record<string, unknown> = {}) {
     orderNumber: "01050",
     customerEmail: "contact@justineisner.com",
     createdOn: "2026-10-01T15:00:00.000Z",
+    channel: "web",
+    channelName: "Squarespace",
     fulfillmentStatus: "FULFILLED",
     billingAddress: { firstName: "Justin", lastName: "Eisner" },
     lineItems: [
@@ -163,6 +166,28 @@ describe("classifySquarespaceOrder", () => {
     expect(result.draft.roll_details[0].film_process).toBe("Black & White");
   });
 
+  it("skips Point of Sale orders even when they include film development", () => {
+    expect(isSquarespacePosOrder({ channel: "pos" })).toBe(true);
+    expect(isSquarespacePosOrder({ channel: "POS" })).toBe(true);
+    expect(isSquarespacePosOrder({ channel: "web", channelName: "Point of Sale" })).toBe(true);
+    expect(isSquarespacePosOrder({ channelName: "point-of-sale" })).toBe(true);
+    expect(isSquarespacePosOrder({ channel: "web", channelName: "Squarespace" })).toBe(false);
+
+    for (const overrides of [
+      { channel: "pos", channelName: "Point of Sale" },
+      { channel: "POS" },
+      { channel: "web", channelName: "Point of Sale" },
+    ]) {
+      const result = classifySquarespaceOrder(filmOrder(overrides));
+      expect(result.kind).toBe("skip_pos");
+    }
+
+    const web = classifySquarespaceOrder(filmOrder({ channel: "web" }));
+    expect(web.kind).toBe("import");
+    if (web.kind !== "import") return;
+    expect(web.draft.squarespace_order_number).toBe("01050");
+  });
+
   it("skips an order that is only a shop sale", () => {
     const result = classifySquarespaceOrder(filmOrder({
       lineItems: [{ productName: "Canon AE-1 Camera", quantity: 1 }],
@@ -243,6 +268,7 @@ describe("importSquarespaceOrders", () => {
 
     const summary = await importSquarespaceOrders([
       filmOrder(),
+      filmOrder({ id: "pos-order", orderNumber: "01058", channel: "pos", channelName: "Point of Sale" }),
       filmOrder({ id: "shop-only", orderNumber: "01059", lineItems: [{ productName: "Kodak Gold 200", quantity: 1 }] }),
       filmOrder({ id: "existing-order", orderNumber: "01060" }),
       filmOrder({ id: "existing-draft", orderNumber: "01061" }),
@@ -253,6 +279,7 @@ describe("importSquarespaceOrders", () => {
     expect(summary.imported).toBe(1);
     expect(summary.importedOrderNumbers).toEqual(["01050"]);
     expect(summary.skippedNoFilm).toBe(1);
+    expect(summary.skippedPos).toBe(1);
     expect(summary.skippedDuplicate).toBe(4);
     expect(summary.errors).toEqual([]);
     expect(deps.createIncomingDraft).toHaveBeenCalledTimes(2);
@@ -308,6 +335,7 @@ describe("POST /api/incoming-drafts/check", () => {
         pagination: { hasNextPage: true, nextPageCursor: "page-2" },
         result: [
           filmOrder({ fulfillmentStatus: "PENDING" }),
+          filmOrder({ id: "pos-counter", orderNumber: "01080", channel: "pos", channelName: "Point of Sale" }),
           filmOrder({ id: "camera", orderNumber: "200", lineItems: [{ productName: "Point and Shoot Camera", quantity: 1 }] }),
         ],
       }), { status: 200 }))
@@ -329,6 +357,7 @@ describe("POST /api/incoming-drafts/check", () => {
     expect(body.configured).toBe(true);
     expect(body.imported).toBe(2);
     expect(body.skippedNoFilm).toBe(1);
+    expect(body.skippedPos).toBe(1);
     expect(body.skippedDuplicate).toBe(0);
     expect(body.importedOrderNumbers).toEqual(["01050", "01070"]);
 
@@ -352,6 +381,7 @@ describe("POST /api/incoming-drafts/check", () => {
     expect(mockSendOrderEmail).not.toHaveBeenCalled();
     const created = mockCreateIncomingDraft.mock.calls.map((call) => call[0].squarespace_order_number);
     expect(created).toEqual(["01050", "01070"]);
+    expect(mockOrderNumberExists).toHaveBeenCalledWith("01050");
   });
 });
 

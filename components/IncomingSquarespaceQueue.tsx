@@ -43,7 +43,7 @@ function CheckSummary({ summary }: { summary: SquarespaceCheckSummary }) {
   return (
     <div className="mt-3 rounded-lg bg-stone-50 px-3 py-2 text-sm text-slate-700">
       <p>
-        Imported {summary.imported}. Skipped {summary.skippedDuplicate} already in the system. Skipped {summary.skippedNoFilm} with no film processing.
+        Imported {summary.imported}. Skipped {summary.skippedDuplicate} already in the system. Skipped {summary.skippedNoFilm} with no film processing. Skipped {summary.skippedPos} (POS).
       </p>
       {summary.importedOrderNumbers.length > 0 ? (
         <p className="mt-1 text-xs text-slate-500">

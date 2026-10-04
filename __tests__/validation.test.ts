@@ -6,6 +6,9 @@ import {
   normalizeCustomerName,
   normalizeEmail,
   normalizeOrderNumber,
+  orderNumberMatchKey,
+  orderNumberMatchPattern,
+  orderNumbersMatch,
   isValidUrl,
   ensureHttps,
   isValidEmail,
@@ -231,6 +234,35 @@ describe("normalizeOrderNumber", () => {
 
   it("handles mixed case", () => {
     expect(normalizeOrderNumber("Je1234")).toBe("JE1234");
+  });
+
+  it("keeps leading zeros in the stored form", () => {
+    expect(normalizeOrderNumber("01050")).toBe("01050");
+    expect(normalizeOrderNumber("001050")).toBe("001050");
+  });
+});
+
+describe("order number duplicate key", () => {
+  function storedMatches(pattern: string, stored: string): boolean {
+    const source = pattern.replace(/\[\[:space:\]\]/g, "\\s");
+    return new RegExp(source, "i").test(stored);
+  }
+
+  it("treats 01050, 1050, and 001050 as the same order and leaves a different number alone", () => {
+    expect(orderNumberMatchKey("01050")).toBe("1050");
+    expect(orderNumberMatchKey("1050")).toBe("1050");
+    expect(orderNumberMatchKey("001050")).toBe("1050");
+    expect(orderNumbersMatch("01050", "1050")).toBe(true);
+    expect(orderNumbersMatch("1050", "001050")).toBe(true);
+    expect(orderNumbersMatch("01050", "11050")).toBe(false);
+    expect(orderNumbersMatch("01050", "010501")).toBe(false);
+
+    const pattern = orderNumberMatchPattern("01050");
+    expect(storedMatches(pattern, "01050")).toBe(true);
+    expect(storedMatches(pattern, "1050")).toBe(true);
+    expect(storedMatches(pattern, "001050")).toBe(true);
+    expect(storedMatches(pattern, "11050")).toBe(false);
+    expect(storedMatches(orderNumberMatchPattern("1050"), "01050")).toBe(true);
   });
 });
 

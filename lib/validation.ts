@@ -97,9 +97,29 @@ export function isValidEmail(email: string): boolean {
 
 /**
  * Normalises an order number: trim + uppercase.
+ * Leading zeros are kept. Squarespace stores "01050"; that exact text is what we save.
  */
 export function normalizeOrderNumber(num: string): string {
   return num.trim().toUpperCase();
+}
+
+/**
+ * Comparison key for duplicate checks. "01050", "1050", and "001050" share one key.
+ * A number that is only zeros stays "0".
+ */
+export function orderNumberMatchKey(orderNumber: string): string {
+  const stripped = normalizeOrderNumber(orderNumber).replace(/^0+/, "");
+  return stripped.length > 0 ? stripped : "0";
+}
+
+export function orderNumbersMatch(left: string, right: string): boolean {
+  return orderNumberMatchKey(left) === orderNumberMatchKey(right);
+}
+
+/** Case-insensitive Postgres pattern (~*) for order numbers that differ only by leading zeros. */
+export function orderNumberMatchPattern(orderNumber: string): string {
+  const key = orderNumberMatchKey(orderNumber).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return `^[[:space:]]*0*${key}[[:space:]]*$`;
 }
 
 /**

@@ -34,6 +34,7 @@ export interface SquarespaceCheckSummary {
   imported: number;
   skippedDuplicate: number;
   skippedNoFilm: number;
+  skippedPos: number;
   errors: SquarespaceCheckError[];
   importedOrderNumbers: string[];
   truncated: boolean;
@@ -46,6 +47,7 @@ export function missingSquarespaceApiKeySummary(): SquarespaceCheckSummary {
     imported: 0,
     skippedDuplicate: 0,
     skippedNoFilm: 0,
+    skippedPos: 0,
     errors: [],
     importedOrderNumbers: [],
     truncated: false,
@@ -58,6 +60,7 @@ export function emptySquarespaceCheckSummary(): SquarespaceCheckSummary {
     imported: 0,
     skippedDuplicate: 0,
     skippedNoFilm: 0,
+    skippedPos: 0,
     errors: [],
     importedOrderNumbers: [],
     truncated: false,
@@ -192,8 +195,26 @@ interface NamedValue {
 
 export type ClassifiedSquarespaceOrder =
   | { kind: "skip_no_film" }
+  | { kind: "skip_pos"; orderNumber?: string }
   | { kind: "error"; orderNumber?: string; message: string }
   | { kind: "import"; draft: IncomingDraftInput };
+
+/**
+ * Squarespace Orders API: `channel` is "web" or "pos".
+ * Point of Sale also shows up in channelName as "Point of Sale" (or similar).
+ * Match is case-insensitive.
+ */
+export function isSquarespacePosOrder(order: { channel?: unknown; channelName?: unknown }): boolean {
+  return [order.channel, order.channelName].some(indicatesPosChannel);
+}
+
+function indicatesPosChannel(value: unknown): boolean {
+  if (typeof value !== "string") return false;
+  const normalized = value.trim().toLowerCase().replace(/[_-]+/g, " ");
+  if (!normalized) return false;
+  if (normalized === "pos" || normalized.includes("point of sale")) return true;
+  return /(^|[^a-z0-9])pos([^a-z0-9]|$)/.test(normalized);
+}
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
@@ -348,6 +369,7 @@ export function classifySquarespaceOrder(order: unknown): ClassifiedSquarespaceO
   if (!record) return { kind: "error", message: "Squarespace order was not an object" };
 
   const orderNumber = orderNumberFrom(record);
+  if (isSquarespacePosOrder(record)) return { kind: "skip_pos", orderNumber };
   const lineItems = Array.isArray(record.lineItems) ? record.lineItems : [];
   const rolls: RollDetail[] = [];
   const problems: string[] = [];

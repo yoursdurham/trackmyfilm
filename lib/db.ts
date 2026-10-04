@@ -13,6 +13,7 @@ import {
   PENDING_INTAKE_STATUS,
 } from "./incoming-drafts";
 import { buildCustomerStatsMap, computeCustomerStats, sortCustomersByLatestOrder } from "./customer-stats";
+import { orderNumberMatchPattern } from "./validation";
 
 type CustomerInsert = Omit<Customer, "id" | "created_at">;
 
@@ -150,11 +151,10 @@ export async function orderNumberExists(orderNumber: string): Promise<boolean> {
   const { data, error } = await getSupabase()
     .from("film_orders")
     .select("id")
-    .eq("order_number", orderNumber)
-    .limit(1)
-    .maybeSingle();
+    .filter("order_number", "imatch", orderNumberMatchPattern(orderNumber))
+    .limit(1);
   if (error) throw new Error(error.message);
-  return data != null;
+  return (data?.length ?? 0) > 0;
 }
 
 export async function getPendingIncomingDrafts(): Promise<IncomingSquarespaceDraft[]> {
@@ -183,10 +183,11 @@ export async function getIncomingDraftByOrderNumber(
   const { data, error } = await getSupabase()
     .from("incoming_squarespace_drafts")
     .select("*")
-    .eq("squarespace_order_number", orderNumber)
-    .maybeSingle();
+    .filter("squarespace_order_number", "imatch", orderNumberMatchPattern(orderNumber))
+    .limit(1);
   if (error) throw new Error(error.message);
-  return data as IncomingSquarespaceDraft | null;
+  const row = data?.[0];
+  return row ? row as IncomingSquarespaceDraft : null;
 }
 
 export async function getIncomingDraftByExternalId(
