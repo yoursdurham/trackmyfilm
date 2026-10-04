@@ -337,7 +337,7 @@ export default function NumbersDashboard({ orders }: { orders: FilmOrder[] }) {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-stone-50 via-orange-50/30 to-amber-50/20">
-      <InternalHeader title="Numbers" subtitle="Admin profit tracking" />
+      <InternalHeader title="Numbers" subtitle="Profit tracking" />
 
       <main className="mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-6 lg:px-8">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
