@@ -4,6 +4,7 @@ import Link from "next/link";
 import { format } from "date-fns";
 import FilmProcessBadge from "@/components/FilmProcessBadge";
 import StatusBadge from "@/components/StatusBadge";
+import { staffOrderDetailPath } from "@/lib/staff-navigation";
 import { formatScanSizeLabel } from "@/lib/scan-size-display";
 import { getOrderRollDetails } from "@/lib/order-roll-utils";
 import type { FilmOrder } from "@/lib/types";
@@ -146,10 +147,10 @@ export default function OrderDetailsReadOnly({ order, showDashboardLink = true }
 
       {showDashboardLink ? (
         <Link
-          href={`/dashboard?search=${encodeURIComponent(order.order_number)}`}
+          href={staffOrderDetailPath(order.id)}
           className="inline-flex text-sm font-medium text-amber-700 hover:text-amber-800 hover:underline"
         >
-          Open on dashboard →
+          Open order #{order.order_number}
         </Link>
       ) : null}
     </div>
