@@ -24,6 +24,7 @@ The main page. Every film order appears as a card.
 - Filter orders by status using the tabs at the top
 - Search by customer name or order number
 - Click **New Drop-off** to log a new order
+- **Pending Intake** lists Squarespace orders that have been imported but not received yet. No confirmation email goes out at import. When the film is in hand, click **Approve & Receive** (leave “Send confirmation email” checked unless you want to skip it). That marks the order Received by Yours and sends the usual email. Dismiss an order you are not going to log. Edit first if a detail needs correcting.
 - Click **Update Status** on any card to advance the order
 
 ### 2. Customers (`/customers`)
@@ -276,6 +277,13 @@ All of these must be set in **Vercel → Project → Settings → Environment Va
 | `NEXT_PUBLIC_APP_URL` | `https://trackmyfilm.com` |
 | `REPLY_TO_EMAIL` | `hello@yoursdurham.com` |
 | `NEXT_PUBLIC_CONTACT_EMAIL` | `hello@yoursdurham.com` |
+| `SQUARESPACE_INTAKE_SECRET` | Long random secret for the Squarespace assistant. Set it in Vercel only — do not commit it. The assistant sends `Authorization: Bearer <this value>` to `POST /api/incoming-drafts`. |
+
+### Squarespace incoming queue
+
+1. In **Supabase Dashboard → SQL Editor → New Query**, run `supabase/migrations/015_incoming_squarespace_drafts.sql`.
+2. Set `SQUARESPACE_INTAKE_SECRET` in Vercel (and in local `.env` if you are testing the assistant).
+3. The assistant creates Pending Intake items only. Approve & Receive is what creates the real order and sends the drop-off email. Hand-entered drop-offs are unchanged.
 
 ### Custom Domain
 - Vercel: `trackmyfilm.com` — A record pointing to `76.76.21.21`, CNAME `www` → `cname.vercel-dns.com`

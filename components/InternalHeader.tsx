@@ -8,12 +8,17 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { BarChart3, DollarSign, LogOut, Plus, Search, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import NewDropoffForm from "@/components/NewDropoffForm";
-import type { Customer } from "@/lib/types";
+import type { Customer, IncomingSquarespaceDraft } from "@/lib/types";
 
 const NEW_DROPOFF_EVENT = "tmf:new-dropoff";
+const OPEN_INCOMING_DRAFT_EVENT = "tmf:open-incoming-draft";
 
 export function openNewDropoffDialog() {
   window.dispatchEvent(new Event(NEW_DROPOFF_EVENT));
+}
+
+export function openIncomingDraft(draft: IncomingSquarespaceDraft) {
+  window.dispatchEvent(new CustomEvent<IncomingSquarespaceDraft>(OPEN_INCOMING_DRAFT_EVENT, { detail: draft }));
 }
 
 const navItems = [
@@ -31,6 +36,7 @@ export default function InternalHeader({
   subtitle?: string;
 }) {
   const [formOpen, setFormOpen] = useState(false);
+  const [incomingDraft, setIncomingDraft] = useState<IncomingSquarespaceDraft | null>(null);
   const pathname = usePathname();
   const queryClient = useQueryClient();
 
@@ -44,9 +50,22 @@ export default function InternalHeader({
   });
 
   useEffect(() => {
-    const open = () => setFormOpen(true);
-    window.addEventListener(NEW_DROPOFF_EVENT, open);
-    return () => window.removeEventListener(NEW_DROPOFF_EVENT, open);
+    const openBlank = () => {
+      setIncomingDraft(null);
+      setFormOpen(true);
+    };
+    const openDraft = (event: Event) => {
+      const detail = (event as CustomEvent<IncomingSquarespaceDraft>).detail;
+      if (!detail?.id) return;
+      setIncomingDraft(detail);
+      setFormOpen(true);
+    };
+    window.addEventListener(NEW_DROPOFF_EVENT, openBlank);
+    window.addEventListener(OPEN_INCOMING_DRAFT_EVENT, openDraft);
+    return () => {
+      window.removeEventListener(NEW_DROPOFF_EVENT, openBlank);
+      window.removeEventListener(OPEN_INCOMING_DRAFT_EVENT, openDraft);
+    };
   }, []);
 
   return (
@@ -93,7 +112,10 @@ export default function InternalHeader({
                 </Button>
               </form>
               <Button
-                onClick={() => setFormOpen(true)}
+                onClick={() => {
+                  setIncomingDraft(null);
+                  setFormOpen(true);
+                }}
                 className="bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-lg shadow-amber-500/25 hover:from-amber-600 hover:to-orange-600"
               >
                 <Plus className="h-4 w-4" />
@@ -106,11 +128,17 @@ export default function InternalHeader({
       </header>
 
       <NewDropoffForm
+        key={incomingDraft?.id ?? "manual"}
         open={formOpen}
-        onOpenChange={setFormOpen}
+        incomingDraft={incomingDraft}
+        onOpenChange={(open) => {
+          setFormOpen(open);
+          if (!open) setIncomingDraft(null);
+        }}
         onSuccess={() => {
           queryClient.invalidateQueries({ queryKey: ["filmOrders"] });
           queryClient.invalidateQueries({ queryKey: ["customers"] });
+          queryClient.invalidateQueries({ queryKey: ["incomingDrafts"] });
         }}
         customers={customers}
       />

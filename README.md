@@ -34,6 +34,39 @@ Required:
 Optional (needed for emails):
 - `RESEND_API_KEY` + three template IDs
 
+Optional (needed for the Squarespace incoming queue):
+- `SQUARESPACE_INTAKE_SECRET` — bearer token for the assistant that stages drop-offs
+
+The assistant calls `POST /api/incoming-drafts` with `Authorization: Bearer <SQUARESPACE_INTAKE_SECRET>`. That creates a **Pending Intake** item only. It does not create a film order, set Received by Yours, write received status history, or send the drop-off email. Logged-in staff click **Approve & Receive** when the film arrives. That sets Received by Yours, the received timestamp, normal status history, and sends the confirmation email unless the checkbox is off.
+
+Set the secret in Vercel and in local `.env`. Do not commit it (`.env*` is gitignored), and do not use a `NEXT_PUBLIC_` name.
+
+Example body (35mm C41, High-Res, 4x6 prints, Portra 800, 1 roll):
+
+```json
+{
+  "squarespace_order_number": "01050",
+  "external_order_id": "squarespace-01050",
+  "import_source": "squarespace",
+  "customer_name": "Justin Eisner",
+  "customer_email": "contact@justineisner.com",
+  "roll_count": 1,
+  "roll_details": [
+    {
+      "film_type": "35mm",
+      "film_process": "C41",
+      "scan_size": "High-Res",
+      "prints_4x6": true,
+      "film_stock": "Kodak Portra 800"
+    }
+  ]
+}
+```
+
+`C41` is stored as Color. `film_stock` is optional. `scan_size` may be `Standard` or `High-Res` (also `TIFF` or `Process Only`). Send `squarespace_order_number` as a string so leading zeros in `01050` are kept. Duplicate order numbers and duplicate `external_order_id` values are rejected, including order numbers that already exist as film orders.
+
+Before using the queue, run `supabase/migrations/015_incoming_squarespace_drafts.sql` in the Supabase SQL editor. See `supabase/migrations/README.md`.
+
 ### 3. Database
 
 Run both migration files in **Supabase Dashboard → SQL Editor**:

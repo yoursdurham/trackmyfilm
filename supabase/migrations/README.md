@@ -12,6 +12,7 @@ Run these in order in: **Supabase Dashboard → SQL Editor → New Query**
 | `012_partial_scan_deliveries.sql` | Partial Color/B&W scan links and timestamps on mixed orders | Yes — for partial scan workflow |
 | `013_allow_110_film_type.sql` | Extends `film_type` CHECK constraints to include `110` | Run if 110 orders fail DB validation |
 | `014_add_scan_notes.sql` | Adds optional `scan_notes` on `film_orders` for scans_sent emails | Yes — when using customer scan notes |
+| `015_incoming_squarespace_drafts.sql` | Creates `incoming_squarespace_drafts` (Pending Intake queue) | Yes — before using Squarespace intake |
 
 ## Notes
 
