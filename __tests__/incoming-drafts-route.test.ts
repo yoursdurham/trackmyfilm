@@ -217,6 +217,7 @@ describe("Squarespace incoming draft routes", () => {
       expect(res.status).toBe(409);
       const body = await res.json();
       expect(body.error).toMatch(/already exists/);
+      expect(mockOrderNumberExists).toHaveBeenCalledWith("01050");
       expect(mockCreateIncomingDraft).not.toHaveBeenCalled();
       expect(mockCreateOrder).not.toHaveBeenCalled();
     });
@@ -227,6 +228,7 @@ describe("Squarespace incoming draft routes", () => {
       expect(res.status).toBe(409);
       const body = await res.json();
       expect(body.error).toMatch(/already imported/);
+      expect(mockGetIncomingDraftByOrderNumber).toHaveBeenCalledWith("01050");
       expect(mockCreateIncomingDraft).not.toHaveBeenCalled();
     });
 

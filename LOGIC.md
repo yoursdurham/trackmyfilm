@@ -24,7 +24,7 @@ The main page. Every film order appears as a card.
 - Filter orders by status using the tabs at the top
 - Search by customer name or order number
 - Click **New Drop-off** to log a new order
-- **Pending Intake** lists Squarespace orders that have been imported but not received yet. No confirmation email goes out at import. **Check Squarespace** pulls recent store orders and adds film-processing ones that are not already in the system. When the film is in hand, click **Approve & Receive** (leave “Send confirmation email” checked unless you want to skip it). That marks the order Received by Yours and sends the usual email. **Dismiss** deletes that intake row so the same Squarespace order can be imported again. Deleting a film order also deletes a matching intake row. Edit first if a detail needs correcting.
+- **Pending Intake** lists Squarespace orders that have been imported but not received yet. No confirmation email goes out at import. **Check Squarespace** pulls recent store orders and adds film-processing ones that are not already in the system. In-person Point of Sale orders are skipped. `01050` and `1050` count as the same order number. When the film is in hand, click **Approve & Receive** (leave “Send confirmation email” checked unless you want to skip it). That marks the order Received by Yours and sends the usual email. **Dismiss** deletes that intake row so the same Squarespace order can be imported again. Deleting a film order also deletes a matching intake row. Edit first if a detail needs correcting.
 - Click **Update Status** on any card to advance the order
 
 ### 2. Customers (`/customers`)
