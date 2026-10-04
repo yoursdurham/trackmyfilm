@@ -6,7 +6,12 @@
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Customer, CustomerSummary, FilmOrder, IncomingSquarespaceDraft } from "./types";
-import { buildIncomingDraftInsert, type IncomingDraftInput, PENDING_INTAKE_STATUS } from "./incoming-drafts";
+import {
+  buildIncomingDraftInsert,
+  incomingDraftDeleteMatch,
+  type IncomingDraftInput,
+  PENDING_INTAKE_STATUS,
+} from "./incoming-drafts";
 import { buildCustomerStatsMap, computeCustomerStats, sortCustomersByLatestOrder } from "./customer-stats";
 
 type CustomerInsert = Omit<Customer, "id" | "created_at">;
@@ -210,21 +215,84 @@ export async function createIncomingDraft(data: IncomingDraftInput): Promise<Inc
   return created as IncomingSquarespaceDraft;
 }
 
+function isMissingFilmOrderLinkColumn(error: { message?: string; code?: string }): boolean {
+  const message = (error.message ?? "").toLowerCase();
+  if (!message.includes("film_order_id")) return false;
+  return error.code === "42703"
+    || error.code === "PGRST204"
+    || message.includes("schema cache")
+    || message.includes("does not exist");
+}
+
 export async function updateIncomingDraftStatus(
   id: string,
-  status: "accepted" | "dismissed"
+  status: "accepted",
+  filmOrderId?: string
 ): Promise<IncomingSquarespaceDraft> {
-  const { data: updated, error } = await getSupabase()
-    .from("incoming_squarespace_drafts")
-    .update({
+  const updatedAt = new Date().toISOString();
+  const write = (includeLink: boolean) => {
+    const patch: { status: "accepted"; updated_at: string; film_order_id?: string } = {
       status,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", id)
-    .select()
-    .single();
+      updated_at: updatedAt,
+    };
+    if (includeLink && filmOrderId) patch.film_order_id = filmOrderId;
+    return getSupabase()
+      .from("incoming_squarespace_drafts")
+      .update(patch)
+      .eq("id", id)
+      .select()
+      .single();
+  };
+
+  let { data: updated, error } = await write(Boolean(filmOrderId));
+  if (error && filmOrderId && isMissingFilmOrderLinkColumn(error)) {
+    ({ data: updated, error } = await write(false));
+  }
   if (error) throw new Error(error.message);
   return updated as IncomingSquarespaceDraft;
+}
+
+/** Removes the intake row. Does not touch film orders. */
+export async function deleteIncomingDraft(id: string): Promise<void> {
+  const { error } = await getSupabase()
+    .from("incoming_squarespace_drafts")
+    .delete()
+    .eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
+/**
+ * Removes intake rows that share this film order's number or Squarespace external id.
+ * Also removes a row linked by film_order_id when that column exists.
+ */
+export async function deleteIncomingDraftsForOrder(order: {
+  id?: string;
+  order_number: string;
+  external_order_id?: string | null;
+}): Promise<void> {
+  if (order.id) {
+    const { error } = await getSupabase()
+      .from("incoming_squarespace_drafts")
+      .delete()
+      .eq("film_order_id", order.id);
+    if (error && !isMissingFilmOrderLinkColumn(error)) throw new Error(error.message);
+  }
+
+  const match = incomingDraftDeleteMatch(order);
+  for (const orderNumber of match.orderNumbers) {
+    const { error } = await getSupabase()
+      .from("incoming_squarespace_drafts")
+      .delete()
+      .eq("squarespace_order_number", orderNumber);
+    if (error) throw new Error(error.message);
+  }
+  for (const externalOrderId of match.externalOrderIds) {
+    const { error } = await getSupabase()
+      .from("incoming_squarespace_drafts")
+      .delete()
+      .eq("external_order_id", externalOrderId);
+    if (error) throw new Error(error.message);
+  }
 }
 
 export async function deleteOrder(id: string): Promise<void> {

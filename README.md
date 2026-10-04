@@ -65,7 +65,9 @@ Example body (35mm C41, High-Res, 4x6 prints, Portra 800, 1 roll):
 
 `C41` is stored as Color. `film_stock` is optional. `scan_size` may be `Standard` or `High-Res` (also `TIFF` or `Process Only`). Send `squarespace_order_number` as a string so leading zeros in `01050` are kept. Duplicate order numbers and duplicate `external_order_id` values are rejected, including order numbers that already exist as film orders.
 
-Before using the queue, run `supabase/migrations/015_incoming_squarespace_drafts.sql` in the Supabase SQL editor. See `supabase/migrations/README.md`.
+**Dismiss** deletes the Pending Intake row. Deleting a film order also deletes the matching intake row (same order number or Squarespace external id). Neither action leaves a row behind, so that Squarespace order can be imported again.
+
+Before using the queue, run `supabase/migrations/015_incoming_squarespace_drafts.sql` in the Supabase SQL editor, then `supabase/migrations/016_hard_delete_intake_rows.sql`. See `supabase/migrations/README.md`.
 
 ### 3. Database
 

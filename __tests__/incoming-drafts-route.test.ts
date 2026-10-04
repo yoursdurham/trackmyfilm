@@ -12,6 +12,7 @@ const mockUpdateCustomer = vi.fn();
 const mockGetPendingIncomingDrafts = vi.fn();
 const mockGetIncomingDraftById = vi.fn();
 const mockUpdateIncomingDraftStatus = vi.fn();
+const mockDeleteIncomingDraft = vi.fn();
 const mockGetOrderByNumber = vi.fn();
 const mockCreateOrder = vi.fn();
 const mockGetCustomers = vi.fn();
@@ -32,6 +33,7 @@ vi.mock("@/lib/db", () => ({
   getPendingIncomingDrafts: (...args: unknown[]) => mockGetPendingIncomingDrafts(...args),
   getIncomingDraftById: (...args: unknown[]) => mockGetIncomingDraftById(...args),
   updateIncomingDraftStatus: (...args: unknown[]) => mockUpdateIncomingDraftStatus(...args),
+  deleteIncomingDraft: (...args: unknown[]) => mockDeleteIncomingDraft(...args),
   getOrderByNumber: (...args: unknown[]) => mockGetOrderByNumber(...args),
   createOrder: (...args: unknown[]) => mockCreateOrder(...args),
   getCustomers: (...args: unknown[]) => mockGetCustomers(...args),
@@ -43,7 +45,7 @@ vi.mock("@/lib/email-service", () => ({
 }));
 
 import { GET, POST } from "@/app/api/incoming-drafts/route";
-import { PATCH } from "@/app/api/incoming-drafts/[id]/route";
+import { DELETE as deleteDraft, PATCH } from "@/app/api/incoming-drafts/[id]/route";
 import { POST as receiveDraft } from "@/app/api/incoming-drafts/[id]/receive/route";
 import { SQUARESPACE_INTAKE_SECRET_ENV } from "@/lib/intake-auth";
 
@@ -141,6 +143,7 @@ describe("Squarespace incoming draft routes", () => {
       status,
       squarespace_order_number: "01050",
     }));
+    mockDeleteIncomingDraft.mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -306,26 +309,37 @@ describe("Squarespace incoming draft routes", () => {
       expect(mockGetCustomers).not.toHaveBeenCalled();
     });
 
-    it("marks a pending draft dismissed", async () => {
+    it("hard-deletes a pending draft instead of marking it dismissed", async () => {
       const res = await patchDraft("dismissed");
       expect(res.status).toBe(200);
-      expect(mockUpdateIncomingDraftStatus).toHaveBeenCalledWith(DRAFT_ID, "dismissed");
+      expect(await res.json()).toEqual({ success: true, deleted: true });
+      expect(mockDeleteIncomingDraft).toHaveBeenCalledWith(DRAFT_ID);
+      expect(mockUpdateIncomingDraftStatus).not.toHaveBeenCalled();
+      expect(mockCreateOrder).not.toHaveBeenCalled();
+      expect(mockSendOrderEmail).not.toHaveBeenCalled();
     });
 
-    it("rejects crossing from accepted to dismissed", async () => {
-      mockGetIncomingDraftById.mockResolvedValue({ id: DRAFT_ID, status: "accepted" });
+    it("hard-deletes an accepted draft so the order number can be imported again", async () => {
+      mockGetIncomingDraftById.mockResolvedValue({
+        id: DRAFT_ID,
+        status: "accepted",
+        squarespace_order_number: "01050",
+        external_order_id: "squarespace-01050",
+      });
       const res = await patchDraft("dismissed");
-      expect(res.status).toBe(409);
+      expect(res.status).toBe(200);
+      expect(mockDeleteIncomingDraft).toHaveBeenCalledWith(DRAFT_ID);
       expect(mockUpdateIncomingDraftStatus).not.toHaveBeenCalled();
     });
 
-    it("returns the current draft when the same terminal status is repeated", async () => {
-      const current = { id: DRAFT_ID, status: "dismissed", squarespace_order_number: "01050" };
+    it("returns the current draft when accepted is repeated", async () => {
+      const current = { id: DRAFT_ID, status: "accepted", squarespace_order_number: "01050" };
       mockGetIncomingDraftById.mockResolvedValue(current);
-      const res = await patchDraft("dismissed");
+      const res = await patchDraft("accepted");
       expect(res.status).toBe(200);
       expect(await res.json()).toEqual(current);
       expect(mockUpdateIncomingDraftStatus).not.toHaveBeenCalled();
+      expect(mockDeleteIncomingDraft).not.toHaveBeenCalled();
     });
 
     it("returns 404 for an unknown id and does not touch orders", async () => {
@@ -379,7 +393,8 @@ describe("Squarespace incoming draft routes", () => {
         { status: "Received by Yours", changed_at: order.received_by_yours_at },
       ]);
       expect(mockSendOrderEmail).toHaveBeenCalledWith("order-1", "film_drop_received");
-      expect(mockUpdateIncomingDraftStatus).toHaveBeenCalledWith(DRAFT_ID, "accepted");
+      expect(mockUpdateIncomingDraftStatus).toHaveBeenCalledWith(DRAFT_ID, "accepted", "order-1");
+      expect(mockDeleteIncomingDraft).not.toHaveBeenCalled();
     });
 
     it("skips the confirmation email when the checkbox is off", async () => {
@@ -389,7 +404,42 @@ describe("Squarespace incoming draft routes", () => {
       expect(body.email.skipped).toBe(true);
       expect(body.order.status).toBe("Received by Yours");
       expect(mockSendOrderEmail).not.toHaveBeenCalled();
-      expect(mockUpdateIncomingDraftStatus).toHaveBeenCalledWith(DRAFT_ID, "accepted");
+      expect(mockUpdateIncomingDraftStatus).toHaveBeenCalledWith(DRAFT_ID, "accepted", "order-1");
+    });
+  });
+
+  describe("DELETE /api/incoming-drafts/:id", () => {
+    function removeDraft(token: string | null = null, id = DRAFT_ID) {
+      const headers: Record<string, string> = {};
+      if (token) headers.authorization = `Bearer ${token}`;
+      return deleteDraft(new Request(`http://localhost/api/incoming-drafts/${id}`, {
+        method: "DELETE",
+        headers,
+      }), { params: Promise.resolve({ id }) });
+    }
+
+    it("does not accept the intake secret in place of a staff session", async () => {
+      mockRequireAuth.mockResolvedValue(NextResponse.json({ error: "Unauthorized" }, { status: 401 }));
+      const res = await removeDraft(SECRET);
+      expect(res.status).toBe(401);
+      expect(mockDeleteIncomingDraft).not.toHaveBeenCalled();
+      expect(mockCreateOrder).not.toHaveBeenCalled();
+    });
+
+    it("hard-deletes a Pending Intake row and does not create an order", async () => {
+      const res = await removeDraft();
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ success: true, deleted: true });
+      expect(mockDeleteIncomingDraft).toHaveBeenCalledWith(DRAFT_ID);
+      expect(mockUpdateIncomingDraftStatus).not.toHaveBeenCalled();
+      expect(mockCreateOrder).not.toHaveBeenCalled();
+      expect(mockSendOrderEmail).not.toHaveBeenCalled();
+    });
+
+    it("returns 404 for an unknown id", async () => {
+      const res = await removeDraft(null, "nope");
+      expect(res.status).toBe(404);
+      expect(mockDeleteIncomingDraft).not.toHaveBeenCalled();
     });
   });
 });

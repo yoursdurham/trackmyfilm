@@ -88,7 +88,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     }
 
     try {
-      await updateIncomingDraftStatus(id, "accepted");
+      await updateIncomingDraftStatus(id, "accepted", result.body.order.id);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Unknown error";
       console.error("[POST /api/incoming-drafts/:id/receive] order created but draft not cleared:", message);

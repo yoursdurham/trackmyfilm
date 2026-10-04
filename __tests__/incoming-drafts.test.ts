@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   buildIncomingDraftInsert,
+  incomingDraftDeleteMatch,
   isIncomingDraftUuid,
   parseIncomingDraftPayload,
   resolveIncomingDraftStatusChange,
@@ -186,35 +187,51 @@ describe("parseIncomingDraftPayload", () => {
 });
 
 describe("resolveIncomingDraftStatusChange", () => {
-  it("accepts or dismisses a Pending Intake item", () => {
+  it("accepts a Pending Intake item and treats a repeated accept as a no-op", () => {
     expect(resolveIncomingDraftStatusChange("Pending Intake", "accepted")).toEqual({
       ok: true, status: "accepted", changed: true,
     });
-    expect(resolveIncomingDraftStatusChange("Pending Intake", "dismissed")).toEqual({
-      ok: true, status: "dismissed", changed: true,
-    });
-  });
-
-  it("treats a repeated terminal status as a no-op", () => {
     expect(resolveIncomingDraftStatusChange("accepted", "accepted")).toEqual({
       ok: true, status: "accepted", changed: false,
     });
-    expect(resolveIncomingDraftStatusChange("dismissed", "dismissed")).toEqual({
-      ok: true, status: "dismissed", changed: false,
-    });
   });
 
-  it("rejects pending as a target and crossing between terminal statuses", () => {
+  it("does not treat dismiss as a stored status", () => {
+    const dismissed = resolveIncomingDraftStatusChange("Pending Intake", "dismissed");
+    expect(dismissed.ok).toBe(false);
+    if (dismissed.ok) return;
+    expect(dismissed.reason).toBe("invalid");
+
     const invalid = resolveIncomingDraftStatusChange("Pending Intake", "Pending Intake");
     expect(invalid.ok).toBe(false);
     if (invalid.ok) return;
     expect(invalid.reason).toBe("invalid");
+  });
 
-    const conflict = resolveIncomingDraftStatusChange("accepted", "dismissed");
+  it("rejects accepting a draft that is no longer Pending Intake", () => {
+    const conflict = resolveIncomingDraftStatusChange("dismissed", "accepted");
     expect(conflict.ok).toBe(false);
     if (conflict.ok) return;
     expect(conflict.reason).toBe("conflict");
-    expect(resolveIncomingDraftStatusChange("dismissed", "accepted").ok).toBe(false);
+  });
+});
+
+describe("incomingDraftDeleteMatch", () => {
+  it("matches the normalized order number and the Squarespace external id", () => {
+    expect(incomingDraftDeleteMatch({
+      order_number: " 01050 ",
+      external_order_id: " squarespace-01050 ",
+    })).toEqual({
+      orderNumbers: ["01050"],
+      externalOrderIds: ["squarespace-01050", "01050"],
+    });
+  });
+
+  it("still matches an external id that is the film order number", () => {
+    expect(incomingDraftDeleteMatch({ order_number: "sq-1001" })).toEqual({
+      orderNumbers: ["SQ-1001"],
+      externalOrderIds: ["sq-1001", "SQ-1001"],
+    });
   });
 });
 

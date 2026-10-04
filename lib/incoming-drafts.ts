@@ -271,29 +271,64 @@ function parseRoll(
 }
 
 export type IncomingDraftStatusChange =
-  | { ok: true; status: "accepted" | "dismissed"; changed: boolean }
+  | { ok: true; status: "accepted"; changed: boolean }
   | { ok: false; reason: "invalid" | "conflict"; error: string };
 
 /**
- * Pending Intake items can be accepted or dismissed.
- * Repeating the current terminal status is a no-op. Crossing between them is rejected.
+ * Pending Intake can be marked accepted. Dismiss is not stored: callers delete the row.
+ * Repeating accepted is a no-op.
  */
 export function resolveIncomingDraftStatusChange(
   current: IncomingDraftStatus,
   requested: unknown
 ): IncomingDraftStatusChange {
-  if (requested !== "accepted" && requested !== "dismissed") {
-    return { ok: false, reason: "invalid", error: "status must be accepted or dismissed" };
+  if (requested !== "accepted") {
+    return { ok: false, reason: "invalid", error: "status must be accepted" };
   }
-  if (current === requested) {
-    return { ok: true, status: requested, changed: false };
+  if (current === "accepted") {
+    return { ok: true, status: "accepted", changed: false };
   }
   if (current !== PENDING_INTAKE_STATUS) {
     return {
       ok: false,
       reason: "conflict",
-      error: `Draft is already ${current} and cannot be marked ${requested}`,
+      error: `Draft is already ${current} and cannot be marked accepted`,
     };
   }
-  return { ok: true, status: requested, changed: true };
+  return { ok: true, status: "accepted", changed: true };
+}
+
+export interface IncomingDraftDeleteMatch {
+  orderNumbers: string[];
+  externalOrderIds: string[];
+}
+
+function uniqueNonEmpty(values: Array<string | null | undefined>): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const value of values) {
+    if (typeof value !== "string") continue;
+    const trimmed = value.trim();
+    if (!trimmed || seen.has(trimmed)) continue;
+    seen.add(trimmed);
+    result.push(trimmed);
+  }
+  return result;
+}
+
+/**
+ * Keys that must be removed from incoming_squarespace_drafts so this film order
+ * no longer blocks a later Squarespace import. Matches the draft order number
+ * and external_order_id, including when the film order number is the external id.
+ */
+export function incomingDraftDeleteMatch(order: {
+  order_number: string;
+  external_order_id?: string | null;
+}): IncomingDraftDeleteMatch {
+  const trimmed = typeof order.order_number === "string" ? order.order_number.trim() : "";
+  const normalized = trimmed ? normalizeOrderNumber(trimmed) : "";
+  return {
+    orderNumbers: uniqueNonEmpty([normalized]),
+    externalOrderIds: uniqueNonEmpty([order.external_order_id, trimmed, normalized]),
+  };
 }
