@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { serializeOrderForPublicTracking } from "../lib/tracking-public";
+import {
+  orderNoteForCustomerDisplay,
+  serializeOrderForPublicTracking,
+} from "../lib/tracking-public";
 import type { FilmOrder } from "../lib/types";
 
 const order: FilmOrder = {
@@ -34,5 +37,34 @@ describe("serializeOrderForPublicTracking", () => {
   it("keeps links when token is valid", () => {
     const full = serializeOrderForPublicTracking(order, true);
     expect(full.color_scans_wetransfer_link).toBe(order.color_scans_wetransfer_link);
+  });
+
+  it("keeps staff order notes for public tracking", () => {
+    const withNotes = { ...order, notes: "Handle with care" };
+    const publicOrder = serializeOrderForPublicTracking(withNotes, false);
+    expect(publicOrder.notes).toBe("Handle with care");
+  });
+
+  it("strips internal-only note and email fields", () => {
+    const enriched = {
+      ...order,
+      scan_notes: "lab only",
+      customer_notes: "from customer form",
+      email_status: "failed",
+      email_error: "smtp",
+    };
+    const publicOrder = serializeOrderForPublicTracking(enriched, false);
+    expect(publicOrder.scan_notes).toBeUndefined();
+    expect(publicOrder.customer_notes).toBeUndefined();
+    expect(publicOrder.email_status).toBeUndefined();
+    expect(publicOrder.email_error).toBeUndefined();
+  });
+});
+
+describe("orderNoteForCustomerDisplay", () => {
+  it("returns trimmed text or null", () => {
+    expect(orderNoteForCustomerDisplay("  hello  ")).toBe("hello");
+    expect(orderNoteForCustomerDisplay("")).toBeNull();
+    expect(orderNoteForCustomerDisplay("   ")).toBeNull();
   });
 });

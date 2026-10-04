@@ -36,6 +36,7 @@ import {
   isPartialScanDeliveryComplete,
   type ScanDeliveryBatch,
 } from "@/lib/scan-batch";
+import { formatScanSizeLabel } from "@/lib/scan-size-display";
 import { isValidWetransferLink, ensureHttps } from "@/lib/validation";
 import type { FilmOrder, FilmProcess, FilmType, OrderStatus, RollDetail } from "@/lib/types";
 
@@ -478,25 +479,23 @@ export default function OrderCard({
             {order.film_type && <span className="text-slate-400">• {order.film_type}</span>}
           </div>
           {mixedScanOrder && order.status === ORDER_STATUS.RECEIVED_AT_LAB && partialProgress.length > 0 ? (
-            <div className="space-y-2 rounded-lg border border-purple-100 bg-purple-50/50 px-3 py-2 text-xs">
-              <p className="font-semibold text-purple-900">Partial scan progress</p>
-              {partialProgress.map((item) => (
-                <div key={item.batch} className="flex flex-wrap items-center justify-between gap-2 text-slate-700">
-                  <span>{item.label}</span>
-                  {item.delivered && item.deliveredAt ? (
-                    <span className="font-medium text-[#5E8068]">
-                      Sent {format(new Date(item.deliveredAt), "MMM d")}
+            <div className="rounded-lg border border-purple-100 bg-purple-50/50 px-2.5 py-2 text-xs">
+              <p className="mb-1 font-semibold text-purple-900">Partial scans</p>
+              <div className="space-y-0.5">
+                {partialProgress.map((item) => (
+                  <div key={item.batch} className="flex items-center justify-between gap-2 text-slate-700">
+                    <span>{item.batch === "Color" ? "Color" : "B&W"}</span>
+                    <span className={item.delivered ? "font-medium text-[#5E8068]" : "text-slate-500"}>
+                      {item.delivered ? "Sent" : "Waiting"}
                     </span>
-                  ) : (
-                    <span className="text-slate-500">Waiting</span>
-                  )}
-                </div>
-              ))}
+                  </div>
+                ))}
+              </div>
               {showPartialScanActions ? (
                 <Button
                   type="button"
                   size="sm"
-                  className="mt-1 h-8 w-full bg-purple-700 text-xs text-white hover:bg-purple-800"
+                  className="mt-1.5 h-7 w-full bg-purple-700 text-xs text-white hover:bg-purple-800"
                   onClick={openPartialDialog}
                 >
                   <Send className="mr-1.5 h-3.5 w-3.5" />
@@ -647,18 +646,6 @@ export default function OrderCard({
           </Collapsible>
         )}
 
-        {showPartialScanActions ? (
-          <Button
-            type="button"
-            size="sm"
-            className="mb-3 h-9 w-full bg-purple-700 text-white hover:bg-purple-800"
-            onClick={openPartialDialog}
-          >
-            <Send className="mr-2 h-4 w-4" />
-            Send Partial Scans
-          </Button>
-        ) : null}
-
         <div className="pt-3 border-t border-slate-100 flex gap-2">
           <DropdownMenu>
             <DropdownMenuTrigger
@@ -670,17 +657,6 @@ export default function OrderCard({
               }
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
-              {showPartialScanActions ? (
-                <DropdownMenuItem
-                  onClick={(event) => {
-                    event.preventDefault();
-                    openPartialDialog();
-                  }}
-                >
-                  <Send className="mr-2 h-3.5 w-3.5 text-purple-700" />
-                  Send Partial Scans…
-                </DropdownMenuItem>
-              ) : null}
               {statusOptions.map((status) => {
                 const targetIdx = STATUS_FLOW.indexOf(status);
                 const isBackward = targetIdx < currentIdx;
@@ -1062,37 +1038,45 @@ export default function OrderCard({
                   Film Details
                 </h4>
                 <div className="space-y-2">
-                  {rollDetails.map((roll, index) => (
-                    <div
-                      key={`${order.id}-detail-roll-${index}`}
-                      className="rounded-xl border border-slate-100 bg-slate-50 p-3"
-                    >
-                      <p className="mb-2 font-medium text-slate-800">Roll {index + 1}</p>
-                      <div className="flex flex-wrap gap-2">
-                        {roll.film_type ? (
-                          <span className="rounded-full bg-[var(--accent-tan)] px-2 py-0.5 text-xs font-medium text-[#A77B43]">
-                            {roll.film_type}
-                          </span>
-                        ) : null}
-                        {roll.film_process ? (
-                          <FilmProcessBadge
-                            process={roll.film_process}
-                            className="rounded-full bg-[var(--accent-purple)] px-2 py-0.5 text-xs font-medium text-white"
-                          />
-                        ) : null}
-                        {roll.film_stock ? (
-                          <span className="rounded-full bg-slate-200 px-2 py-0.5 text-xs text-slate-700">
-                            {roll.film_stock}
-                          </span>
-                        ) : null}
-                        {roll.prints_4x6 ? (
-                          <span className="rounded-full bg-[var(--accent-green)] px-2 py-0.5 text-xs font-medium text-white">
-                            4x6 Prints
-                          </span>
-                        ) : null}
+                  {rollDetails.map((roll, index) => {
+                    const scanLabel = formatScanSizeLabel(roll.scan_size);
+                    return (
+                      <div
+                        key={`${order.id}-detail-roll-${index}`}
+                        className="rounded-xl border border-slate-100 bg-slate-50 p-3"
+                      >
+                        <p className="mb-2 font-medium text-slate-800">Roll {index + 1}</p>
+                        <div className="flex flex-wrap gap-2">
+                          {roll.film_type ? (
+                            <span className="rounded-full bg-[var(--accent-tan)] px-2 py-0.5 text-xs font-medium text-[#A77B43]">
+                              {roll.film_type}
+                            </span>
+                          ) : null}
+                          {roll.film_process ? (
+                            <FilmProcessBadge
+                              process={roll.film_process}
+                              className="rounded-full bg-[var(--accent-purple)] px-2 py-0.5 text-xs font-medium text-white"
+                            />
+                          ) : null}
+                          {roll.film_stock ? (
+                            <span className="rounded-full bg-slate-200 px-2 py-0.5 text-xs text-slate-700">
+                              {roll.film_stock}
+                            </span>
+                          ) : null}
+                          {scanLabel ? (
+                            <span className="rounded-full bg-slate-200 px-2 py-0.5 text-xs font-medium text-slate-700">
+                              {scanLabel}
+                            </span>
+                          ) : null}
+                          {roll.prints_4x6 ? (
+                            <span className="rounded-full bg-[var(--accent-green)] px-2 py-0.5 text-xs font-medium text-white">
+                              4x6 Prints
+                            </span>
+                          ) : null}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </section>
             ) : null}

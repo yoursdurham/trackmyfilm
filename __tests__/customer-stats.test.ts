@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { computeCustomerStats } from "../lib/customer-stats";
+import {
+  computeCustomerStats,
+  getLatestOrderDate,
+  sortCustomersByLatestOrder,
+  sortCustomersByMostOrders,
+  sortCustomersForList,
+} from "../lib/customer-stats";
 import type { FilmOrder } from "../lib/types";
 
 const baseOrder = (overrides: Partial<FilmOrder> = {}): FilmOrder => ({
@@ -50,8 +56,9 @@ describe("computeCustomerStats", () => {
     expect(stats.total_orders).toBe(2);
     expect(stats.total_rolls).toBe(3);
     expect(stats.last_order_date).toBe("2026-02-01");
-    expect(stats.common_film_type).toBe("35mm");
-    expect(stats.common_film_process).toBe("Color");
+    // 35mm×2 vs 120×1 — tie broken by most recent order (Feb 120 roll)
+    expect(stats.common_film_type).toBe("120");
+    expect(stats.common_film_process).toBe("Black & White");
     expect(stats.average_turnaround_days).toBe(4);
   });
 
@@ -71,5 +78,69 @@ describe("computeCustomerStats", () => {
     ]);
 
     expect(stats.common_film_type).toBe("110");
+  });
+
+  it("uses newest order by dropoff_date, then received_by_yours_at, then created_at", () => {
+    expect(
+      getLatestOrderDate([
+        baseOrder({ dropoff_date: "2026-06-01" }),
+        baseOrder({ id: "o2", dropoff_date: "2026-09-28" }),
+      ])
+    ).toBe("2026-09-28");
+
+    expect(
+      getLatestOrderDate([
+        baseOrder({ dropoff_date: "", received_by_yours_at: "2026-08-01T10:00:00.000Z" }),
+        baseOrder({
+          id: "o2",
+          dropoff_date: "",
+          received_by_yours_at: "2026-09-01T10:00:00.000Z",
+        }),
+      ])
+    ).toBe("2026-09-01T10:00:00.000Z");
+  });
+});
+
+describe("sortCustomersByLatestOrder", () => {
+  it("orders by latest order descending; no orders last; name tie-break", () => {
+    const sorted = sortCustomersByLatestOrder([
+      { first_name: "Chris", last_name: "Lee", last_order_date: "2026-06-12" },
+      { first_name: "John", last_name: "May", last_order_date: "2026-09-28" },
+      { first_name: "Alex", last_name: "Jones", last_order_date: "2026-08-30" },
+      { first_name: "Sarah", last_name: "Smith", last_order_date: "2026-09-24" },
+      { first_name: "No", last_name: "Orders", last_order_date: null },
+    ]);
+
+    expect(sorted.map((c) => c.first_name)).toEqual([
+      "John",
+      "Sarah",
+      "Alex",
+      "Chris",
+      "No",
+    ]);
+  });
+});
+
+describe("sortCustomersByMostOrders", () => {
+  it("orders by total orders desc, then latest order date", () => {
+    const sorted = sortCustomersByMostOrders([
+      { first_name: "A", total_orders: 5, last_order_date: "2026-01-01" },
+      { first_name: "B", total_orders: 21, last_order_date: "2026-03-01" },
+      { first_name: "C", total_orders: 9, last_order_date: "2026-06-01" },
+      { first_name: "D", total_orders: 14, last_order_date: "2026-02-01" },
+      { first_name: "E", total_orders: 5, last_order_date: "2026-08-01" },
+      { first_name: "F", total_orders: 1, last_order_date: "2026-09-01" },
+    ]);
+
+    expect(sorted.map((c) => c.first_name)).toEqual(["B", "D", "C", "E", "A", "F"]);
+  });
+
+  it("sortCustomersForList respects mode", () => {
+    const rows = [
+      { first_name: "Low", total_orders: 1, last_order_date: "2026-09-01" },
+      { first_name: "High", total_orders: 10, last_order_date: "2026-01-01" },
+    ];
+    expect(sortCustomersForList(rows, "most_orders").map((c) => c.first_name)).toEqual(["High", "Low"]);
+    expect(sortCustomersForList(rows, "recent_order").map((c) => c.first_name)).toEqual(["Low", "High"]);
   });
 });

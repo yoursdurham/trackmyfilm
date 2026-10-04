@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
-import { getCustomerProfile, updateCustomer, deleteCustomer } from "@/lib/db";
+import { getCustomerById, getCustomerProfile, deleteCustomer, getCustomerByEmail } from "@/lib/db";
 import { requireAuth } from "@/lib/api-auth";
 import { isValidEmail, normalizeEmail } from "@/lib/validation";
+import { applyNormalizedNameToPatch, buildCustomerPatchFromBody } from "@/lib/customer-update";
+import { patchCustomerWithOrderEmailSync } from "@/lib/customer-email-sync";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAuth();
@@ -26,38 +28,52 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   try {
     const { id } = await params;
     const body = await req.json();
-    const {
-      first_name, last_name, email, phone, notes, total_rolls, total_dropoffs,
-      normalized_name, last_dropoff_date, last_order_number, current_rolls,
-      preferred_contact_method, default_film_type, default_film_process,
-      default_scan_size, default_delivery_preference,
-    } = body;
 
-    if (email !== undefined && email !== null && email !== "" && !isValidEmail(email)) {
+    const { patch: rawPatch, error: buildError } = buildCustomerPatchFromBody(body);
+    if (buildError) {
+      return NextResponse.json({ error: buildError }, { status: 400 });
+    }
+
+    if (rawPatch.email !== undefined && rawPatch.email !== "" && !isValidEmail(rawPatch.email)) {
       return NextResponse.json({ error: "Invalid email address" }, { status: 400 });
     }
 
-    const customer = await updateCustomer(id, {
-      first_name,
-      last_name,
-      email: email ? normalizeEmail(email) : email,
-      phone,
-      notes,
-      total_rolls,
-      total_dropoffs,
-      normalized_name,
-      last_dropoff_date,
-      last_order_number,
-      current_rolls,
-      preferred_contact_method,
-      default_film_type,
-      default_film_process,
-      default_scan_size,
-      default_delivery_preference,
-    });
+    if (Object.keys(rawPatch).length === 0) {
+      return NextResponse.json({ error: "No fields to update" }, { status: 400 });
+    }
+
+    const current = await getCustomerById(id);
+    if (!current) {
+      return NextResponse.json({ error: "Customer not found" }, { status: 404 });
+    }
+
+    let patch = { ...rawPatch };
+    if (patch.email !== undefined && patch.email !== "") {
+      const normalized = normalizeEmail(patch.email);
+      const existing = await getCustomerByEmail(normalized);
+      if (existing && existing.id !== id) {
+        return NextResponse.json(
+          { error: "Another customer already uses this email address" },
+          { status: 409 },
+        );
+      }
+      patch.email = normalized;
+    }
+
+    patch = applyNormalizedNameToPatch(patch, current);
+
+    const { customer, ordersUpdated } = await patchCustomerWithOrderEmailSync(id, current, patch);
+    if (ordersUpdated > 0) {
+      console.log("[PATCH /api/customers] Synced customer_email on orders:", {
+        customerId: id,
+        ordersUpdated,
+      });
+    }
     return NextResponse.json(customer);
-  } catch {
-    return NextResponse.json({ error: "Failed to update customer" }, { status: 500 });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Failed to update customer";
+    console.error("[PATCH /api/customers]", message);
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 

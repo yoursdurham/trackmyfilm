@@ -70,17 +70,16 @@ function isWithinPeriod(scansSent: Date, period: TurnaroundPeriodKey, now = new 
   return scansSent >= cutoff;
 }
 
-export function calculateTurnaroundForPeriod(
+function collectTurnaroundDays(
   orders: FilmOrder[],
-  period: TurnaroundPeriodKey,
-  now = new Date()
+  includeScansSent: (scansSent: Date) => boolean
 ): TurnaroundPeriodStats {
   const completed = orders
     .map((order) => {
       const scansSent = getScansSentDate(order);
       const turnaroundDays = getTurnaroundDays(order);
       if (!scansSent || turnaroundDays === null) return null;
-      if (!isWithinPeriod(scansSent, period, now)) return null;
+      if (!includeScansSent(scansSent)) return null;
       return turnaroundDays;
     })
     .filter((days): days is number => days !== null);
@@ -91,6 +90,28 @@ export function calculateTurnaroundForPeriod(
     : null;
 
   return { averageDays, orderCount };
+}
+
+export function calculateTurnaroundForPeriod(
+  orders: FilmOrder[],
+  period: TurnaroundPeriodKey,
+  now = new Date()
+): TurnaroundPeriodStats {
+  return collectTurnaroundDays(orders, (scansSent) =>
+    isWithinPeriod(scansSent, period, now)
+  );
+}
+
+/** Average turnaround for orders whose Scans Sent date falls within [start, end]. */
+export function calculateTurnaroundForDateRange(
+  orders: FilmOrder[],
+  start: Date,
+  end: Date
+): TurnaroundPeriodStats {
+  return collectTurnaroundDays(
+    orders,
+    (scansSent) => scansSent >= start && scansSent <= end
+  );
 }
 
 export function formatTurnaroundDays(days: number | null): string {

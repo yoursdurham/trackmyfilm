@@ -225,6 +225,10 @@ const variables: Record<string, string> = {
   scans_sent_at: formatDate(order.scans_sent_at),
 };
 
+  if (template === "film_drop_received") {
+    variables.notes = order.notes?.trim() ?? "";
+  }
+
   if (template === "scans_sent") {
     variables.wetransfer_link = order.wetransfer_link ?? "";
     variables.color_wetransfer_link = order.color_scans_wetransfer_link ?? "";

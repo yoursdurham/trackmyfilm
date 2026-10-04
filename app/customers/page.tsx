@@ -12,6 +12,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import InternalHeader from "@/components/InternalHeader";
 import AddCustomerForm from "@/components/AddCustomerForm";
 import type { CustomerSummary } from "@/lib/types";
+import {
+  type CustomerListSortMode,
+  sortCustomersForList,
+} from "@/lib/customer-stats";
 
 const PAGE_SIZE = 50;
 
@@ -22,6 +26,7 @@ function displayName(customer: CustomerSummary) {
 export default function CustomersPage() {
   const router = useRouter();
   const [search, setSearch] = useState("");
+  const [sortBy, setSortBy] = useState<CustomerListSortMode>("recent_order");
   const [page, setPage] = useState(1);
   const [showAdd, setShowAdd] = useState(false);
   const queryClient = useQueryClient();
@@ -38,16 +43,18 @@ export default function CustomersPage() {
 
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
-    if (!query) return customers;
-    return customers.filter((customer) => {
-      const name = displayName(customer).toLowerCase();
-      return (
-        name.includes(query) ||
-        customer.email?.toLowerCase().includes(query) ||
-        customer.phone?.toLowerCase().includes(query)
-      );
-    });
-  }, [customers, search]);
+    const list = query
+      ? customers.filter((customer) => {
+          const name = displayName(customer).toLowerCase();
+          return (
+            name.includes(query) ||
+            customer.email?.toLowerCase().includes(query) ||
+            customer.phone?.toLowerCase().includes(query)
+          );
+        })
+      : customers;
+    return sortCustomersForList(list, sortBy);
+  }, [customers, search, sortBy]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
@@ -58,17 +65,36 @@ export default function CustomersPage() {
 
       <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="relative max-w-sm flex-1">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <Input
-              placeholder="Search by name, email, or phone..."
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                setPage(1);
-              }}
-              className="border-stone-200 bg-white pl-10"
-            />
+          <div className="flex flex-1 flex-col gap-3 sm:flex-row sm:items-center">
+            <div className="relative max-w-sm flex-1">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <Input
+                placeholder="Search by name, email, or phone..."
+                value={search}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  setPage(1);
+                }}
+                className="border-stone-200 bg-white pl-10"
+              />
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              <label htmlFor="customer-sort" className="whitespace-nowrap text-sm text-slate-600">
+                Sort by
+              </label>
+              <select
+                id="customer-sort"
+                value={sortBy}
+                onChange={(e) => {
+                  setSortBy(e.target.value as CustomerListSortMode);
+                  setPage(1);
+                }}
+                className="h-8 min-w-[11rem] rounded-lg border border-stone-200 bg-white px-3 text-sm text-slate-800 outline-none focus-visible:border-amber-500 focus-visible:ring-2 focus-visible:ring-amber-500/20"
+              >
+                <option value="recent_order">Most Recent Order</option>
+                <option value="most_orders">Most Orders</option>
+              </select>
+            </div>
           </div>
           <Button onClick={() => setShowAdd(true)} className="bg-amber-600 text-white hover:bg-amber-700">
             <UserPlus className="mr-2 h-4 w-4" />

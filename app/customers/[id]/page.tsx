@@ -5,44 +5,59 @@ import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import {
-  ArrowLeft, Calendar, Layers, Loader2, Mail, Phone, Save, User,
+  ArrowLeft, Loader2, Mail, Pencil, Save, User, X,
 } from "lucide-react";
+import { isValidEmail, normalizeEmail } from "@/lib/validation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import InternalHeader from "@/components/InternalHeader";
-import { ORDER_STATUS } from "@/lib/constants";
-import type { Customer, FilmOrder, FilmProcess, FilmType } from "@/lib/types";
+import CustomerPreferenceField from "@/components/CustomerPreferenceField";
+import CustomerProfileOrderHistory from "@/components/CustomerProfileOrderHistory";
+import { computeCalculatedPreferences } from "@/lib/customer-preference-calculations";
+import type { Customer, FilmProcess, FilmType } from "@/lib/types";
 import type { ContactMethod, CustomerOrderStats, DeliveryPreference } from "@/lib/customer-stats";
 
 const FILM_TYPES: FilmType[] = ["35mm", "120", "110", "Disposable Camera"];
-const FILM_PROCESSES: FilmProcess[] = ["Color", "Black & White", "Both"];
+const FILM_PROCESSES: Array<Exclude<FilmProcess, "Both">> = ["Color", "Black & White"];
 const SCAN_SIZES = ["Standard", "High-Res", "TIFF", "Process Only"] as const;
 const CONTACT_METHODS: ContactMethod[] = ["email", "phone", "text"];
 const DELIVERY_OPTIONS: DeliveryPreference[] = ["pickup", "ship", "email"];
 
 type ProfileResponse = {
   customer: Customer;
-  orders: FilmOrder[];
+  orders: import("@/lib/types").FilmOrder[];
   stats: CustomerOrderStats;
 };
+
+type IdentityDraft = {
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone: string;
+};
+
+function identityDraftFromCustomer(customer: Customer): IdentityDraft {
+  return {
+    first_name: customer.first_name ?? "",
+    last_name: customer.last_name ?? "",
+    email: customer.email ?? "",
+    phone: customer.phone ?? "",
+  };
+}
 
 function displayName(customer: Customer) {
   return `${customer.first_name} ${customer.last_name ?? ""}`.trim();
 }
 
-function statusClass(status: string) {
-  if (status === ORDER_STATUS.RECEIVED_BY_YOURS) return "bg-[var(--accent-tan)] text-[#A77B43]";
-  if (status === ORDER_STATUS.RECEIVED_AT_LAB) return "bg-[var(--accent-green)] text-white";
-  if (status === ORDER_STATUS.READY_FOR_PICKUP) return "bg-amber-500 text-white";
-  return "bg-[var(--accent-purple)] text-white";
-}
-
 export default function CustomerProfilePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const queryClient = useQueryClient();
-  const [draft, setDraft] = useState<Partial<Customer>>({});
+  const [notesDraft, setNotesDraft] = useState<string | null>(null);
+  const [editingIdentity, setEditingIdentity] = useState(false);
+  const [identityDraft, setIdentityDraft] = useState<IdentityDraft | null>(null);
+  const [identityError, setIdentityError] = useState<string | null>(null);
 
   const { data, isLoading, error } = useQuery<ProfileResponse>({
     queryKey: ["customer-profile", id],
@@ -57,47 +72,126 @@ export default function CustomerProfilePage({ params }: { params: Promise<{ id: 
   const orders = data?.orders ?? [];
   const stats = data?.stats;
 
-  const editState = useMemo(() => ({ ...customer, ...draft }), [customer, draft]);
+  const calculatedPrefs = useMemo(
+    () => computeCalculatedPreferences(orders),
+    [orders],
+  );
 
-  const saveMutation = useMutation({
-    mutationFn: async (patch: Partial<Customer>) => {
-      const response = await fetch(`/api/customers/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(patch),
-      });
-      if (!response.ok) {
-        const body = await response.json().catch(() => null) as { error?: string } | null;
-        throw new Error(body?.error ?? "Failed to save");
-      }
-      return response.json();
-    },
+  const notesValue = notesDraft ?? customer?.notes ?? "";
+
+  type CustomerPatch = Omit<
+    Partial<Customer>,
+    | "default_film_type"
+    | "default_film_process"
+    | "default_scan_size"
+    | "default_delivery_preference"
+    | "preferred_contact_method"
+  > & {
+    default_film_type?: Customer["default_film_type"] | null;
+    default_film_process?: Customer["default_film_process"] | null;
+    default_scan_size?: Customer["default_scan_size"] | null;
+    default_delivery_preference?: Customer["default_delivery_preference"] | null;
+    preferred_contact_method?: Customer["preferred_contact_method"] | null;
+  };
+
+  const patchCustomer = async (patch: CustomerPatch) => {
+    const response = await fetch(`/api/customers/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch),
+    });
+    if (!response.ok) {
+      const body = await response.json().catch(() => null) as { error?: string } | null;
+      throw new Error(body?.error ?? "Failed to save");
+    }
+    return response.json() as Promise<Customer>;
+  };
+
+  const saveMutation = useMutation<Customer, Error, CustomerPatch>({
+    mutationFn: patchCustomer,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["customer-profile", id] });
       queryClient.invalidateQueries({ queryKey: ["customers"] });
-      setDraft({});
-      toast.success("Customer saved");
+      setNotesDraft(null);
+      toast.success("Saved");
     },
     onError: (err: Error) => toast.error(err.message),
   });
 
-  const handleSave = () => {
+  const saveIdentityMutation = useMutation({
+    mutationFn: patchCustomer,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["customer-profile", id] });
+      queryClient.invalidateQueries({ queryKey: ["customers"] });
+      queryClient.invalidateQueries({ queryKey: ["filmOrders"] });
+      setEditingIdentity(false);
+      setIdentityDraft(null);
+      setIdentityError(null);
+      toast.success("Customer information updated");
+    },
+    onError: (err: Error) => {
+      setIdentityError(err.message);
+      toast.error(err.message);
+    },
+  });
+
+  const handleSaveNotes = () => {
     if (!customer) return;
-    const patch: Partial<Customer> = {};
-    const fields: (keyof Customer)[] = [
-      "notes", "phone", "preferred_contact_method",
-      "default_film_type", "default_film_process", "default_scan_size", "default_delivery_preference",
-    ];
-    for (const field of fields) {
-      if (editState[field] !== customer[field]) {
-        (patch as Record<string, unknown>)[field] = editState[field];
-      }
-    }
-    if (!Object.keys(patch).length) {
+    const trimmed = notesValue.trim();
+    if (trimmed === (customer.notes ?? "").trim()) {
       toast.info("No changes to save");
       return;
     }
-    saveMutation.mutate(patch);
+    saveMutation.mutate({ notes: trimmed || undefined });
+  };
+
+  const startEditIdentity = () => {
+    if (!customer) return;
+    setIdentityDraft(identityDraftFromCustomer(customer));
+    setIdentityError(null);
+    setEditingIdentity(true);
+  };
+
+  const cancelEditIdentity = () => {
+    setEditingIdentity(false);
+    setIdentityDraft(null);
+    setIdentityError(null);
+  };
+
+  const handleSaveIdentity = () => {
+    if (!customer || !identityDraft) return;
+    setIdentityError(null);
+
+    const first = identityDraft.first_name.trim();
+    if (!first) {
+      setIdentityError("First name is required");
+      return;
+    }
+
+    const emailTrimmed = identityDraft.email.trim();
+    if (emailTrimmed && !isValidEmail(emailTrimmed)) {
+      setIdentityError("Enter a valid email address");
+      return;
+    }
+
+    const patch: Partial<Customer> = {};
+    const last = identityDraft.last_name.trim();
+    const phone = identityDraft.phone.trim();
+
+    if (first !== customer.first_name) patch.first_name = first;
+    if (last !== (customer.last_name ?? "")) patch.last_name = last || undefined;
+    if (emailTrimmed !== (customer.email ?? "")) {
+      patch.email = emailTrimmed ? normalizeEmail(emailTrimmed) : undefined;
+    }
+    if (phone !== (customer.phone ?? "")) patch.phone = phone || undefined;
+
+    if (!Object.keys(patch).length) {
+      cancelEditIdentity();
+      toast.info("No changes to save");
+      return;
+    }
+
+    saveIdentityMutation.mutate(patch);
   };
 
   if (isLoading) {
@@ -129,7 +223,7 @@ export default function CustomerProfilePage({ params }: { params: Promise<{ id: 
     <div className="min-h-screen bg-gradient-to-br from-stone-50 via-orange-50/30 to-amber-50/20">
       <InternalHeader title={displayName(customer)} subtitle="Customer profile" />
 
-      <main className="mx-auto max-w-5xl space-y-6 px-4 py-6 sm:px-6 lg:px-8">
+      <main className="mx-auto max-w-3xl space-y-5 px-4 py-6 sm:px-6">
         <Link
           href="/customers"
           className="inline-flex items-center text-sm text-slate-600 hover:text-slate-800"
@@ -138,41 +232,100 @@ export default function CustomerProfilePage({ params }: { params: Promise<{ id: 
           All customers
         </Link>
 
-        <section className="rounded-xl border border-stone-200 bg-white p-6 shadow-sm">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div className="space-y-2">
-              <h2 className="flex items-center gap-2 text-2xl font-semibold text-slate-800">
-                <User className="h-5 w-5 text-amber-600" />
-                {displayName(customer)}
-              </h2>
-              {customer.email ? (
-                <p className="flex items-center gap-2 text-slate-600">
-                  <Mail className="h-4 w-4 text-slate-400" />
-                  {customer.email}
-                </p>
-              ) : null}
-              {customer.phone ? (
-                <p className="flex items-center gap-2 text-slate-600">
-                  <Phone className="h-4 w-4 text-slate-400" />
-                  {customer.phone}
-                </p>
-              ) : null}
-            </div>
-            <Button
-              onClick={handleSave}
-              disabled={saveMutation.isPending}
-              className="bg-amber-600 text-white hover:bg-amber-700"
-            >
-              {saveMutation.isPending ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+        {/* Customer summary */}
+        <section className="rounded-xl border border-stone-200 bg-white p-5 shadow-sm">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              {editingIdentity && identityDraft ? (
+                <div className="space-y-3 max-w-md">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="mb-1 block text-xs text-slate-500">First name *</label>
+                      <Input
+                        value={identityDraft.first_name}
+                        onChange={(e) => setIdentityDraft((d) => d && ({ ...d, first_name: e.target.value }))}
+                        className="border-stone-200"
+                        autoFocus
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs text-slate-500">Last name</label>
+                      <Input
+                        value={identityDraft.last_name}
+                        onChange={(e) => setIdentityDraft((d) => d && ({ ...d, last_name: e.target.value }))}
+                        className="border-stone-200"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs text-slate-500">Email</label>
+                    <Input
+                      type="email"
+                      value={identityDraft.email}
+                      onChange={(e) => setIdentityDraft((d) => d && ({ ...d, email: e.target.value }))}
+                      className="border-stone-200"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs text-slate-500">Phone</label>
+                    <Input
+                      type="tel"
+                      value={identityDraft.phone}
+                      onChange={(e) => setIdentityDraft((d) => d && ({ ...d, phone: e.target.value }))}
+                      className="border-stone-200"
+                    />
+                  </div>
+                  {identityError ? <p className="text-sm text-red-600">{identityError}</p> : null}
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={handleSaveIdentity}
+                      disabled={saveIdentityMutation.isPending}
+                      className="bg-amber-600 text-white hover:bg-amber-700"
+                    >
+                      {saveIdentityMutation.isPending ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <Save className="mr-2 h-4 w-4" />
+                      )}
+                      Save
+                    </Button>
+                    <Button type="button" size="sm" variant="outline" onClick={cancelEditIdentity}>
+                      <X className="mr-2 h-4 w-4" />
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
               ) : (
-                <Save className="mr-2 h-4 w-4" />
+                <>
+                  <h2 className="text-xl font-semibold text-slate-800">{displayName(customer)}</h2>
+                  {customer.email ? (
+                    <p className="mt-1 flex items-center gap-2 text-slate-600">
+                      <Mail className="h-4 w-4 shrink-0 text-slate-400" />
+                      {customer.email}
+                    </p>
+                  ) : (
+                    <p className="mt-1 text-sm italic text-slate-400">No email on file</p>
+                  )}
+                </>
               )}
-              Save changes
-            </Button>
+            </div>
+            {!editingIdentity ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={startEditIdentity}
+                className="shrink-0 border-stone-200"
+              >
+                <Pencil className="mr-2 h-3.5 w-3.5" />
+                Edit customer
+              </Button>
+            ) : null}
           </div>
 
-          <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
             <StatCard label="Total orders" value={String(stats.total_orders)} />
             <StatCard label="Total rolls" value={String(stats.total_rolls)} />
             <StatCard
@@ -185,170 +338,200 @@ export default function CustomerProfilePage({ params }: { params: Promise<{ id: 
             />
           </div>
 
-          <div className="mt-4 grid gap-3 sm:grid-cols-3">
-            <StatCard label="Common film type" value={stats.common_film_type ?? "—"} small />
-            <StatCard label="Common process" value={stats.common_film_process ?? "—"} small />
-            <StatCard label="Common scan size" value={stats.common_scan_size ?? "—"} small />
+          <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
+            <StatCard label="Common film type" value={stats.common_film_type ?? "—"} compact />
+            <StatCard label="Common process" value={stats.common_film_process ?? "—"} compact />
+            <StatCard label="Common scan size" value={stats.common_scan_size ?? "—"} compact />
           </div>
         </section>
 
-        <div className="grid gap-6 lg:grid-cols-2">
-          <section className="rounded-xl border border-stone-200 bg-white p-6 shadow-sm">
-            <h3 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-500">Notes</h3>
-            <Textarea
-              value={editState.notes ?? ""}
-              onChange={(e) => setDraft((d) => ({ ...d, notes: e.target.value }))}
-              placeholder="Internal notes about this customer..."
-              className="min-h-28 border-stone-200"
-            />
-          </section>
+        {/* Preferences */}
+        <section className="rounded-xl border border-stone-200 bg-white p-5 shadow-sm">
+          <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">Preferences</h3>
+          <CustomerPreferenceField
+            label="Film type"
+            calculated={calculatedPrefs.film_type}
+            manualValue={customer.default_film_type}
+            options={FILM_TYPES}
+            saving={saveMutation.isPending}
+            onSaveManual={(value) => saveMutation.mutate({ default_film_type: value })}
+            onClearManual={() => saveMutation.mutate({ default_film_type: null })}
+          />
+          <CustomerPreferenceField
+            label="Process"
+            calculated={calculatedPrefs.film_process}
+            manualValue={customer.default_film_process}
+            options={FILM_PROCESSES}
+            saving={saveMutation.isPending}
+            onSaveManual={(value) => saveMutation.mutate({ default_film_process: value })}
+            onClearManual={() => saveMutation.mutate({ default_film_process: null })}
+          />
+          <CustomerPreferenceField
+            label="Scan size"
+            calculated={calculatedPrefs.scan_size}
+            manualValue={customer.default_scan_size}
+            options={SCAN_SIZES}
+            saving={saveMutation.isPending}
+            onSaveManual={(value) => saveMutation.mutate({ default_scan_size: value })}
+            onClearManual={() => saveMutation.mutate({ default_scan_size: null })}
+          />
+          <ManualOnlyPreferenceRow
+            label="Delivery"
+            value={customer.default_delivery_preference}
+            helper={
+              customer.default_delivery_preference
+                ? "Manual override"
+                : "Not enough data"
+            }
+            options={DELIVERY_OPTIONS}
+            saving={saveMutation.isPending}
+            onSave={(value) => saveMutation.mutate({ default_delivery_preference: value })}
+            onClear={() => saveMutation.mutate({ default_delivery_preference: null })}
+          />
+          <ManualOnlyPreferenceRow
+            label="Preferred contact"
+            value={customer.preferred_contact_method}
+            helper={
+              customer.preferred_contact_method
+                ? "Manual override"
+                : "Not enough data"
+            }
+            options={CONTACT_METHODS}
+            saving={saveMutation.isPending}
+            onSave={(value) => saveMutation.mutate({ preferred_contact_method: value })}
+            onClear={() => saveMutation.mutate({ preferred_contact_method: null })}
+          />
+        </section>
 
-          <section className="rounded-xl border border-stone-200 bg-white p-6 shadow-sm">
-            <h3 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-500">Default preferences</h3>
-            <div className="space-y-3">
-              <Field label="Phone">
-                <Input
-                  value={editState.phone ?? ""}
-                  onChange={(e) => setDraft((d) => ({ ...d, phone: e.target.value }))}
-                  className="border-stone-200"
-                />
-              </Field>
-              <Field label="Preferred contact">
-                <select
-                  value={editState.preferred_contact_method ?? ""}
-                  onChange={(e) => setDraft((d) => ({
-                    ...d,
-                    preferred_contact_method: (e.target.value || undefined) as ContactMethod | undefined,
-                  }))}
-                  className="h-9 w-full rounded-lg border border-stone-200 bg-white px-2.5 text-sm"
-                >
-                  <option value="">Not set</option>
-                  {CONTACT_METHODS.map((method) => (
-                    <option key={method} value={method}>{method}</option>
-                  ))}
-                </select>
-              </Field>
-              <Field label="Default film type">
-                <select
-                  value={editState.default_film_type ?? ""}
-                  onChange={(e) => setDraft((d) => ({
-                    ...d,
-                    default_film_type: (e.target.value || undefined) as FilmType | undefined,
-                  }))}
-                  className="h-9 w-full rounded-lg border border-stone-200 bg-white px-2.5 text-sm"
-                >
-                  <option value="">Not set</option>
-                  {FILM_TYPES.map((type) => (
-                    <option key={type} value={type}>{type}</option>
-                  ))}
-                </select>
-              </Field>
-              <Field label="Default process">
-                <select
-                  value={editState.default_film_process ?? ""}
-                  onChange={(e) => setDraft((d) => ({
-                    ...d,
-                    default_film_process: (e.target.value || undefined) as FilmProcess | undefined,
-                  }))}
-                  className="h-9 w-full rounded-lg border border-stone-200 bg-white px-2.5 text-sm"
-                >
-                  <option value="">Not set</option>
-                  {FILM_PROCESSES.map((process) => (
-                    <option key={process} value={process}>{process}</option>
-                  ))}
-                </select>
-              </Field>
-              <Field label="Default scan size">
-                <select
-                  value={editState.default_scan_size ?? ""}
-                  onChange={(e) => setDraft((d) => ({
-                    ...d,
-                    default_scan_size: (e.target.value || undefined) as Customer["default_scan_size"],
-                  }))}
-                  className="h-9 w-full rounded-lg border border-stone-200 bg-white px-2.5 text-sm"
-                >
-                  <option value="">Not set</option>
-                  {SCAN_SIZES.map((size) => (
-                    <option key={size} value={size}>{size}</option>
-                  ))}
-                </select>
-              </Field>
-              <Field label="Delivery preference">
-                <select
-                  value={editState.default_delivery_preference ?? ""}
-                  onChange={(e) => setDraft((d) => ({
-                    ...d,
-                    default_delivery_preference: (e.target.value || undefined) as DeliveryPreference | undefined,
-                  }))}
-                  className="h-9 w-full rounded-lg border border-stone-200 bg-white px-2.5 text-sm"
-                >
-                  <option value="">Not set</option>
-                  {DELIVERY_OPTIONS.map((option) => (
-                    <option key={option} value={option}>{option}</option>
-                  ))}
-                </select>
-              </Field>
-            </div>
-          </section>
-        </div>
+        {/* Notes */}
+        <section className="rounded-xl border border-stone-200 bg-white p-5 shadow-sm">
+          <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">Notes</h3>
+          <Textarea
+            value={notesValue}
+            onChange={(e) => setNotesDraft(e.target.value)}
+            placeholder="Internal notes about this customer..."
+            className="min-h-24 border-stone-200"
+          />
+          <div className="mt-3 flex justify-end">
+            <Button
+              type="button"
+              size="sm"
+              disabled={saveMutation.isPending}
+              className="bg-amber-600 text-white hover:bg-amber-700"
+              onClick={handleSaveNotes}
+            >
+              {saveMutation.isPending ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Save className="mr-2 h-4 w-4" />
+              )}
+              Save notes
+            </Button>
+          </div>
+        </section>
 
-        <section className="rounded-xl border border-stone-200 bg-white p-6 shadow-sm">
+        {/* Order history */}
+        <section className="rounded-xl border border-stone-200 bg-white p-5 shadow-sm">
           <h3 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-500">Order history</h3>
-          {orders.length === 0 ? (
-            <p className="text-sm italic text-slate-400">No orders on record yet.</p>
-          ) : (
-            <div className="space-y-2">
-              {orders.map((order) => (
-                <div
-                  key={order.id}
-                  className="flex flex-wrap items-center gap-3 rounded-lg border border-stone-100 bg-stone-50/50 px-4 py-3 text-sm"
-                >
-                  <Link
-                    href={`/dashboard?search=${encodeURIComponent(order.order_number)}`}
-                    className="font-mono font-medium text-amber-700 hover:text-amber-800 hover:underline"
-                  >
-                    #{order.order_number}
-                  </Link>
-                  <span className={`rounded-full px-2 py-0.5 text-xs ${statusClass(order.status)}`}>
-                    {order.status}
-                  </span>
-                  <span className="flex items-center gap-1 text-slate-500">
-                    <Layers className="h-3.5 w-3.5" />
-                    {order.roll_count} roll{order.roll_count !== 1 ? "s" : ""}
-                  </span>
-                  <span className="flex items-center gap-1 text-xs text-slate-400">
-                    <Calendar className="h-3 w-3" />
-                    {order.dropoff_date
-                      ? format(new Date(order.dropoff_date), "MMM d, yyyy")
-                      : "—"}
-                  </span>
-                  {order.film_process ? (
-                    <span className="text-slate-500">{order.film_process}</span>
-                  ) : null}
-                </div>
-              ))}
-            </div>
-          )}
+          <CustomerProfileOrderHistory orders={orders} />
         </section>
       </main>
     </div>
   );
 }
 
-function StatCard({ label, value, small = false }: { label: string; value: string; small?: boolean }) {
+function StatCard({
+  label,
+  value,
+  compact = false,
+}: {
+  label: string;
+  value: string;
+  compact?: boolean;
+}) {
   return (
-    <div className={`rounded-lg border border-stone-100 bg-stone-50 px-4 py-3 ${small ? "" : ""}`}>
-      <p className="text-xs font-medium uppercase tracking-wide text-slate-400">{label}</p>
-      <p className={`mt-1 font-semibold text-slate-800 ${small ? "text-sm" : "text-lg"}`}>{value}</p>
+    <div className="rounded-lg border border-stone-100 bg-stone-50 px-3 py-2">
+      <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">{label}</p>
+      <p className={`font-semibold text-slate-800 ${compact ? "text-sm" : "text-base"}`}>{value}</p>
     </div>
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function ManualOnlyPreferenceRow<T extends string>({
+  label,
+  value,
+  helper,
+  options,
+  onSave,
+  onClear,
+  saving,
+}: {
+  label: string;
+  value?: T | null;
+  helper: string;
+  options: readonly T[];
+  onSave: (value: T) => void;
+  onClear: () => void;
+  saving: boolean;
+}) {
+  const [editing, setEditing] = useState(false);
+
   return (
-    <div>
-      <label className="mb-1 block text-xs text-slate-500">{label}</label>
-      {children}
+    <div className="border-b border-stone-100 py-3 last:border-0">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-medium uppercase tracking-wide text-slate-400">{label}</p>
+          {editing ? (
+            <select
+              className="mt-1 h-9 w-full max-w-xs rounded-lg border border-stone-200 bg-white px-2.5 text-sm"
+              defaultValue={value ?? ""}
+              onChange={(e) => {
+                const v = e.target.value as T;
+                if (v) onSave(v);
+                setEditing(false);
+              }}
+              onBlur={() => setEditing(false)}
+              autoFocus
+            >
+              <option value="" disabled>Select…</option>
+              {options.map((opt) => (
+                <option key={opt} value={opt}>{opt}</option>
+              ))}
+            </select>
+          ) : (
+            <>
+              <p className="mt-0.5 font-medium text-slate-800">{value ?? "Not enough data"}</p>
+              <p className="mt-0.5 text-xs text-slate-500">{helper}</p>
+            </>
+          )}
+        </div>
+        <div className="flex shrink-0 gap-1.5">
+          {!editing ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs"
+              disabled={saving}
+              onClick={() => setEditing(true)}
+            >
+              Change
+            </Button>
+          ) : null}
+          {value ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs text-amber-700"
+              disabled={saving}
+              onClick={onClear}
+            >
+              Clear
+            </Button>
+          ) : null}
+        </div>
+      </div>
     </div>
   );
 }

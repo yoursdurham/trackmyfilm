@@ -12,6 +12,15 @@ import { format } from "date-fns";
 import { toast } from "sonner";
 import type { Customer, FilmType, FilmProcess } from "@/lib/types";
 import { DROP_OFF_FILM_TYPES, isValidEmail, normalizeEmail } from "@/lib/validation";
+import {
+  applyCustomerDefaultsToRolls,
+  createEmptyDropoffRoll,
+  duplicateDropoffRollAt,
+  DROP_OFF_SCAN_SIZES,
+  syncRollCount,
+  type DropoffRollState,
+  type DropoffScanSize,
+} from "@/lib/dropoff-roll-state";
 
 const MAX_ROLLS = 20;
 
@@ -36,8 +45,6 @@ const FILM_STOCKS = [
 
 const FILM_TYPES = DROP_OFF_FILM_TYPES;
 const FILM_PROCESSES: FilmProcess[] = ["Color", "Black & White"];
-const SCAN_SIZES = ["Standard", "High-Res", "TIFF", "Process Only"] as const;
-
 /** Stable DOM ids — avoid ids ending in bare "110" (Safari label/validation quirks). */
 const FILM_TYPE_DOM_ID: Record<(typeof FILM_TYPES)[number], string> = {
   "35mm": "fmt-35mm",
@@ -49,26 +56,6 @@ const FILM_PROCESS_DOM_ID: Record<FilmProcess, string> = {
   "Black & White": "proc-bw",
   Both: "proc-both",
 };
-
-type ScanSize = (typeof SCAN_SIZES)[number];
-
-interface RollState {
-  film_type: FilmType | "";
-  film_process: FilmProcess | "";
-  film_stock: string;       // selected from dropdown (empty = none, "__other__" = custom)
-  custom_stock: string;     // shown when film_stock === "__other__"
-  scan_size: ScanSize;
-  prints_4x6: boolean;
-}
-
-const emptyRoll = (): RollState => ({
-  film_type: "",
-  film_process: "",
-  film_stock: "",
-  custom_stock: "",
-  scan_size: "Standard",
-  prints_4x6: false,
-});
 
 const emptyMeta = {
   customer_name: "",
@@ -90,7 +77,7 @@ export default function NewDropoffForm({ open, onOpenChange, onSuccess, customer
     customer_name: selectedCustomer ? `${selectedCustomer.first_name} ${selectedCustomer.last_name || ""}`.trim() : "",
     customer_email: selectedCustomer?.email || "",
   });
-  const [rolls, setRolls] = useState<RollState[]>([emptyRoll()]);
+  const [rolls, setRolls] = useState<DropoffRollState[]>([createEmptyDropoffRoll()]);
   const [customStocks, setCustomStocks] = useState<string[]>([]);
 
   useEffect(() => {
@@ -107,15 +94,23 @@ export default function NewDropoffForm({ open, onOpenChange, onSuccess, customer
   const handleRollCountChange = (raw: number) => {
     const count = Math.min(Math.max(1, raw || 1), MAX_ROLLS);
     set("roll_count", count);
-    setRolls((prev) => {
-      const next = [...prev];
-      while (next.length < count) next.push(emptyRoll());
-      return next.slice(0, count);
-    });
+    setRolls((prev) => syncRollCount(prev, count, MAX_ROLLS));
   };
 
-  const setRoll = <K extends keyof RollState>(index: number, key: K, value: RollState[K]) =>
+  const setRoll = <K extends keyof DropoffRollState>(index: number, key: K, value: DropoffRollState[K]) =>
     setRolls((prev) => prev.map((r, i) => i === index ? { ...r, [key]: value } : r));
+
+  const duplicateRoll = (index: number) => {
+    setRolls((prev) => {
+      const next = duplicateDropoffRollAt(prev, index, MAX_ROLLS);
+      if (!next) {
+        toast.error(`Maximum ${MAX_ROLLS} rolls per drop-off`);
+        return prev;
+      }
+      setFormData((f) => ({ ...f, roll_count: next.length }));
+      return next;
+    });
+  };
 
   const handleSubmit = async (e: { preventDefault(): void }) => {
     e.preventDefault();
@@ -195,7 +190,7 @@ export default function NewDropoffForm({ open, onOpenChange, onSuccess, customer
       toast.success("Drop-off created successfully");
       onSuccess?.();
       setFormData({ ...emptyMeta, dropoff_date: format(new Date(), "yyyy-MM-dd") });
-      setRolls([emptyRoll()]);
+      setRolls([createEmptyDropoffRoll()]);
       setSelectedCustomerId(null);
       setSendEmail(true);
       onOpenChange(false);
@@ -233,12 +228,7 @@ export default function NewDropoffForm({ open, onOpenChange, onSuccess, customer
     if (!customer.default_film_type && !customer.default_film_process && !customer.default_scan_size) {
       return;
     }
-    setRolls((prev) => prev.map((roll) => ({
-      ...roll,
-      film_type: customer.default_film_type || roll.film_type,
-      film_process: customer.default_film_process || roll.film_process,
-      scan_size: customer.default_scan_size || roll.scan_size,
-    })));
+    setRolls((prev) => applyCustomerDefaultsToRolls(prev, customer));
   };
 
   const lookupCustomerByEmail = async (email: string) => {
@@ -347,10 +337,22 @@ export default function NewDropoffForm({ open, onOpenChange, onSuccess, customer
           <div className="space-y-3">
             {rolls.map((roll, i) => (
               <div key={i} className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 space-y-3">
-                <p className="text-sm font-semibold text-slate-700 flex items-center gap-2">
-                  <Film className="w-3.5 h-3.5 text-amber-500" />
-                  Roll {i + 1}
-                </p>
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                    <Film className="w-3.5 h-3.5 text-amber-500" />
+                    Roll {i + 1}
+                  </p>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-2 text-xs text-slate-600 hover:text-slate-800"
+                    disabled={rolls.length >= MAX_ROLLS}
+                    onClick={() => duplicateRoll(i)}
+                  >
+                    Duplicate Roll
+                  </Button>
+                </div>
 
                 {/* Film type */}
                 <div className="space-y-1">
@@ -385,10 +387,10 @@ export default function NewDropoffForm({ open, onOpenChange, onSuccess, customer
                   <p className="text-xs font-medium text-slate-600">Scan Size</p>
                   <select
                     value={roll.scan_size}
-                    onChange={(e) => setRoll(i, "scan_size", e.target.value as ScanSize)}
+                    onChange={(e) => setRoll(i, "scan_size", e.target.value as DropoffScanSize)}
                     className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500"
                   >
-                    {SCAN_SIZES.map((size) => (
+                    {DROP_OFF_SCAN_SIZES.map((size) => (
                       <option key={size} value={size}>{size}</option>
                     ))}
                   </select>

@@ -119,6 +119,7 @@ The system automatically fills in these placeholders when sending. The names mus
 | `{{first_name}}` | Customer's first name (e.g. "Sarah") |
 | `{{order_number}}` | The order number (e.g. "JE1234") |
 | `{{roll_count}}` | Number of rolls (e.g. "3") |
+| `{{notes}}` | Drop-off notes from the New Film Drop-off form (film_drop_received only; empty if none) |
 | `{{wetransfer_link}}` | The WeTransfer download URL (scans_sent email only) |
 | `{{scan_notes}}` | Plain-text note from the lab (scans_sent only; empty if none) |
 | `{{scan_notes_html}}` | Same note as HTML paragraph (scans_sent only; empty if none — paste this in HTML templates) |

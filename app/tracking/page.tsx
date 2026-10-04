@@ -24,6 +24,7 @@ import { Input } from "@/components/ui/input";
 import FilmProcessBadge from "@/components/FilmProcessBadge";
 import { isProcessOnlyOrder } from "@/lib/order-service";
 import { getPartialScanProgress, isMixedScanOrder } from "@/lib/scan-batch";
+import { orderNoteForCustomerDisplay } from "@/lib/tracking-public";
 import type { FilmOrder, OrderStatus, StatusHistoryEntry } from "@/lib/types";
 
 type StatusStep = {
@@ -446,6 +447,7 @@ function TrackingContent() {
                 const processOnlyOrder = isProcessOnlyOrder(order);
                 const mixedScanOrder = isMixedScanOrder(order);
                 const partialProgress = mixedScanOrder ? getPartialScanProgress(order) : [];
+                const customerOrderNote = orderNoteForCustomerDisplay(order.notes);
 
                 return (
                 <Card
@@ -593,6 +595,17 @@ function TrackingContent() {
                             </span>
                           ) : null}
                         </div>
+                      </div>
+                    ) : null}
+
+                    {customerOrderNote ? (
+                      <div className="mt-4 space-y-2 border-t border-slate-100 pt-4">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                          Order notes
+                        </p>
+                        <p className="whitespace-pre-wrap text-sm text-slate-700">
+                          {customerOrderNote}
+                        </p>
                       </div>
                     ) : null}
 

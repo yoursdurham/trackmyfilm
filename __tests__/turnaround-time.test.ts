@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import {
+  calculateTurnaroundForDateRange,
   calculateTurnaroundForPeriod,
   formatTurnaroundDays,
   getReceivedAtLabDate,
@@ -107,6 +108,28 @@ describe("turnaround-time", () => {
     expect(calculateTurnaroundForPeriod(orders, "30d")).toEqual({
       orderCount: 3,
       averageDays: expect.closeTo(6.667, 2),
+    });
+  });
+
+  it("calculates turnaround for a custom scans-sent date range", () => {
+    const orders = [
+      makeOrder({
+        at_lab_at: isoDaysAgo(10),
+        scans_sent_at: isoDaysAgo(5),
+      }),
+      makeOrder({
+        id: "order-2",
+        at_lab_at: isoDaysAgo(40),
+        scans_sent_at: isoDaysAgo(35),
+      }),
+    ];
+
+    const start = new Date(isoDaysAgo(7));
+    const end = new Date(isoDaysAgo(0));
+
+    expect(calculateTurnaroundForDateRange(orders, start, end)).toEqual({
+      orderCount: 1,
+      averageDays: 5,
     });
   });
 

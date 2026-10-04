@@ -3,6 +3,10 @@
  */
 
 import type { FilmOrder, FilmProcess, FilmType, RollDetail } from "./types";
+import { computeCalculatedPreferences } from "./customer-preference-calculations";
+import { getOrderRollDetails } from "./order-roll-utils";
+
+export { getOrderRollDetails } from "./order-roll-utils";
 
 export type ContactMethod = "email" | "phone" | "text";
 export type DeliveryPreference = "pickup" | "ship" | "email";
@@ -17,31 +21,87 @@ export interface CustomerOrderStats {
   common_scan_size: RollDetail["scan_size"] | null;
 }
 
-function mode<T extends string>(values: T[]): T | null {
-  if (!values.length) return null;
-  const counts = new Map<T, number>();
-  for (const value of values) {
-    counts.set(value, (counts.get(value) ?? 0) + 1);
-  }
-  let best: T | null = null;
-  let bestCount = 0;
-  for (const [value, count] of counts) {
-    if (count > bestCount) {
-      best = value;
-      bestCount = count;
-    }
-  }
-  return best;
+/** Prefer drop-off date, then received-by-Yours, then order created_at. */
+export function orderLatestSortValue(order: FilmOrder): number {
+  const raw = order.dropoff_date || order.received_by_yours_at || order.created_at;
+  if (!raw) return 0;
+  const parsed = Date.parse(raw.length <= 10 ? `${raw}T12:00:00` : raw);
+  return Number.isNaN(parsed) ? 0 : parsed;
 }
 
-function getOrderRollDetails(order: FilmOrder): RollDetail[] {
-  if (order.roll_details?.length) return order.roll_details;
-  return [{
-    film_type: order.film_type,
-    film_process: order.film_process,
-    film_stock: order.film_stock,
-    prints_4x6: order.prints_4x6,
-  }];
+export function getLatestOrderDate(orders: FilmOrder[]): string | null {
+  let best: FilmOrder | null = null;
+  let bestTs = 0;
+  for (const order of orders) {
+    const ts = orderLatestSortValue(order);
+    if (ts > bestTs) {
+      bestTs = ts;
+      best = order;
+    }
+  }
+  if (!best || bestTs === 0) return null;
+  return best.dropoff_date || best.received_by_yours_at || best.created_at || null;
+}
+
+export type CustomerListSortMode = "recent_order" | "most_orders";
+
+type CustomerSortRow = {
+  last_order_date?: string | null;
+  total_orders?: number;
+  first_name: string;
+  last_name?: string | null;
+};
+
+function customerNameCompare(a: CustomerSortRow, b: CustomerSortRow): number {
+  const aName = `${a.first_name} ${a.last_name ?? ""}`.trim();
+  const bName = `${b.first_name} ${b.last_name ?? ""}`.trim();
+  return aName.localeCompare(bName);
+}
+
+export function lastOrderDateSortValue(lastOrderDate: string | null | undefined): number {
+  if (!lastOrderDate) return 0;
+  const parsed = Date.parse(lastOrderDate.length <= 10 ? `${lastOrderDate}T12:00:00` : lastOrderDate);
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
+/** Newest order first; customers without orders last; stable name tie-break. */
+export function sortCustomersByLatestOrder<T extends CustomerSortRow>(customers: T[]): T[] {
+  return [...customers].sort((a, b) => {
+    const aTs = lastOrderDateSortValue(a.last_order_date);
+    const bTs = lastOrderDateSortValue(b.last_order_date);
+
+    const aHas = aTs > 0;
+    const bHas = bTs > 0;
+    if (aHas && !bHas) return -1;
+    if (!aHas && bHas) return 1;
+    if (aHas && bHas && aTs !== bTs) return bTs - aTs;
+
+    return customerNameCompare(a, b);
+  });
+}
+
+/** Most orders first; tie-break by newest order; then name. */
+export function sortCustomersByMostOrders<T extends CustomerSortRow>(customers: T[]): T[] {
+  return [...customers].sort((a, b) => {
+    const aCount = a.total_orders ?? 0;
+    const bCount = b.total_orders ?? 0;
+    if (aCount !== bCount) return bCount - aCount;
+
+    const aTs = lastOrderDateSortValue(a.last_order_date);
+    const bTs = lastOrderDateSortValue(b.last_order_date);
+    if (aTs !== bTs) return bTs - aTs;
+
+    return customerNameCompare(a, b);
+  });
+}
+
+export function sortCustomersForList<T extends CustomerSortRow>(
+  customers: T[],
+  mode: CustomerListSortMode
+): T[] {
+  return mode === "most_orders"
+    ? sortCustomersByMostOrders(customers)
+    : sortCustomersByLatestOrder(customers);
 }
 
 function getTurnaroundDays(order: FilmOrder): number | null {
@@ -67,42 +127,27 @@ export function computeCustomerStats(orders: FilmOrder[]): CustomerOrderStats {
     };
   }
 
-  const sorted = [...orders].sort((a, b) => {
-    const aDate = a.dropoff_date || a.created_at || "";
-    const bDate = b.dropoff_date || b.created_at || "";
-    return bDate.localeCompare(aDate);
-  });
-
-  const filmTypes: FilmType[] = [];
-  const filmProcesses: FilmProcess[] = [];
-  const scanSizes: NonNullable<RollDetail["scan_size"]>[] = [];
   const turnaroundDays: number[] = [];
 
   for (const order of orders) {
     const turnaround = getTurnaroundDays(order);
     if (turnaround !== null) turnaroundDays.push(turnaround);
-
-    for (const roll of getOrderRollDetails(order)) {
-      if (roll.film_type) filmTypes.push(roll.film_type);
-      if (roll.film_process) filmProcesses.push(roll.film_process);
-      if (roll.scan_size) scanSizes.push(roll.scan_size);
-    }
   }
+
+  const calculated = computeCalculatedPreferences(orders);
 
   const avgTurnaround = turnaroundDays.length
     ? Math.round(turnaroundDays.reduce((sum, d) => sum + d, 0) / turnaroundDays.length)
     : null;
 
-  const last = sorted[0];
-
   return {
     total_orders: orders.length,
     total_rolls: orders.reduce((sum, o) => sum + (o.roll_count || 0), 0),
-    last_order_date: last.dropoff_date || last.created_at || null,
+    last_order_date: getLatestOrderDate(orders),
     average_turnaround_days: avgTurnaround,
-    common_film_type: mode(filmTypes),
-    common_film_process: mode(filmProcesses),
-    common_scan_size: mode(scanSizes),
+    common_film_type: calculated.film_type.value,
+    common_film_process: calculated.film_process.value,
+    common_scan_size: calculated.scan_size.value,
   };
 }
 

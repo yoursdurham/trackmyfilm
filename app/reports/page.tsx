@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Clock, Download, Users, Layers } from "lucide-react";
 import {
+  calculateTurnaroundForDateRange,
   calculateTurnaroundForPeriod,
   formatTurnaroundDays,
 } from "@/lib/turnaround-time";
@@ -26,7 +27,7 @@ interface ReportMetrics {
   scanResolutionUsage: { resolution: string; count: number }[];
 }
 
-type TimeFrameKey = "all" | "7d" | "30d" | "90d" | "365d";
+type TimeFrameKey = "all" | "7d" | "30d" | "90d" | "365d" | "custom";
 
 const TIME_FRAMES: { key: TimeFrameKey; label: string; days?: number }[] = [
   { key: "all", label: "All time" },
@@ -34,12 +35,35 @@ const TIME_FRAMES: { key: TimeFrameKey; label: string; days?: number }[] = [
   { key: "30d", label: "Last 30 days", days: 30 },
   { key: "90d", label: "Last 90 days", days: 90 },
   { key: "365d", label: "Last 12 months", days: 365 },
+  { key: "custom", label: "Custom Date Range" },
 ];
+
+function getDateForOrder(order: FilmOrder) {
+  return new Date(order.created_at || order.dropoff_date);
+}
+
+function parseDateInput(date: string, endOfDay = false) {
+  if (!date) return null;
+  const parsed = new Date(`${date}T${endOfDay ? "23:59:59.999" : "00:00:00.000"}`);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function formatDisplayDate(date: string) {
+  const parsed = parseDateInput(date);
+  if (!parsed) return "";
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(parsed);
+}
 
 const FILM_STOCK_LIST_MAX_HEIGHT_PX = 260;
 
 export default function Reports() {
   const [selectedTimeFrame, setSelectedTimeFrame] = useState<TimeFrameKey>("30d");
+  const [customStartDate, setCustomStartDate] = useState("");
+  const [customEndDate, setCustomEndDate] = useState("");
 
   const { data: orders = [] } = useQuery<FilmOrder[]>({
     queryKey: ["filmOrders"],
@@ -50,21 +74,44 @@ export default function Reports() {
     },
   });
 
-  const getDateForOrder = (order: FilmOrder) => {
-    if (order.created_at) return new Date(order.created_at);
-    return new Date(order.dropoff_date);
-  };
+  const customStart = parseDateInput(customStartDate);
+  const customEnd = parseDateInput(customEndDate, true);
+  const hasCompleteCustomRange = Boolean(customStart && customEnd);
+  const hasValidCustomRange = Boolean(
+    customStart && customEnd && customStart.getTime() <= customEnd.getTime()
+  );
+  const customRangeLabel = hasCompleteCustomRange
+    ? `${formatDisplayDate(customStartDate)} - ${formatDisplayDate(customEndDate)}`
+    : "Custom Date Range";
+  const selectedTimeFrameLabel =
+    selectedTimeFrame === "custom"
+      ? customRangeLabel
+      : TIME_FRAMES.find((frame) => frame.key === selectedTimeFrame)?.label ?? "Last 30 days";
 
-  const selectedTimeFrameLabel = TIME_FRAMES.find((frame) => frame.key === selectedTimeFrame)?.label ?? "Last 30 days";
+  const handleTimeFrameChange = (timeFrame: TimeFrameKey) => {
+    setSelectedTimeFrame(timeFrame);
+    if (timeFrame !== "custom") {
+      setCustomStartDate("");
+      setCustomEndDate("");
+    }
+  };
 
   const filteredOrders = orders.filter((order) => {
     if (selectedTimeFrame === "all") return true;
+
+    if (selectedTimeFrame === "custom") {
+      if (!hasCompleteCustomRange || !hasValidCustomRange || !customStart || !customEnd) {
+        return true;
+      }
+      const orderDate = getDateForOrder(order);
+      return orderDate >= customStart && orderDate <= customEnd;
+    }
+
     const timeFrame = TIME_FRAMES.find((frame) => frame.key === selectedTimeFrame);
     if (!timeFrame?.days) return true;
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - timeFrame.days);
-    const orderDate = getDateForOrder(order);
-    return orderDate >= cutoff;
+    return getDateForOrder(order) >= cutoff;
   });
 
   const calculateMetrics = (orderList: FilmOrder[] = orders): ReportMetrics => {
@@ -132,7 +179,13 @@ export default function Reports() {
   };
 
   const metrics = calculateMetrics(filteredOrders);
-  const turnaround = calculateTurnaroundForPeriod(orders, selectedTimeFrame);
+  const turnaround =
+    selectedTimeFrame === "custom" && hasValidCustomRange && customStart && customEnd
+      ? calculateTurnaroundForDateRange(orders, customStart, customEnd)
+      : calculateTurnaroundForPeriod(
+          orders,
+          selectedTimeFrame === "custom" ? "all" : selectedTimeFrame
+        );
   const totalScanRolls = metrics.scanResolutionUsage.reduce((sum, item) => sum + item.count, 0);
 
   const handleExport = () => {
@@ -181,21 +234,51 @@ export default function Reports() {
         <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h2 className="text-2xl font-bold text-slate-800">Analytics Dashboard</h2>
-            <p className="text-sm text-slate-500">Showing data for <span className="font-semibold text-slate-700">{selectedTimeFrameLabel}</span></p>
+            <p className="text-sm text-slate-500">
+              Showing data for{" "}
+              <span className="font-semibold text-slate-700">{selectedTimeFrameLabel}</span>
+            </p>
+            {selectedTimeFrame === "custom" && hasCompleteCustomRange && !hasValidCustomRange ? (
+              <p className="mt-1 text-sm font-medium text-red-500">Start date cannot be after end date.</p>
+            ) : null}
           </div>
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <div className="flex flex-col gap-3 lg:items-end">
             <div className="flex flex-wrap gap-2">
               {TIME_FRAMES.map((frame) => (
                 <button
                   key={frame.key}
                   type="button"
-                  onClick={() => setSelectedTimeFrame(frame.key)}
+                  onClick={() => handleTimeFrameChange(frame.key)}
                   className={`rounded-full border px-3 py-2 text-xs font-semibold transition ${selectedTimeFrame === frame.key ? "border-amber-500 bg-amber-500 text-white" : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50"}`}
                 >
                   {frame.label}
                 </button>
               ))}
             </div>
+            {selectedTimeFrame === "custom" ? (
+              <div className="flex flex-col gap-2 rounded-xl border border-stone-100 bg-white p-3 sm:flex-row sm:items-center">
+                <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Start
+                  <input
+                    type="date"
+                    value={customStartDate}
+                    max={customEndDate || undefined}
+                    onChange={(event) => setCustomStartDate(event.target.value)}
+                    className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium normal-case tracking-normal text-slate-700 outline-none transition focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20"
+                  />
+                </label>
+                <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  End
+                  <input
+                    type="date"
+                    value={customEndDate}
+                    min={customStartDate || undefined}
+                    onChange={(event) => setCustomEndDate(event.target.value)}
+                    className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium normal-case tracking-normal text-slate-700 outline-none transition focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20"
+                  />
+                </label>
+              </div>
+            ) : null}
             <Button onClick={handleExport} className="bg-amber-600 hover:bg-amber-700 text-white">
               <Download className="w-4 h-4 mr-2" />
               Export CSV

@@ -6,7 +6,7 @@
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Customer, CustomerSummary, FilmOrder } from "./types";
-import { buildCustomerStatsMap, computeCustomerStats } from "./customer-stats";
+import { buildCustomerStatsMap, computeCustomerStats, sortCustomersByLatestOrder } from "./customer-stats";
 
 type CustomerInsert = Omit<Customer, "id" | "created_at">;
 
@@ -102,6 +102,20 @@ export async function updateOrder(id: string, data: Partial<FilmOrder>): Promise
   return updated as FilmOrder;
 }
 
+/** Updates customer_email on every order linked by customer_id (not by email match). */
+export async function updateOrdersCustomerEmailByCustomerId(
+  customerId: string,
+  customerEmail: string,
+): Promise<number> {
+  const { data, error } = await getSupabase()
+    .from("film_orders")
+    .update({ customer_email: customerEmail })
+    .eq("customer_id", customerId)
+    .select("id");
+  if (error) throw new Error(error.message);
+  return data?.length ?? 0;
+}
+
 export async function getDistinctFilmStocks(): Promise<string[]> {
   const { data, error } = await getSupabase()
     .from("film_orders")
@@ -155,7 +169,7 @@ export async function getCustomersWithSummaries(): Promise<CustomerSummary[]> {
   const [customers, orders] = await Promise.all([getCustomers(), getOrders("desc")]);
   const statsMap = buildCustomerStatsMap(orders);
 
-  return customers.map((customer) => {
+  const withSummaries = customers.map((customer) => {
     const stats = statsMap.get(customer.id) ?? computeCustomerStats([]);
     return {
       ...customer,
@@ -165,6 +179,8 @@ export async function getCustomersWithSummaries(): Promise<CustomerSummary[]> {
       common_scan_size: stats.common_scan_size,
     };
   });
+
+  return sortCustomersByLatestOrder(withSummaries);
 }
 
 export async function getCustomerProfile(id: string) {
