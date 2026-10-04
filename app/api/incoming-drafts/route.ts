@@ -2,7 +2,8 @@
  * Incoming Squarespace drafts.
  *
  * POST — bot only. Authorization: Bearer $SQUARESPACE_INTAKE_SECRET.
- *        Creates a pending draft. Cannot create film orders, read customers, or send email.
+ *        Creates a Pending Intake item. Does not create a film order, set Received by Yours,
+ *        write status history, or send email.
  * GET  — logged-in staff only. Lists pending drafts for the dashboard.
  */
 
@@ -10,6 +11,7 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/api-auth";
 import {
   createIncomingDraft,
+  getIncomingDraftByExternalId,
   getIncomingDraftByOrderNumber,
   getPendingIncomingDrafts,
   orderNumberExists,
@@ -65,6 +67,7 @@ export async function POST(req: Request) {
   }
 
   const orderNumber = parsed.value.squarespace_order_number;
+  const externalOrderId = parsed.value.external_order_id;
 
   try {
     if (await orderNumberExists(orderNumber)) {
@@ -78,6 +81,14 @@ export async function POST(req: Request) {
     if (existingDraft) {
       return NextResponse.json(
         { error: `Squarespace order number ${orderNumber} was already imported` },
+        { status: 409 }
+      );
+    }
+
+    const existingExternal = await getIncomingDraftByExternalId(externalOrderId);
+    if (existingExternal) {
+      return NextResponse.json(
+        { error: `Squarespace order ${externalOrderId} was already imported` },
         { status: 409 }
       );
     }

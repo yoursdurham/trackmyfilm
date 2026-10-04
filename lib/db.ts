@@ -6,7 +6,7 @@
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Customer, CustomerSummary, FilmOrder, IncomingSquarespaceDraft } from "./types";
-import type { IncomingDraftInput } from "./incoming-drafts";
+import { buildIncomingDraftInsert, type IncomingDraftInput, PENDING_INTAKE_STATUS } from "./incoming-drafts";
 import { buildCustomerStatsMap, computeCustomerStats, sortCustomersByLatestOrder } from "./customer-stats";
 
 type CustomerInsert = Omit<Customer, "id" | "created_at">;
@@ -156,7 +156,7 @@ export async function getPendingIncomingDrafts(): Promise<IncomingSquarespaceDra
   const { data, error } = await getSupabase()
     .from("incoming_squarespace_drafts")
     .select("*")
-    .eq("status", "pending")
+    .eq("status", PENDING_INTAKE_STATUS)
     .order("created_at", { ascending: false });
   if (error) throw new Error(error.message);
   return data as IncomingSquarespaceDraft[];
@@ -184,20 +184,22 @@ export async function getIncomingDraftByOrderNumber(
   return data as IncomingSquarespaceDraft | null;
 }
 
+export async function getIncomingDraftByExternalId(
+  externalOrderId: string
+): Promise<IncomingSquarespaceDraft | null> {
+  const { data, error } = await getSupabase()
+    .from("incoming_squarespace_drafts")
+    .select("*")
+    .eq("external_order_id", externalOrderId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return data as IncomingSquarespaceDraft | null;
+}
+
 export async function createIncomingDraft(data: IncomingDraftInput): Promise<IncomingSquarespaceDraft> {
   const { data: created, error } = await getSupabase()
     .from("incoming_squarespace_drafts")
-    .insert({
-      squarespace_order_number: data.squarespace_order_number,
-      customer_name: data.customer_name,
-      customer_email: data.customer_email,
-      dropoff_date: data.dropoff_date,
-      roll_count: data.roll_count,
-      roll_details: data.roll_details,
-      notes: data.notes,
-      source: data.source,
-      status: "pending",
-    })
+    .insert(buildIncomingDraftInsert(data))
     .select()
     .single();
   if (error) {

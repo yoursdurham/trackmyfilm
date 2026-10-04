@@ -4,14 +4,17 @@ import { NextResponse } from "next/server";
 const mockRequireAuth = vi.fn();
 const mockOrderNumberExists = vi.fn();
 const mockGetIncomingDraftByOrderNumber = vi.fn();
+const mockGetIncomingDraftByExternalId = vi.fn();
 const mockCreateIncomingDraft = vi.fn();
+const mockGetCustomerByEmailOrName = vi.fn();
+const mockCreateCustomer = vi.fn();
+const mockUpdateCustomer = vi.fn();
 const mockGetPendingIncomingDrafts = vi.fn();
 const mockGetIncomingDraftById = vi.fn();
 const mockUpdateIncomingDraftStatus = vi.fn();
 const mockGetOrderByNumber = vi.fn();
 const mockCreateOrder = vi.fn();
 const mockGetCustomers = vi.fn();
-const mockCreateCustomer = vi.fn();
 const mockSendOrderEmail = vi.fn();
 
 vi.mock("@/lib/api-auth", () => ({
@@ -21,7 +24,11 @@ vi.mock("@/lib/api-auth", () => ({
 vi.mock("@/lib/db", () => ({
   orderNumberExists: (...args: unknown[]) => mockOrderNumberExists(...args),
   getIncomingDraftByOrderNumber: (...args: unknown[]) => mockGetIncomingDraftByOrderNumber(...args),
+  getIncomingDraftByExternalId: (...args: unknown[]) => mockGetIncomingDraftByExternalId(...args),
   createIncomingDraft: (...args: unknown[]) => mockCreateIncomingDraft(...args),
+  getCustomerByEmailOrName: (...args: unknown[]) => mockGetCustomerByEmailOrName(...args),
+  createCustomer: (...args: unknown[]) => mockCreateCustomer(...args),
+  updateCustomer: (...args: unknown[]) => mockUpdateCustomer(...args),
   getPendingIncomingDrafts: (...args: unknown[]) => mockGetPendingIncomingDrafts(...args),
   getIncomingDraftById: (...args: unknown[]) => mockGetIncomingDraftById(...args),
   updateIncomingDraftStatus: (...args: unknown[]) => mockUpdateIncomingDraftStatus(...args),
@@ -37,26 +44,29 @@ vi.mock("@/lib/email-service", () => ({
 
 import { GET, POST } from "@/app/api/incoming-drafts/route";
 import { PATCH } from "@/app/api/incoming-drafts/[id]/route";
+import { POST as receiveDraft } from "@/app/api/incoming-drafts/[id]/receive/route";
 import { SQUARESPACE_INTAKE_SECRET_ENV } from "@/lib/intake-auth";
 
 const SECRET = "test-intake-secret";
 const DRAFT_ID = "4f1c2d30-7b1a-4e2e-9c1a-6b0e1d2a3c4b";
 
 const payload = {
-  squarespace_order_number: "sq-1001",
-  customer_name: "Jane Doe",
-  customer_email: "jane@example.com",
+  squarespace_order_number: "01050",
+  external_order_id: "squarespace-01050",
+  import_source: "squarespace",
+  customer_name: "Justin Eisner",
+  customer_email: "contact@justineisner.com",
   dropoff_date: "2026-10-03",
   roll_count: 1,
   roll_details: [{
     film_type: "35mm",
-    film_process: "Color",
-    scan_size: "Standard",
-    prints_4x6: false,
-    film_stock: "Kodak Gold 200",
+    film_process: "C41",
+    scan_size: "High-Res",
+    prints_4x6: true,
+    film_stock: "Kodak Portra 800",
   }],
   notes: "bag 4",
-  status: "accepted",
+  status: "Received by Yours",
   send_email: true,
 };
 
@@ -78,22 +88,58 @@ describe("Squarespace incoming draft routes", () => {
     process.env[SQUARESPACE_INTAKE_SECRET_ENV] = SECRET;
     mockRequireAuth.mockResolvedValue({ id: "user-1", email: "staff@example.com" });
     mockOrderNumberExists.mockResolvedValue(false);
-    mockGetIncomingDraftByOrderNumber.mockResolvedValue(null);
-    mockCreateIncomingDraft.mockImplementation(async (data: Record<string, unknown>) => ({
-      id: DRAFT_ID,
-      status: "pending",
+    mockGetOrderByNumber.mockResolvedValue(null);
+    mockCreateOrder.mockImplementation(async (data: Record<string, unknown>) => ({
+      id: "order-1",
       ...data,
     }));
+    mockGetIncomingDraftByOrderNumber.mockResolvedValue(null);
+    mockGetIncomingDraftByExternalId.mockResolvedValue(null);
+    mockCreateIncomingDraft.mockImplementation(async (data: Record<string, unknown>) => ({
+      id: DRAFT_ID,
+      status: "Pending Intake",
+      ...data,
+    }));
+    mockGetCustomerByEmailOrName.mockResolvedValue({
+      id: "cust-1",
+      first_name: "Justin",
+      last_name: "Eisner",
+      total_rolls: 0,
+      total_dropoffs: 0,
+    });
+    mockCreateCustomer.mockResolvedValue({
+      id: "cust-new",
+      first_name: "Justin",
+      last_name: "Eisner",
+      total_rolls: 0,
+      total_dropoffs: 0,
+    });
+    mockUpdateCustomer.mockResolvedValue({});
+    mockSendOrderEmail.mockResolvedValue({ success: true, variant: "film_drop_received", emailId: "em_1" });
     mockGetPendingIncomingDrafts.mockResolvedValue([]);
     mockGetIncomingDraftById.mockResolvedValue({
       id: DRAFT_ID,
-      status: "pending",
-      squarespace_order_number: "SQ-1001",
+      status: "Pending Intake",
+      squarespace_order_number: "01050",
+      external_order_id: "squarespace-01050",
+      import_source: "squarespace",
+      customer_name: "Justin Eisner",
+      customer_email: "contact@justineisner.com",
+      dropoff_date: "2026-10-03",
+      roll_count: 1,
+      roll_details: [{
+        film_type: "35mm",
+        film_process: "Color",
+        scan_size: "High-Res",
+        prints_4x6: true,
+        film_stock: "Kodak Portra 800",
+      }],
+      notes: null,
     });
     mockUpdateIncomingDraftStatus.mockImplementation(async (id: string, status: string) => ({
       id,
       status,
-      squarespace_order_number: "SQ-1001",
+      squarespace_order_number: "01050",
     }));
   });
 
@@ -118,25 +164,48 @@ describe("Squarespace incoming draft routes", () => {
       expect(mockRequireAuth).not.toHaveBeenCalled();
     });
 
-    it("creates a pending draft and does not create orders, read customers, or send email", async () => {
+    it("creates Pending Intake and does not receive the film or send email", async () => {
       const res = await postDraft(payload);
       expect(res.status).toBe(201);
       const body = await res.json();
-      expect(body.status).toBe("pending");
-      expect(body.squarespace_order_number).toBe("SQ-1001");
-      expect(body.customer_email).toBe("jane@example.com");
+      expect(body.status).toBe("Pending Intake");
+      expect(body.squarespace_order_number).toBe("01050");
+      expect(body.customer_email).toBe("contact@justineisner.com");
+      expect(body.import_source).toBe("squarespace");
+      expect(body.roll_details[0].film_process).toBe("Color");
+      expect(body).not.toHaveProperty("received_by_yours_at");
+      expect(body).not.toHaveProperty("status_history");
 
       expect(mockCreateIncomingDraft).toHaveBeenCalledTimes(1);
       const inserted = mockCreateIncomingDraft.mock.calls[0][0];
-      expect(inserted.status).toBeUndefined();
+      expect(inserted.squarespace_order_number).toBe("01050");
+      expect(inserted.external_order_id).toBe("squarespace-01050");
+      expect(inserted.import_source).toBe("squarespace");
+      expect(inserted.roll_details[0].film_process).toBe("Color");
+      expect(inserted.roll_details[0].scan_size).toBe("High-Res");
+      expect(inserted.roll_details[0].prints_4x6).toBe(true);
+      expect(inserted.roll_details[0].film_stock).toBe("Kodak Portra 800");
+      expect(inserted).not.toHaveProperty("status");
+      expect(inserted).not.toHaveProperty("received_by_yours_at");
+      expect(inserted).not.toHaveProperty("status_history");
       expect(inserted).not.toHaveProperty("send_email");
 
       expect(mockCreateOrder).not.toHaveBeenCalled();
       expect(mockGetOrderByNumber).not.toHaveBeenCalled();
       expect(mockGetCustomers).not.toHaveBeenCalled();
       expect(mockCreateCustomer).not.toHaveBeenCalled();
+      expect(mockGetCustomerByEmailOrName).not.toHaveBeenCalled();
       expect(mockSendOrderEmail).not.toHaveBeenCalled();
       expect(mockRequireAuth).not.toHaveBeenCalled();
+    });
+
+    it("rejects a duplicate external Squarespace order id", async () => {
+      mockGetIncomingDraftByExternalId.mockResolvedValue({ id: DRAFT_ID, status: "Pending Intake" });
+      const res = await postDraft({ ...payload, squarespace_order_number: "01051" });
+      expect(res.status).toBe(409);
+      expect(mockCreateIncomingDraft).not.toHaveBeenCalled();
+      expect(mockCreateOrder).not.toHaveBeenCalled();
+      expect(mockSendOrderEmail).not.toHaveBeenCalled();
     });
 
     it("rejects an order number that already exists as a real order", async () => {
@@ -198,11 +267,11 @@ describe("Squarespace incoming draft routes", () => {
     });
 
     it("returns pending drafts for staff", async () => {
-      mockGetPendingIncomingDrafts.mockResolvedValue([{ id: DRAFT_ID, status: "pending" }]);
+      mockGetPendingIncomingDrafts.mockResolvedValue([{ id: DRAFT_ID, status: "Pending Intake" }]);
       const res = await GET(new Request("http://localhost/api/incoming-drafts"));
       expect(res.status).toBe(200);
       const body = await res.json();
-      expect(body).toEqual([{ id: DRAFT_ID, status: "pending" }]);
+      expect(body).toEqual([{ id: DRAFT_ID, status: "Pending Intake" }]);
     });
   });
 
@@ -251,7 +320,7 @@ describe("Squarespace incoming draft routes", () => {
     });
 
     it("returns the current draft when the same terminal status is repeated", async () => {
-      const current = { id: DRAFT_ID, status: "dismissed", squarespace_order_number: "SQ-1001" };
+      const current = { id: DRAFT_ID, status: "dismissed", squarespace_order_number: "01050" };
       mockGetIncomingDraftById.mockResolvedValue(current);
       const res = await patchDraft("dismissed");
       expect(res.status).toBe(200);
@@ -268,6 +337,59 @@ describe("Squarespace incoming draft routes", () => {
       expect(res.status).toBe(404);
       expect(mockGetIncomingDraftById).not.toHaveBeenCalled();
       expect(mockCreateOrder).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("POST /api/incoming-drafts/:id/receive", () => {
+    function receive(body: unknown, token: string | null = null) {
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (token) headers.authorization = `Bearer ${token}`;
+      return receiveDraft(new Request(`http://localhost/api/incoming-drafts/${DRAFT_ID}/receive`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(body),
+      }), { params: Promise.resolve({ id: DRAFT_ID }) });
+    }
+
+    it("does not accept the intake secret in place of a staff session", async () => {
+      mockRequireAuth.mockResolvedValue(NextResponse.json({ error: "Unauthorized" }, { status: 401 }));
+      const res = await receive({ send_email: true }, SECRET);
+      expect(res.status).toBe(401);
+      expect(mockCreateOrder).not.toHaveBeenCalled();
+      expect(mockSendOrderEmail).not.toHaveBeenCalled();
+    });
+
+    it("sets Received by Yours, the received timestamp, status history, and sends the confirmation email", async () => {
+      const res = await receive({ send_email: true });
+      expect(res.status).toBe(201);
+      expect(mockCreateOrder).toHaveBeenCalledTimes(1);
+      const order = mockCreateOrder.mock.calls[0][0];
+      expect(order.status).toBe("Received by Yours");
+      expect(order.order_number).toBe("01050");
+      expect(order.customer_name).toBe("Justin Eisner");
+      expect(order.customer_email).toBe("contact@justineisner.com");
+      expect(order.film_type).toBe("35mm");
+      expect(order.film_process).toBe("Color");
+      expect(order.roll_count).toBe(1);
+      expect(order.roll_details[0].scan_size).toBe("High-Res");
+      expect(order.roll_details[0].prints_4x6).toBe(true);
+      expect(order.roll_details[0].film_stock).toBe("Kodak Portra 800");
+      expect(typeof order.received_by_yours_at).toBe("string");
+      expect(order.status_history).toEqual([
+        { status: "Received by Yours", changed_at: order.received_by_yours_at },
+      ]);
+      expect(mockSendOrderEmail).toHaveBeenCalledWith("order-1", "film_drop_received");
+      expect(mockUpdateIncomingDraftStatus).toHaveBeenCalledWith(DRAFT_ID, "accepted");
+    });
+
+    it("skips the confirmation email when the checkbox is off", async () => {
+      const res = await receive({ send_email: false });
+      expect(res.status).toBe(201);
+      const body = await res.json();
+      expect(body.email.skipped).toBe(true);
+      expect(body.order.status).toBe("Received by Yours");
+      expect(mockSendOrderEmail).not.toHaveBeenCalled();
+      expect(mockUpdateIncomingDraftStatus).toHaveBeenCalledWith(DRAFT_ID, "accepted");
     });
   });
 });

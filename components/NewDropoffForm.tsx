@@ -192,7 +192,7 @@ export default function NewDropoffForm({
         prints_4x6: r.prints_4x6,
       }));
 
-      const res = await fetch("/api/dropoff", {
+      const res = await fetch(incomingDraft ? `/api/incoming-drafts/${incomingDraft.id}/receive` : "/api/dropoff", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -215,6 +215,7 @@ export default function NewDropoffForm({
         error?: string;
         customer?: { name: string; isNew: boolean; total_dropoffs: number };
         email?: { sent: boolean; skipped?: boolean; variant?: string; error?: string };
+        warning?: string;
       };
 
       if (!res.ok) throw new Error(data.error || "Failed to create drop-off");
@@ -233,27 +234,8 @@ export default function NewDropoffForm({
         toast.error(`Order created but email failed: ${data.email.error}`);
       }
 
-      toast.success("Drop-off created successfully");
-
-      if (incomingDraft) {
-        try {
-          const acceptRes = await fetch(`/api/incoming-drafts/${incomingDraft.id}`, {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ status: "accepted" }),
-          });
-          if (!acceptRes.ok) {
-            const acceptBody = await acceptRes.json().catch(() => null) as { error?: string } | null;
-            toast.error(
-              acceptBody?.error
-                ? `Drop-off saved, but the Squarespace draft was not cleared: ${acceptBody.error}`
-                : "Drop-off saved, but the Squarespace draft was not cleared. Dismiss it if it is still in the queue."
-            );
-          }
-        } catch {
-          toast.error("Drop-off saved, but the Squarespace draft was not cleared. Dismiss it if it is still in the queue.");
-        }
-      }
+      toast.success(incomingDraft ? "Marked Received by Yours" : "Drop-off created successfully");
+      if (data.warning) toast.error(data.warning);
 
       onSuccess?.();
       setFormData({ ...emptyMeta, dropoff_date: format(new Date(), "yyyy-MM-dd") });
@@ -325,11 +307,11 @@ export default function NewDropoffForm({
       <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-xl font-semibold text-slate-800">
-            {incomingDraft ? "Review Squarespace Drop-off" : "New Film Drop-off"}
+            {incomingDraft ? "Approve & Receive" : "New Film Drop-off"}
           </DialogTitle>
           {incomingDraft ? (
             <p className="text-sm text-slate-500">
-              Imported from Squarespace as {incomingDraft.squarespace_order_number}. Saving uses the normal drop-off flow and clears it from the incoming queue.
+              Pending Intake from Squarespace ({incomingDraft.squarespace_order_number}). Approving sets Received by Yours and sends the confirmation email when the box below is checked.
             </p>
           ) : null}
         </DialogHeader>
@@ -555,7 +537,9 @@ export default function NewDropoffForm({
               Cancel
             </Button>
             <Button type="submit" disabled={loading} className="flex-1 bg-amber-600 hover:bg-amber-700 text-white">
-              {loading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Saving...</> : "Create Drop-off"}
+              {loading
+                ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Saving...</>
+                : incomingDraft ? "Approve & Receive" : "Create Drop-off"}
             </Button>
           </div>
         </form>

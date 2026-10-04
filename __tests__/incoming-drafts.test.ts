@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  buildIncomingDraftInsert,
   isIncomingDraftUuid,
   parseIncomingDraftPayload,
   resolveIncomingDraftStatusChange,
@@ -15,14 +16,15 @@ const validRoll = {
 
 const validBody = {
   squarespace_order_number: "sq-1001",
+  external_order_id: "sq-id-1001",
   customer_name: "  Jane Doe  ",
   customer_email: "Jane@Example.com",
   dropoff_date: "2026-10-03",
   roll_count: 1,
   roll_details: [validRoll],
   notes: "  hold at counter  ",
-  source: "squarespace",
-  status: "accepted",
+  import_source: "squarespace",
+  status: "Received by Yours",
 };
 
 describe("parseIncomingDraftPayload", () => {
@@ -32,6 +34,7 @@ describe("parseIncomingDraftPayload", () => {
     if (!result.ok) return;
     expect(result.value).toEqual({
       squarespace_order_number: "SQ-1001",
+      external_order_id: "sq-id-1001",
       customer_name: "Jane Doe",
       customer_email: "jane@example.com",
       dropoff_date: "2026-10-03",
@@ -44,9 +47,50 @@ describe("parseIncomingDraftPayload", () => {
         film_stock: "Kodak Portra 400",
       }],
       notes: "hold at counter",
-      source: "squarespace",
+      import_source: "squarespace",
     });
     expect(result.value).not.toHaveProperty("status");
+    expect(result.value).not.toHaveProperty("received_by_yours_at");
+    expect(result.value).not.toHaveProperty("status_history");
+  });
+
+  it("maps Squarespace C41 to Color and keeps order 01050 for Justin Eisner", () => {
+    const result = parseIncomingDraftPayload({
+      squarespace_order_number: "01050",
+      external_order_id: "squarespace-01050",
+      import_source: "squarespace",
+      customer_name: "Justin Eisner",
+      customer_email: "contact@justineisner.com",
+      roll_count: 1,
+      roll_details: [{
+        film_type: "35mm",
+        film_process: "C41",
+        scan_size: "High-Res",
+        prints_4x6: true,
+        film_stock: "Kodak Portra 800",
+      }],
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.squarespace_order_number).toBe("01050");
+    expect(result.value.external_order_id).toBe("squarespace-01050");
+    expect(result.value.import_source).toBe("squarespace");
+    expect(result.value.customer_name).toBe("Justin Eisner");
+    expect(result.value.customer_email).toBe("contact@justineisner.com");
+    expect(result.value.roll_count).toBe(1);
+    expect(result.value.roll_details[0]).toEqual({
+      film_type: "35mm",
+      film_process: "Color",
+      scan_size: "High-Res",
+      prints_4x6: true,
+      film_stock: "Kodak Portra 800",
+    });
+
+    const row = buildIncomingDraftInsert(result.value);
+    expect(row.status).toBe("Pending Intake");
+    expect(row).not.toHaveProperty("received_by_yours_at");
+    expect(row).not.toHaveProperty("status_history");
+    expect(row.import_source).toBe("squarespace");
   });
 
   it("accepts 120 and 110 film, black and white, and every scan size", () => {
@@ -69,19 +113,26 @@ describe("parseIncomingDraftPayload", () => {
     expect(result.value.roll_details[3].prints_4x6).toBe(false);
   });
 
-  it("coerces a numeric Squarespace order number and defaults source", () => {
+  it("coerces a numeric Squarespace order number and defaults import_source", () => {
     const result = parseIncomingDraftPayload({
-      ...validBody,
       squarespace_order_number: 48291,
-      source: undefined,
+      external_order_id: validBody.external_order_id,
+      customer_name: validBody.customer_name,
       customer_email: "",
       dropoff_date: null,
+      roll_count: validBody.roll_count,
+      roll_details: validBody.roll_details,
       notes: "   ",
     });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value.squarespace_order_number).toBe("48291");
-    expect(result.value.source).toBe("squarespace");
+    expect(result.value.import_source).toBe("squarespace");
+
+    const aliased = parseIncomingDraftPayload({ ...validBody, import_source: undefined, source: "squarespace" });
+    expect(aliased.ok).toBe(true);
+    if (!aliased.ok) return;
+    expect(aliased.value.import_source).toBe("squarespace");
     expect(result.value.customer_email).toBeNull();
     expect(result.value.dropoff_date).toBeNull();
     expect(result.value.notes).toBeNull();
@@ -129,16 +180,17 @@ describe("parseIncomingDraftPayload", () => {
     expect(parseIncomingDraftPayload({ ...validBody, roll_count: 21, roll_details: rolls }).ok).toBe(false);
     expect(parseIncomingDraftPayload({ ...validBody, dropoff_date: "10/03/2026" }).ok).toBe(false);
     expect(parseIncomingDraftPayload({ ...validBody, dropoff_date: "2026-02-31" }).ok).toBe(false);
-    expect(parseIncomingDraftPayload({ ...validBody, source: "squarespace!" }).ok).toBe(false);
+    expect(parseIncomingDraftPayload({ ...validBody, import_source: "squarespace!" }).ok).toBe(false);
+    expect(parseIncomingDraftPayload({ ...validBody, external_order_id: "  " }).ok).toBe(false);
   });
 });
 
 describe("resolveIncomingDraftStatusChange", () => {
-  it("accepts or dismisses a pending draft", () => {
-    expect(resolveIncomingDraftStatusChange("pending", "accepted")).toEqual({
+  it("accepts or dismisses a Pending Intake item", () => {
+    expect(resolveIncomingDraftStatusChange("Pending Intake", "accepted")).toEqual({
       ok: true, status: "accepted", changed: true,
     });
-    expect(resolveIncomingDraftStatusChange("pending", "dismissed")).toEqual({
+    expect(resolveIncomingDraftStatusChange("Pending Intake", "dismissed")).toEqual({
       ok: true, status: "dismissed", changed: true,
     });
   });
@@ -153,7 +205,7 @@ describe("resolveIncomingDraftStatusChange", () => {
   });
 
   it("rejects pending as a target and crossing between terminal statuses", () => {
-    const invalid = resolveIncomingDraftStatusChange("pending", "pending");
+    const invalid = resolveIncomingDraftStatusChange("Pending Intake", "Pending Intake");
     expect(invalid.ok).toBe(false);
     if (invalid.ok) return;
     expect(invalid.reason).toBe("invalid");

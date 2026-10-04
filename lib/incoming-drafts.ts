@@ -17,9 +17,9 @@ export const MAX_INCOMING_DRAFT_ROLLS = 20;
 
 export const INCOMING_DRAFT_PROCESSES = ["Color", "Black & White"] as const satisfies readonly FilmProcess[];
 export const INCOMING_DRAFT_SCAN_SIZES = ["Standard", "High-Res", "TIFF", "Process Only"] as const;
-export const INCOMING_DRAFT_STATUSES = ["pending", "accepted", "dismissed"] as const satisfies readonly IncomingDraftStatus[];
+export const PENDING_INTAKE_STATUS = "Pending Intake" as const;
+export const INCOMING_DRAFT_STATUSES = [PENDING_INTAKE_STATUS, "accepted", "dismissed"] as const satisfies readonly IncomingDraftStatus[];
 
-const PROCESS_SET = new Set<string>(INCOMING_DRAFT_PROCESSES);
 const SCAN_SIZE_SET = new Set<string>(INCOMING_DRAFT_SCAN_SIZES);
 const DROP_OFF_FILM_TYPE_SET = new Set<string>(DROP_OFF_FILM_TYPES);
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -31,13 +31,38 @@ const MAX_ORDER_NUMBER_LENGTH = 64;
 
 export interface IncomingDraftInput {
   squarespace_order_number: string;
+  external_order_id: string;
   customer_name: string;
   customer_email: string | null;
   dropoff_date: string | null;
   roll_count: number;
   roll_details: RollDetail[];
   notes: string | null;
-  source: string;
+  import_source: string;
+}
+
+/** Row written on import. Status is always Pending Intake — never a received order. */
+export function buildIncomingDraftInsert(input: IncomingDraftInput) {
+  return {
+    squarespace_order_number: input.squarespace_order_number,
+    external_order_id: input.external_order_id,
+    customer_name: input.customer_name,
+    customer_email: input.customer_email,
+    dropoff_date: input.dropoff_date,
+    roll_count: input.roll_count,
+    roll_details: input.roll_details,
+    notes: input.notes,
+    import_source: input.import_source,
+    status: PENDING_INTAKE_STATUS,
+  };
+}
+
+export function normalizeIncomingFilmProcess(value: unknown): FilmProcess | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (trimmed === "Color" || trimmed === "Black & White") return trimmed;
+  if (/^c-?41$/i.test(trimmed)) return "Color";
+  return null;
 }
 
 export type IncomingDraftParseResult =
@@ -65,7 +90,7 @@ function readOrderNumber(value: unknown): string | null {
 
 /**
  * Validates a bot payload and returns the row to insert.
- * `status` is intentionally not read — callers always store `pending`.
+ * `status` is intentionally not read — callers always store Pending Intake.
  */
 export function parseIncomingDraftPayload(body: unknown): IncomingDraftParseResult {
   if (!body || typeof body !== "object" || Array.isArray(body)) {
@@ -84,6 +109,15 @@ export function parseIncomingDraftPayload(body: unknown): IncomingDraftParseResu
   }
   if (/[\u0000-\u001F]/.test(squarespaceOrderNumber)) {
     return { ok: false, error: "squarespace_order_number is invalid" };
+  }
+
+  const rawExternalId = readOrderNumber(record.external_order_id);
+  if (rawExternalId === null) {
+    return { ok: false, error: "external_order_id is required" };
+  }
+  const externalOrderId = rawExternalId.trim();
+  if (!externalOrderId || externalOrderId.length > 128 || /[\u0000-\u001F]/.test(externalOrderId)) {
+    return { ok: false, error: "external_order_id is invalid" };
   }
 
   if (typeof record.customer_name !== "string" || !record.customer_name.trim()) {
@@ -147,25 +181,27 @@ export function parseIncomingDraftPayload(body: unknown): IncomingDraftParseResu
     notes = trimmedNotes || null;
   }
 
-  let source = "squarespace";
-  if (record.source !== undefined && record.source !== null && record.source !== "") {
-    if (typeof record.source !== "string" || !SOURCE_PATTERN.test(record.source.trim())) {
-      return { ok: false, error: "source is invalid" };
+  const rawSource = record.import_source ?? record.source;
+  let importSource = "squarespace";
+  if (rawSource !== undefined && rawSource !== null && rawSource !== "") {
+    if (typeof rawSource !== "string" || !SOURCE_PATTERN.test(rawSource.trim())) {
+      return { ok: false, error: "import_source is invalid" };
     }
-    source = record.source.trim();
+    importSource = rawSource.trim();
   }
 
   return {
     ok: true,
     value: {
       squarespace_order_number: squarespaceOrderNumber,
+      external_order_id: externalOrderId,
       customer_name: customerName,
       customer_email: customerEmail,
       dropoff_date: dropoffDate,
       roll_count: record.roll_count,
       roll_details: rollDetails,
       notes,
-      source,
+      import_source: importSource,
     },
   };
 }
@@ -187,10 +223,11 @@ function parseRoll(
     };
   }
 
-  if (typeof roll.film_process !== "string" || !PROCESS_SET.has(roll.film_process)) {
+  const filmProcess = normalizeIncomingFilmProcess(roll.film_process);
+  if (!filmProcess) {
     return {
       ok: false,
-      error: `roll_details[${index}].film_process is invalid (expected one of: ${INCOMING_DRAFT_PROCESSES.join(", ")})`,
+      error: `roll_details[${index}].film_process is invalid (expected one of: ${INCOMING_DRAFT_PROCESSES.join(", ")}, C41)`,
     };
   }
 
@@ -225,7 +262,7 @@ function parseRoll(
     ok: true,
     roll: {
       film_type: filmType,
-      film_process: roll.film_process as FilmProcess,
+      film_process: filmProcess,
       scan_size: scanSize,
       prints_4x6: roll.prints_4x6 === true,
       ...(filmStock ? { film_stock: filmStock } : {}),
@@ -238,7 +275,7 @@ export type IncomingDraftStatusChange =
   | { ok: false; reason: "invalid" | "conflict"; error: string };
 
 /**
- * Pending drafts can be accepted or dismissed.
+ * Pending Intake items can be accepted or dismissed.
  * Repeating the current terminal status is a no-op. Crossing between them is rejected.
  */
 export function resolveIncomingDraftStatusChange(
@@ -251,7 +288,7 @@ export function resolveIncomingDraftStatusChange(
   if (current === requested) {
     return { ok: true, status: requested, changed: false };
   }
-  if (current !== "pending") {
+  if (current !== PENDING_INTAKE_STATUS) {
     return {
       ok: false,
       reason: "conflict",

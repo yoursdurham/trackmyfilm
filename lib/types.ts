@@ -49,19 +49,20 @@ export interface CustomerSummary extends Customer {
   common_scan_size: RollDetail["scan_size"] | null;
 }
 
-export type IncomingDraftStatus = "pending" | "accepted" | "dismissed";
+export type IncomingDraftStatus = "Pending Intake" | "accepted" | "dismissed";
 
-/** A Squarespace order staged for review. Not a film order until staff submit New Drop-off. */
+/** A Squarespace order waiting for physical receipt. Not received and not emailed yet. */
 export interface IncomingSquarespaceDraft {
   id: string;
   squarespace_order_number: string;
+  external_order_id: string;
   customer_name: string;
   customer_email: string | null;
   dropoff_date: string | null;
   roll_count: number;
   roll_details: RollDetail[];
   notes: string | null;
-  source: string;
+  import_source: string;
   status: IncomingDraftStatus;
   created_at?: string;
   updated_at?: string;
