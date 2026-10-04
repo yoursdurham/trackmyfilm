@@ -36,6 +36,7 @@ Optional (needed for emails):
 
 Optional (needed for the Squarespace incoming queue):
 - `SQUARESPACE_INTAKE_SECRET` — bearer token for the assistant that stages drop-offs
+- `SQUARESPACE_API_KEY` — server-only Squarespace Commerce API key with **Orders read**. Used by the dashboard **Check Squarespace** button. Do not use a `NEXT_PUBLIC_` name.
 
 The assistant calls `POST /api/incoming-drafts` with `Authorization: Bearer <SQUARESPACE_INTAKE_SECRET>`. That creates a **Pending Intake** item only. It does not create a film order, set Received by Yours, write received status history, or send the drop-off email. Logged-in staff click **Approve & Receive** when the film arrives. That sets Received by Yours, the received timestamp, normal status history, and sends the confirmation email unless the checkbox is off.
 
@@ -66,6 +67,8 @@ Example body (35mm C41, High-Res, 4x6 prints, Portra 800, 1 roll):
 `C41` is stored as Color. `film_stock` is optional. `scan_size` may be `Standard` or `High-Res` (also `TIFF` or `Process Only`). Send `squarespace_order_number` as a string so leading zeros in `01050` are kept. Duplicate order numbers and duplicate `external_order_id` values are rejected, including order numbers that already exist as film orders.
 
 **Dismiss** deletes the Pending Intake row. Deleting a film order also deletes the matching intake row (same order number or Squarespace external id). Neither action leaves a row behind, so that Squarespace order can be imported again.
+
+**Check Squarespace** on the dashboard (staff login required) calls `POST /api/incoming-drafts/check`. That reads recent orders from `https://api.squarespace.com/1.0/commerce/orders` and creates Pending Intake rows for film-processing line items that are not already drafts or film orders. Fulfillment status is ignored. Shop sales are skipped. No email is sent. If `SQUARESPACE_API_KEY` is missing, the button shows that message instead of failing.
 
 Before using the queue, run `supabase/migrations/015_incoming_squarespace_drafts.sql` in the Supabase SQL editor, then `supabase/migrations/016_hard_delete_intake_rows.sql`. See `supabase/migrations/README.md`.
 
