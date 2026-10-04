@@ -5,6 +5,7 @@ import { isMixedScanOrder, isPartialScanDeliveryComplete, scansSentBlockedReason
 import { isValidTransition, isKnownStatus, isValidUrl, ensureHttps } from "@/lib/validation";
 import { scanNotesForStorage } from "@/lib/scan-notes";
 import { EmailSendError, sendOrderEmail } from "@/lib/email-service";
+import { isPendingIntakeOrder } from "@/lib/pending-intake";
 import type { FilmOrder, OrderStatus, StatusHistoryEntry } from "@/lib/types";
 
 export type StatusUpdateResult = {
@@ -47,6 +48,14 @@ export async function updateOrderStatus({
     return { success: false, order_id, error: "Order not found" };
   }
 
+  if (isPendingIntakeOrder(order)) {
+    return {
+      success: false,
+      order_id,
+      error: "Pending Intake orders must be approved before entering the workflow.",
+    };
+  }
+
   const processOnlyOrder = isProcessOnlyOrder(order);
 
   if (new_status === ORDER_STATUS.SCANS_SENT && processOnlyOrder) {
@@ -75,7 +84,7 @@ export async function updateOrderStatus({
     };
   }
 
-  if (!isValidTransition(order.status, new_status) && !force) {
+  if (!isValidTransition(order.status as OrderStatus, new_status) && !force) {
     return {
       success: false,
       order_id,

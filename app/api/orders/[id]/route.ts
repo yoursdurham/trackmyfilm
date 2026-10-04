@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getOrderById, updateOrder, deleteOrder, getCustomerById, updateCustomer } from "@/lib/db";
+import { isPendingIntakeOrder } from "@/lib/pending-intake";
 import { ensureHttps } from "@/lib/validation";
 import { requireAuth } from "@/lib/api-auth";
 
@@ -23,6 +24,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
   try {
     const { id } = await params;
+    const existing = await getOrderById(id);
+    if (!existing) return NextResponse.json({ error: "Order not found" }, { status: 404 });
+
     const body = await req.json();
     // Whitelist updatable fields — prevent id/customer_id/created_at from being overwritten
     const {
@@ -42,16 +46,34 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       ? ensureHttps(rawWetransferLink)
       : rawWetransferLink;
 
+    const pending = isPendingIntakeOrder(existing);
+    if (pending && (status != null || status_history != null || received_by_yours_at != null)) {
+      return NextResponse.json(
+        { error: "Use Approve & Receive to move pending intake orders into the workflow." },
+        { status: 400 }
+      );
+    }
+
     const order = await updateOrder(id, {
-      order_number, customer_name, customer_email, status, status_history, status_updated_at,
-      film_type, film_process, film_stock, roll_count, dropoff_date, dropoff_number,
+      order_number, customer_name, customer_email,
+      status: pending ? undefined : status,
+      status_history: pending ? undefined : status_history,
+      status_updated_at: pending ? undefined : status_updated_at,
+      film_type, film_process, film_stock, roll_count, dropoff_date,
+      dropoff_number: pending ? undefined : dropoff_number,
       roll_details, prints_4x6, scan_notes,
       color_scans_wetransfer_link, color_scans_delivered_at, color_partial_email_sent_at,
       bw_scans_wetransfer_link, bw_scans_delivered_at, bw_partial_email_sent_at,
       wetransfer_link, notes,
-      received_by_yours_at, at_lab_at, scans_sent_at,
-      received_email_sent_at, at_lab_email_sent_at, process_only_finished_emailed_at, scans_sent_email_sent_at,
-      email_status, email_error,
+      received_by_yours_at: pending ? undefined : received_by_yours_at,
+      at_lab_at: pending ? undefined : at_lab_at,
+      scans_sent_at: pending ? undefined : scans_sent_at,
+      received_email_sent_at: pending ? undefined : received_email_sent_at,
+      at_lab_email_sent_at: pending ? undefined : at_lab_email_sent_at,
+      process_only_finished_emailed_at: pending ? undefined : process_only_finished_emailed_at,
+      scans_sent_email_sent_at: pending ? undefined : scans_sent_email_sent_at,
+      email_status: pending ? undefined : email_status,
+      email_error: pending ? undefined : email_error,
     });
     return NextResponse.json(order);
   } catch {
@@ -73,7 +95,7 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
     await deleteOrder(id);
 
     // Best-effort: decrement customer totals — don't fail the delete if this errors
-    if (order.customer_id) {
+    if (order.customer_id && !isPendingIntakeOrder(order)) {
       try {
         const customer = await getCustomerById(order.customer_id);
         if (customer) {

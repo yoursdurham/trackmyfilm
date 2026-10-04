@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getOrderByNumber, getCustomerByEmail, getOrdersByCustomerId } from "@/lib/db";
 import { normalizeEmail, normalizeOrderNumber } from "@/lib/validation";
+import { isPendingIntakeOrder } from "@/lib/pending-intake";
 import { serializeOrderForPublicTracking } from "@/lib/tracking-public";
 
 function hasValidTrackingToken(token: string | null) {
@@ -19,7 +20,7 @@ export async function GET(req: Request) {
 
     if (orderNumber) {
       const order = await getOrderByNumber(normalizeOrderNumber(orderNumber));
-      if (!order) return NextResponse.json([], { status: 200 });
+      if (!order || isPendingIntakeOrder(order)) return NextResponse.json([], { status: 200 });
       return NextResponse.json([serializeOrderForPublicTracking(order, tokenIsValid)]);
     }
 
@@ -27,7 +28,9 @@ export async function GET(req: Request) {
       const normalized = normalizeEmail(email);
       const customer = await getCustomerByEmail(normalized);
       if (!customer) return NextResponse.json({ customer: null, orders: [] });
-      const orders = await getOrdersByCustomerId(customer.id);
+      const orders = await getOrdersByCustomerId(customer.id).then((list) =>
+        list.filter((order) => !isPendingIntakeOrder(order))
+      );
       return NextResponse.json({
         customer,
         orders: orders.map((order) => serializeOrderForPublicTracking(order, tokenIsValid)),

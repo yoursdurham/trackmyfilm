@@ -2,6 +2,7 @@
  * Derive customer statistics from film orders (no duplicate counters on customer row).
  */
 
+import { filterOperationalOrders } from "@/lib/pending-intake";
 import type { FilmOrder, FilmProcess, FilmType, RollDetail } from "./types";
 import { computeCalculatedPreferences } from "./customer-preference-calculations";
 import { getOrderRollDetails } from "./order-roll-utils";
@@ -153,7 +154,7 @@ export function computeCustomerStats(orders: FilmOrder[]): CustomerOrderStats {
 
 export function buildCustomerStatsMap(orders: FilmOrder[]): Map<string, CustomerOrderStats> {
   const byCustomer = new Map<string, FilmOrder[]>();
-  for (const order of orders) {
+  for (const order of filterOperationalOrders(orders)) {
     if (!order.customer_id) continue;
     const list = byCustomer.get(order.customer_id) ?? [];
     list.push(order);

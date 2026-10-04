@@ -13,6 +13,7 @@ import {
 import { toast } from "sonner";
 import InternalHeader from "@/components/InternalHeader";
 import FilmProcessBadge from "@/components/FilmProcessBadge";
+import { filterOperationalOrders } from "@/lib/pending-intake";
 import type { FilmOrder } from "@/lib/types";
 
 interface ReportMetrics {
@@ -96,7 +97,7 @@ export default function Reports() {
     }
   };
 
-  const filteredOrders = orders.filter((order) => {
+  const filteredOrders = filterOperationalOrders(orders).filter((order) => {
     if (selectedTimeFrame === "all") return true;
 
     if (selectedTimeFrame === "custom") {

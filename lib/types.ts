@@ -1,5 +1,8 @@
 export type OrderStatus = "Received by Yours" | "Received at Lab" | "Ready for Pickup" | "Scans Sent";
 
+/** Operational statuses plus internal pre-intake (not customer-facing). */
+export type FilmOrderStatus = OrderStatus | "Pending Intake";
+
 export type FilmType = "35mm" | "120" | "110" | "Disposable Camera";
 export type FilmProcess = "Color" | "Black & White" | "Both";
 
@@ -55,8 +58,12 @@ export interface FilmOrder {
   customer_id: string;
   customer_name: string;
   customer_email: string;
-  status: OrderStatus;
+  status: FilmOrderStatus;
   status_history: StatusHistoryEntry[];
+  pending_intake?: boolean;
+  import_source?: string | null;
+  external_order_id?: string | null;
+  imported_at?: string | null;
   status_updated_at: string;
   film_type: FilmType;
   film_process: FilmProcess;

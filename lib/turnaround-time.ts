@@ -1,4 +1,5 @@
 import { ORDER_STATUS } from "@/lib/constants";
+import { filterOperationalOrders } from "@/lib/pending-intake";
 import type { FilmOrder, OrderStatus } from "@/lib/types";
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
@@ -97,7 +98,7 @@ export function calculateTurnaroundForPeriod(
   period: TurnaroundPeriodKey,
   now = new Date()
 ): TurnaroundPeriodStats {
-  return collectTurnaroundDays(orders, (scansSent) =>
+  return collectTurnaroundDays(filterOperationalOrders(orders), (scansSent) =>
     isWithinPeriod(scansSent, period, now)
   );
 }
@@ -109,7 +110,7 @@ export function calculateTurnaroundForDateRange(
   end: Date
 ): TurnaroundPeriodStats {
   return collectTurnaroundDays(
-    orders,
+    filterOperationalOrders(orders),
     (scansSent) => scansSent >= start && scansSent <= end
   );
 }

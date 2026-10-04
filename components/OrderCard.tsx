@@ -38,6 +38,8 @@ import {
 } from "@/lib/scan-batch";
 import { formatScanSizeLabel } from "@/lib/scan-size-display";
 import { isValidWetransferLink, ensureHttps } from "@/lib/validation";
+import type { PendingIntakeOrderEdits } from "@/lib/pending-intake";
+import { isPendingIntakeOrder } from "@/lib/pending-intake";
 import type { FilmOrder, FilmProcess, FilmType, OrderStatus, RollDetail } from "@/lib/types";
 
 const FILM_TYPES: FilmType[] = ["35mm", "120", "110"];
@@ -85,6 +87,23 @@ interface Props {
   selectable?: boolean;
   selected?: boolean;
   onSelectedChange?: (selected: boolean) => void;
+  pendingIntake?: boolean;
+  onApproveIntake?: (orderId: string, edits?: PendingIntakeOrderEdits) => Promise<void>;
+}
+
+function editsFromOrderDraft(draft: OrderDraft): PendingIntakeOrderEdits {
+  const firstRoll = draft.roll_details[0];
+  return {
+    order_number: draft.order_number.trim(),
+    dropoff_date: draft.dropoff_date,
+    roll_count: Number(draft.roll_count) || 1,
+    film_type: firstRoll?.film_type,
+    film_process: firstRoll?.film_process,
+    film_stock: firstRoll?.film_stock || undefined,
+    roll_details: draft.roll_details,
+    prints_4x6: Boolean(firstRoll?.prints_4x6),
+    notes: draft.notes.trim() || null,
+  };
 }
 
 export default function OrderCard({
@@ -96,6 +115,8 @@ export default function OrderCard({
   selectable = false,
   selected = false,
   onSelectedChange,
+  pendingIntake = false,
+  onApproveIntake,
 }: Props) {
   const [showLinkDialog, setShowLinkDialog] = useState(false);
   const [showForceDialog, setShowForceDialog] = useState(false);
@@ -118,6 +139,8 @@ export default function OrderCard({
   const [isEditingNotes, setIsEditingNotes] = useState(false);
   const [isSavingNotes, setIsSavingNotes] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [isApprovingIntake, setIsApprovingIntake] = useState(false);
+  const isPendingIntake = pendingIntake || isPendingIntakeOrder(order);
   const [isRetryingEmail, setIsRetryingEmail] = useState(false);
 
   const handleRetryEmail = async () => {
@@ -153,7 +176,9 @@ export default function OrderCard({
   const processOnlyOrder = isProcessOnlyOrder(order);
   const statusOptions = getStatusOptionsForOrder(order);
 
-  const currentIdx = STATUS_FLOW.indexOf(order.status);
+  const currentIdx = isPendingIntake
+    ? -1
+    : STATUS_FLOW.indexOf(order.status as OrderStatus);
 
   useEffect(() => {
     setDisplayedNotes(order.notes ?? "");
@@ -189,7 +214,9 @@ export default function OrderCard({
 
   const buildOrderDraft = (): OrderDraft => ({
     order_number: order.order_number,
-    status: order.status,
+    status: isPendingIntakeOrder(order)
+      ? ORDER_STATUS.RECEIVED_BY_YOURS
+      : (order.status as OrderStatus),
     dropoff_date: order.dropoff_date,
     roll_count: order.roll_count,
     wetransfer_link: order.wetransfer_link ?? "",
@@ -232,7 +259,7 @@ export default function OrderCard({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           order_number: orderDraft.order_number.trim(),
-          status: orderDraft.status,
+          ...(isPendingIntake ? {} : { status: orderDraft.status }),
           dropoff_date: orderDraft.dropoff_date,
           roll_count: Number(orderDraft.roll_count) || 1,
           film_type: firstRoll?.film_type,
@@ -394,6 +421,25 @@ export default function OrderCard({
     }
   };
 
+  const handleApproveIntakeClick = async () => {
+    if (!onApproveIntake) return;
+    setIsApprovingIntake(true);
+    try {
+      const edits =
+        isEditingOrder && orderDraft ? editsFromOrderDraft(orderDraft) : undefined;
+      await onApproveIntake(order.id, edits);
+      toast.success("Approved — order is now Received by Yours");
+      setDetailsOpen(false);
+      setIsEditingOrder(false);
+      setOrderDraft(null);
+      onOrderUpdated?.();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to approve intake");
+    } finally {
+      setIsApprovingIntake(false);
+    }
+  };
+
   const handleForceConfirm = async () => {
     setShowForceDialog(false);
     if (!pendingStatus) return;
@@ -461,6 +507,14 @@ export default function OrderCard({
                 variant="metadata"
                 icon={Mail}
                 valueClassName="text-slate-500"
+              />
+            ) : null}
+            {isPendingIntake && order.external_order_id ? (
+              <CopyField
+                label="Squarespace #"
+                value={order.external_order_id}
+                variant="metadata"
+                valueClassName="text-slate-600"
               />
             ) : null}
           </div>
@@ -608,10 +662,16 @@ export default function OrderCard({
             variant="outline"
             size="sm"
             className={`h-8 justify-center border-[var(--border-soft)] text-xs text-slate-600 hover:border-[var(--accent-purple)]/40 hover:bg-[var(--accent-purple)]/10 hover:text-[#806A91] ${showQuestionsButton ? "flex-1" : "w-full"}`}
-            onClick={() => setDetailsOpen(true)}
+            onClick={() => {
+              setDetailsOpen(true);
+              if (isPendingIntake) {
+                setOrderDraft(buildOrderDraft());
+                setIsEditingOrder(true);
+              }
+            }}
           >
             <FileText className="mr-1.5 h-3.5 w-3.5" />
-            View details
+            {isPendingIntake ? "Review / Edit" : "View details"}
           </Button>
           {showQuestionsButton && (
             <a
@@ -647,43 +707,62 @@ export default function OrderCard({
         )}
 
         <div className="pt-3 border-t border-slate-100 flex gap-2">
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              render={<Button variant="outline" size="sm" disabled={isUpdating} className="flex-1 min-w-0 justify-between text-slate-600 hover:border-[var(--accent-purple)]/40 hover:bg-[var(--accent-purple)]/10 hover:text-[#806A91]" />}
+          {isPendingIntake ? (
+            <Button
+              type="button"
+              size="sm"
+              disabled={isApprovingIntake}
+              className="min-h-9 flex-1 bg-amber-600 text-white hover:bg-amber-700"
+              onClick={handleApproveIntakeClick}
             >
-              {isUpdating
-                ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Updating...</>
-                : <><span>Update Status</span><ChevronDown className="w-4 h-4 ml-2" /></>
-              }
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
-              {statusOptions.map((status) => {
-                const targetIdx = STATUS_FLOW.indexOf(status);
-                const isBackward = targetIdx < currentIdx;
-                const scansSentBlocked =
-                  status === ORDER_STATUS.SCANS_SENT &&
-                  mixedScanOrder &&
-                  !isPartialScanDeliveryComplete(order);
-                return (
-                  <DropdownMenuItem
-                    key={status}
-                    disabled={scansSentBlocked}
-                    onClick={() => handleStatusChangeClick(status)}
-                    className={order.status === status ? "bg-[var(--accent-tan)]/35 text-slate-800" : ""}
-                  >
-                    <span className={`w-2 h-2 rounded-full mr-2 ${getStatusDotClass(status)}`} />
-                    {status}
-                    {scansSentBlocked ? (
-                      <span className="ml-auto text-xs text-slate-400">needs both batches</span>
-                    ) : null}
-                    {isBackward && !scansSentBlocked ? (
-                      <span className="ml-auto text-xs text-slate-400">↩ undo</span>
-                    ) : null}
-                  </DropdownMenuItem>
-                );
-              })}
-            </DropdownMenuContent>
-          </DropdownMenu>
+              {isApprovingIntake ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Approving…
+                </>
+              ) : (
+                "Approve & Receive"
+              )}
+            </Button>
+          ) : (
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={<Button variant="outline" size="sm" disabled={isUpdating} className="flex-1 min-w-0 justify-between text-slate-600 hover:border-[var(--accent-purple)]/40 hover:bg-[var(--accent-purple)]/10 hover:text-[#806A91]" />}
+              >
+                {isUpdating
+                  ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Updating...</>
+                  : <><span>Update Status</span><ChevronDown className="w-4 h-4 ml-2" /></>
+                }
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                {statusOptions.map((status) => {
+                  const targetIdx = STATUS_FLOW.indexOf(status);
+                  const isBackward = targetIdx < currentIdx;
+                  const scansSentBlocked =
+                    status === ORDER_STATUS.SCANS_SENT &&
+                    mixedScanOrder &&
+                    !isPartialScanDeliveryComplete(order);
+                  return (
+                    <DropdownMenuItem
+                      key={status}
+                      disabled={scansSentBlocked}
+                      onClick={() => handleStatusChangeClick(status)}
+                      className={order.status === status ? "bg-[var(--accent-tan)]/35 text-slate-800" : ""}
+                    >
+                      <span className={`w-2 h-2 rounded-full mr-2 ${getStatusDotClass(status)}`} />
+                      {status}
+                      {scansSentBlocked ? (
+                        <span className="ml-auto text-xs text-slate-400">needs both batches</span>
+                      ) : null}
+                      {isBackward && !scansSentBlocked ? (
+                        <span className="ml-auto text-xs text-slate-400">↩ undo</span>
+                      ) : null}
+                    </DropdownMenuItem>
+                  );
+                })}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
 
           <AlertDialog>
             <AlertDialogTrigger
@@ -750,22 +829,24 @@ export default function OrderCard({
                     className="border-slate-200"
                   />
                 </div>
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-slate-500">Status</label>
-                  <select
-                    value={orderDraft.status}
-                    onChange={(event) =>
-                      setOrderDraft((draft) => draft ? { ...draft, status: event.target.value as OrderStatus } : draft)
-                    }
-                    className="h-8 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-sm text-slate-700 outline-none focus:border-[var(--accent-purple)] focus:ring-2 focus:ring-[var(--accent-purple)]/20"
-                  >
-                    {draftStatusOptions.map((status) => (
-                      <option key={status} value={status}>
-                        {status}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                {!isPendingIntake ? (
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-slate-500">Status</label>
+                    <select
+                      value={orderDraft.status}
+                      onChange={(event) =>
+                        setOrderDraft((draft) => draft ? { ...draft, status: event.target.value as OrderStatus } : draft)
+                      }
+                      className="h-8 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-sm text-slate-700 outline-none focus:border-[var(--accent-purple)] focus:ring-2 focus:ring-[var(--accent-purple)]/20"
+                    >
+                      {draftStatusOptions.map((status) => (
+                        <option key={status} value={status}>
+                          {status}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ) : null}
                 <div>
                   <label className="mb-1 block text-xs font-medium text-slate-500">Drop-off Date</label>
                   <Input

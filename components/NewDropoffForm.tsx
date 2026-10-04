@@ -24,12 +24,16 @@ import {
 
 const MAX_ROLLS = 20;
 
+export type NewDropoffFormVariant = "manual_received" | "pending_import";
+
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess?: () => void;
   customers?: Customer[];
   selectedCustomer?: Customer | null;
+  /** manual_received = physical drop-off (default). pending_import = Squarespace → Pending Intake. */
+  variant?: NewDropoffFormVariant;
 }
 
 const FILM_STOCKS = [
@@ -66,12 +70,21 @@ const emptyMeta = {
   notes: "",
 };
 
-export default function NewDropoffForm({ open, onOpenChange, onSuccess, customers = [], selectedCustomer }: Props) {
+export default function NewDropoffForm({
+  open,
+  onOpenChange,
+  onSuccess,
+  customers = [],
+  selectedCustomer,
+  variant = "manual_received",
+}: Props) {
+  const isPendingImport = variant === "pending_import";
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(selectedCustomer?.id ?? null);
   const [sendEmail, setSendEmail] = useState(true);
+  const [externalOrderId, setExternalOrderId] = useState("");
   const [formData, setFormData] = useState({
     ...emptyMeta,
     customer_name: selectedCustomer ? `${selectedCustomer.first_name} ${selectedCustomer.last_name || ""}`.trim() : "",
@@ -118,13 +131,17 @@ export default function NewDropoffForm({ open, onOpenChange, onSuccess, customer
 
     if (!formData.customer_name.trim()) { toast.error("Customer name is required"); return; }
     const emailTrimmed = formData.customer_email.trim();
-    if (!selectedCustomerId) {
+    if (isPendingImport) {
+      if (!externalOrderId.trim()) { toast.error("Squarespace order ID is required"); return; }
+      if (!emailTrimmed) { toast.error("Email is required for import"); return; }
+      if (!isValidEmail(emailTrimmed)) { toast.error("Enter a valid email address"); return; }
+    } else if (!selectedCustomerId) {
       if (!emailTrimmed) { toast.error("Email is required for new customers"); return; }
       if (!isValidEmail(emailTrimmed)) { toast.error("Enter a valid email address"); return; }
     } else if (emailTrimmed && !isValidEmail(emailTrimmed)) {
       toast.error("Enter a valid email address"); return;
     }
-    if (!formData.order_number.trim()) { toast.error("Order number is required"); return; }
+    if (!isPendingImport && !formData.order_number.trim()) { toast.error("Order number is required"); return; }
     if (!formData.roll_count || formData.roll_count < 1) { toast.error("Roll count must be at least 1"); return; }
 
     for (let i = 0; i < rolls.length; i++) {
@@ -146,53 +163,87 @@ export default function NewDropoffForm({ open, onOpenChange, onSuccess, customer
         prints_4x6: r.prints_4x6,
       }));
 
-      const res = await fetch("/api/dropoff", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          customer_name:  formData.customer_name.trim(),
-          customer_email: emailTrimmed ? normalizeEmail(emailTrimmed) : undefined,
-          order_number:   formData.order_number.trim(),
-          dropoff_date:   formData.dropoff_date,
-          roll_count:     Number(formData.roll_count),
-          film_type:      roll_details[0].film_type,
-          film_process:   roll_details[0].film_process,
-          film_stock:     roll_details[0].film_stock,
-          roll_details,
-          notes:          formData.notes || undefined,
-          send_email:     sendEmail,
-        }),
-      });
+      const payload = {
+        customer_name: formData.customer_name.trim(),
+        customer_email: emailTrimmed ? normalizeEmail(emailTrimmed) : undefined,
+        order_number: formData.order_number.trim() || undefined,
+        order_date: formData.dropoff_date,
+        dropoff_date: formData.dropoff_date,
+        roll_count: Number(formData.roll_count),
+        film_type: roll_details[0].film_type,
+        film_process: roll_details[0].film_process,
+        film_stock: roll_details[0].film_stock,
+        roll_details,
+        notes: formData.notes || undefined,
+        send_email: sendEmail,
+        external_order_id: externalOrderId.trim(),
+      };
+
+      const res = await fetch(
+        isPendingImport ? "/api/orders/import/squarespace" : "/api/dropoff",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(
+            isPendingImport
+              ? payload
+              : {
+                  customer_name: payload.customer_name,
+                  customer_email: payload.customer_email,
+                  order_number: formData.order_number.trim(),
+                  dropoff_date: payload.dropoff_date,
+                  roll_count: payload.roll_count,
+                  film_type: payload.film_type,
+                  film_process: payload.film_process,
+                  film_stock: payload.film_stock,
+                  roll_details: payload.roll_details,
+                  notes: payload.notes,
+                  send_email: sendEmail,
+                }
+          ),
+        }
+      );
 
       const data = await res.json() as {
         success?: boolean;
         error?: string;
-        customer?: { name: string; isNew: boolean; total_dropoffs: number };
+        customer?: { name: string; isNew: boolean; total_dropoffs: number; created_customer?: boolean };
         email?: { sent: boolean; skipped?: boolean; variant?: string; error?: string };
+        order?: { order_number: string };
       };
 
-      if (!res.ok) throw new Error(data.error || "Failed to create drop-off");
+      if (!res.ok) throw new Error(data.error || (isPendingImport ? "Failed to import order" : "Failed to create drop-off"));
 
-      if (data.customer?.isNew) {
-        toast.success(`New customer created: ${data.customer.name}`);
-      } else if (data.customer) {
-        toast.success(`Matched existing customer: ${data.customer.name} (drop-off #${data.customer.total_dropoffs})`);
+      if (isPendingImport) {
+        toast.success(
+          `Imported to Pending Intake${data.order?.order_number ? ` (#${data.order.order_number})` : ""}`
+        );
+        if ((data as { created_customer?: boolean }).created_customer) {
+          toast.info(`New customer record: ${payload.customer_name}`);
+        }
+      } else {
+        if (data.customer?.isNew) {
+          toast.success(`New customer created: ${data.customer.name}`);
+        } else if (data.customer) {
+          toast.success(`Matched existing customer: ${data.customer.name} (drop-off #${data.customer.total_dropoffs})`);
+        }
+
+        if (data.email?.sent) {
+          toast.success("Confirmation email sent");
+        } else if (data.email?.skipped) {
+          if (data.email.error) toast.info(`No email: ${data.email.error}`);
+        } else if (data.email?.error) {
+          toast.error(`Order created but email failed: ${data.email.error}`);
+        }
+
+        toast.success("Drop-off created successfully");
       }
-
-      if (data.email?.sent) {
-        toast.success("Confirmation email sent");
-      } else if (data.email?.skipped) {
-        if (data.email.error) toast.info(`No email: ${data.email.error}`);
-      } else if (data.email?.error) {
-        toast.error(`Order created but email failed: ${data.email.error}`);
-      }
-
-      toast.success("Drop-off created successfully");
       onSuccess?.();
       setFormData({ ...emptyMeta, dropoff_date: format(new Date(), "yyyy-MM-dd") });
       setRolls([createEmptyDropoffRoll()]);
       setSelectedCustomerId(null);
       setSendEmail(true);
+      setExternalOrderId("");
       onOpenChange(false);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed to create drop-off";
@@ -257,7 +308,15 @@ export default function NewDropoffForm({ open, onOpenChange, onSuccess, customer
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-xl font-semibold text-slate-800">New Film Drop-off</DialogTitle>
+          <DialogTitle className="text-xl font-semibold text-slate-800">
+            {isPendingImport ? "Import to Pending Intake" : "New Film Drop-off"}
+          </DialogTitle>
+          {isPendingImport ? (
+            <p className="text-sm text-sky-800">
+              Squarespace / online order only — does <strong>not</strong> mark film as received and sends{" "}
+              <strong>no</strong> customer email until you Approve &amp; Receive on the dashboard.
+            </p>
+          ) : null}
         </DialogHeader>
 
         {error && (
@@ -291,7 +350,7 @@ export default function NewDropoffForm({ open, onOpenChange, onSuccess, customer
           {/* Email */}
           <div className="space-y-2">
             <Label htmlFor="customer_email" className="flex items-center gap-2 text-slate-700">
-              <Mail className="w-3.5 h-3.5" /> Email {!selectedCustomerId && "*"}
+              <Mail className="w-3.5 h-3.5" /> Email {(isPendingImport || !selectedCustomerId) && "*"}
             </Label>
             <Input id="customer_email" type="text" inputMode="email" autoComplete="email"
               value={formData.customer_email}
@@ -299,8 +358,28 @@ export default function NewDropoffForm({ open, onOpenChange, onSuccess, customer
               className="border-slate-200"
               onChange={(e) => { set("customer_email", e.target.value); setShowSuggestions(true); setSelectedCustomerId(null); }}
               onBlur={(e) => { void lookupCustomerByEmail(e.target.value); }} />
-            <p className="text-xs text-slate-500">Confirmation email will be sent to this address</p>
+            <p className="text-xs text-slate-500">
+              {isPendingImport
+                ? "Required to match the Squarespace order to a customer"
+                : "Confirmation email will be sent to this address"}
+            </p>
           </div>
+
+          {isPendingImport ? (
+            <div className="space-y-2">
+              <Label htmlFor="external_order_id" className="flex items-center gap-2 text-slate-700">
+                <Hash className="w-3.5 h-3.5" /> Squarespace Order ID *
+              </Label>
+              <Input
+                id="external_order_id"
+                value={externalOrderId}
+                placeholder="e.g. 5f8a2b1c..."
+                required
+                className="border-sky-200 bg-sky-50/30"
+                onChange={(e) => setExternalOrderId(e.target.value)}
+              />
+            </div>
+          ) : null}
 
           {/* Date + Order # */}
           <div className="grid grid-cols-2 gap-4">
@@ -314,9 +393,13 @@ export default function NewDropoffForm({ open, onOpenChange, onSuccess, customer
             </div>
             <div className="space-y-2">
               <Label htmlFor="order_number" className="flex items-center gap-2 text-slate-700">
-                <Hash className="w-3.5 h-3.5" /> Order Number *
+                <Hash className="w-3.5 h-3.5" /> Order Number {!isPendingImport && "*"}
               </Label>
-              <Input id="order_number" value={formData.order_number} placeholder="JE1234" required
+              <Input
+                id="order_number"
+                value={formData.order_number}
+                placeholder={isPendingImport ? "Optional (defaults to SQ-…)" : "JE1234"}
+                required={!isPendingImport}
                 className="border-slate-200"
                 onChange={(e) => set("order_number", e.target.value)} />
             </div>
@@ -463,25 +546,39 @@ export default function NewDropoffForm({ open, onOpenChange, onSuccess, customer
               onChange={(e) => set("notes", e.target.value)} />
           </div>
 
-          {/* Email toggle */}
-          <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
-            <Checkbox id="send_email" checked={sendEmail} onCheckedChange={(v) => setSendEmail(!!v)} />
-            <div>
-              <label htmlFor="send_email" className="text-sm font-medium text-slate-700 cursor-pointer">
-                Send confirmation email
-              </label>
-              <p className="text-xs text-slate-500">
-                {sendEmail ? "Customer will receive an email when this drop-off is submitted" : "No email will be sent for this drop-off"}
-              </p>
+          {!isPendingImport ? (
+            <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+              <Checkbox id="send_email" checked={sendEmail} onCheckedChange={(v) => setSendEmail(!!v)} />
+              <div>
+                <label htmlFor="send_email" className="text-sm font-medium text-slate-700 cursor-pointer">
+                  Send confirmation email
+                </label>
+                <p className="text-xs text-slate-500">
+                  {sendEmail ? "Customer will receive an email when this drop-off is submitted" : "No email will be sent for this drop-off"}
+                </p>
+              </div>
             </div>
-          </div>
+          ) : null}
 
           <div className="flex gap-3 pt-2">
             <Button type="button" variant="outline" className="flex-1" onClick={() => onOpenChange(false)} disabled={loading}>
               Cancel
             </Button>
-            <Button type="submit" disabled={loading} className="flex-1 bg-amber-600 hover:bg-amber-700 text-white">
-              {loading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Saving...</> : "Create Drop-off"}
+            <Button
+              type="submit"
+              disabled={loading}
+              className={`flex-1 text-white ${isPendingImport ? "bg-sky-600 hover:bg-sky-700" : "bg-amber-600 hover:bg-amber-700"}`}
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Saving...
+                </>
+              ) : isPendingImport ? (
+                "Import to Pending Intake"
+              ) : (
+                "Create Drop-off"
+              )}
             </Button>
           </div>
         </form>

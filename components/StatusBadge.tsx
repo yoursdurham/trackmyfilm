@@ -26,7 +26,22 @@ const statusConfig: Record<OrderStatus, { bg: string; text: string; dot: string 
   },
 };
 
+const pendingIntakeConfig = {
+  bg: "bg-sky-100",
+  text: "text-sky-800",
+  dot: "bg-sky-600",
+};
+
 export default function StatusBadge({ status }: { status: string }) {
+  if (status === "Pending Intake") {
+    const config = pendingIntakeConfig;
+    return (
+      <span className={cn("inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium", config.bg, config.text)}>
+        <span className={cn("w-1.5 h-1.5 rounded-full", config.dot)} />
+        {status}
+      </span>
+    );
+  }
   const config = statusConfig[status as OrderStatus] ?? statusConfig["Received by Yours"];
   return (
     <span className={cn("inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium", config.bg, config.text)}>

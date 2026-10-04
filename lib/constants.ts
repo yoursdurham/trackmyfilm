@@ -1,5 +1,10 @@
 import type { OrderStatus } from "./types";
 
+/** Internal dashboard-only status; not part of customer STATUS_FLOW or Resend map. */
+export const PENDING_INTAKE_STATUS = "Pending Intake" as const;
+
+export const IMPORT_SOURCE_SQUARESPACE = "squarespace" as const;
+
 export const ORDER_STATUS = {
   RECEIVED_BY_YOURS: "Received by Yours" as OrderStatus,
   RECEIVED_AT_LAB: "Received at Lab" as OrderStatus,

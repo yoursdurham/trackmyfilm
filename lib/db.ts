@@ -56,6 +56,20 @@ export async function getOrderByNumber(orderNumber: string): Promise<FilmOrder |
   return data as FilmOrder | null;
 }
 
+export async function getOrderByExternalImport(
+  importSource: string,
+  externalOrderId: string
+): Promise<FilmOrder | null> {
+  const { data, error } = await getSupabase()
+    .from("film_orders")
+    .select("*")
+    .eq("import_source", importSource)
+    .eq("external_order_id", externalOrderId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return data as FilmOrder | null;
+}
+
 export async function getOrderByNumberAndEmail(
   orderNumber: string,
   email: string

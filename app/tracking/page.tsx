@@ -464,7 +464,7 @@ function TrackingContent() {
                       </div>
                       <div
                         className={`rounded-full px-4 py-2 text-sm font-medium ${getStatusBadgeClass(
-                          order.status
+                          order.status as OrderStatus
                         )}`}
                       >
                         {order.status}
@@ -472,7 +472,7 @@ function TrackingContent() {
                     </div>
 
                     <OrderTimeline
-                      currentStatus={order.status}
+                      currentStatus={order.status as OrderStatus}
                       statusHistory={order.status_history}
                       processOnly={processOnlyOrder}
                     />

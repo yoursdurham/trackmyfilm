@@ -13,6 +13,13 @@ import OrderCard from "@/components/OrderCard";
 import BulkStatusActionBar from "@/components/BulkStatusActionBar";
 import { getUrgentAgeDays, isUrgent } from "@/lib/order-urgency";
 import { ORDER_STATUS } from "@/lib/constants";
+import NewDropoffForm from "@/components/NewDropoffForm";
+import PendingIntakeSection from "@/components/PendingIntakeSection";
+import {
+  filterOperationalOrders,
+  isPendingIntakeOrder,
+  type PendingIntakeOrderEdits,
+} from "@/lib/pending-intake";
 import type { FilmOrder } from "@/lib/types";
 
 const statusFilters = [
@@ -62,6 +69,7 @@ export default function Dashboard() {
   const [customStartDate, setCustomStartDate] = useState("");
   const [customEndDate, setCustomEndDate] = useState("");
   const [selectedOrderIds, setSelectedOrderIds] = useState<Set<string>>(new Set());
+  const [pendingImportOpen, setPendingImportOpen] = useState(false);
   const queryClient = useQueryClient();
 
   useEffect(() => {
@@ -146,7 +154,31 @@ export default function Dashboard() {
     }
   };
 
-  const dateFilteredOrders = orders.filter((order) => {
+  const pendingIntakeOrders = orders.filter((order) => {
+    if (!isPendingIntakeOrder(order)) return false;
+    if (!searchQuery) return true;
+    const q = searchQuery.toLowerCase();
+    return (
+      order.customer_name?.toLowerCase().includes(q) ||
+      order.order_number?.toLowerCase().includes(q) ||
+      order.customer_email?.toLowerCase().includes(q) ||
+      order.external_order_id?.toLowerCase().includes(q)
+    );
+  });
+
+  const handleApproveIntake = async (orderId: string, edits?: PendingIntakeOrderEdits) => {
+    const res = await fetch(`/api/orders/${orderId}/approve-intake`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ edits }),
+    });
+    const data = await res.json() as { error?: string; email_error?: string };
+    if (!res.ok) throw new Error(data.error ?? "Failed to approve intake");
+    if (data.email_error) toast.error(`Received, but email failed: ${data.email_error}`);
+    queryClient.invalidateQueries({ queryKey: ["filmOrders"] });
+  };
+
+  const dateFilteredOrders = filterOperationalOrders(orders).filter((order) => {
     if (selectedTimeFrame === "all") return true;
 
     if (selectedTimeFrame === "custom") {
@@ -273,6 +305,24 @@ export default function Dashboard() {
             ) : null}
           </div>
         </div>
+
+        <PendingIntakeSection
+          orders={pendingIntakeOrders}
+          onApproveIntake={handleApproveIntake}
+          onDelete={(id) => deleteMutation.mutate(id)}
+          onOrderUpdated={() => queryClient.invalidateQueries({ queryKey: ["filmOrders"] })}
+          onImportClick={() => setPendingImportOpen(true)}
+        />
+
+        <NewDropoffForm
+          variant="pending_import"
+          open={pendingImportOpen}
+          onOpenChange={setPendingImportOpen}
+          onSuccess={() => {
+            queryClient.invalidateQueries({ queryKey: ["filmOrders"] });
+            queryClient.invalidateQueries({ queryKey: ["customers"] });
+          }}
+        />
 
         <div className="grid grid-cols-2 gap-3 mb-6 lg:grid-cols-4">
           {[
