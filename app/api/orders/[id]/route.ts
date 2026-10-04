@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getOrderById, updateOrder, deleteOrder, getCustomerById, updateCustomer } from "@/lib/db";
+import { getOrderById, updateOrder, deleteOrder, deleteIncomingDraftsForOrder, getCustomerById, updateCustomer } from "@/lib/db";
 import { ensureHttps } from "@/lib/validation";
 import { requireAuth } from "@/lib/api-auth";
 
@@ -69,6 +69,13 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
     // Fetch order before deleting so we can decrement customer totals
     const order = await getOrderById(id);
     if (!order) return NextResponse.json({ error: "Order not found" }, { status: 404 });
+
+    // Remove the intake row first. A leftover squarespace_order_number or
+    // external_order_id unique key would block importing that order again.
+    await deleteIncomingDraftsForOrder({
+      id: order.id,
+      order_number: order.order_number,
+    });
 
     await deleteOrder(id);
 

@@ -1,13 +1,47 @@
 /**
  * PATCH /api/incoming-drafts/:id
- * Logged-in staff only. Marks a pending draft accepted or dismissed.
- * Does not create a film order and does not send email.
+ * Logged-in staff only.
+ *   { status: "accepted" } marks the draft accepted. Does not create a film order or send email.
+ *   { status: "dismissed" } hard-deletes the row so the Squarespace order can be imported again.
+ *
+ * DELETE /api/incoming-drafts/:id
+ * Logged-in staff only. Hard-deletes the row in any status. Does not create or delete a film order.
  */
 
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/api-auth";
-import { getIncomingDraftById, updateIncomingDraftStatus } from "@/lib/db";
+import { deleteIncomingDraft, getIncomingDraftById, updateIncomingDraftStatus } from "@/lib/db";
 import { isIncomingDraftUuid, resolveIncomingDraftStatusChange } from "@/lib/incoming-drafts";
+
+async function loadDraft(id: string) {
+  if (!isIncomingDraftUuid(id)) {
+    return { response: NextResponse.json({ error: "Draft not found" }, { status: 404 }) };
+  }
+  const draft = await getIncomingDraftById(id);
+  if (!draft) {
+    return { response: NextResponse.json({ error: "Draft not found" }, { status: 404 }) };
+  }
+  return { draft };
+}
+
+export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const auth = await requireAuth();
+  if (auth instanceof NextResponse) return auth;
+
+  const { id } = await params;
+
+  try {
+    const loaded = await loadDraft(id);
+    if ("response" in loaded) return loaded.response;
+
+    await deleteIncomingDraft(id);
+    return NextResponse.json({ success: true, deleted: true });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    console.error("[DELETE /api/incoming-drafts/:id]", message);
+    return NextResponse.json({ error: "Failed to delete draft" }, { status: 500 });
+  }
+}
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAuth();
@@ -33,6 +67,11 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     const draft = await getIncomingDraftById(id);
     if (!draft) {
       return NextResponse.json({ error: "Draft not found" }, { status: 404 });
+    }
+
+    if (requested === "dismissed") {
+      await deleteIncomingDraft(id);
+      return NextResponse.json({ success: true, deleted: true });
     }
 
     const decision = resolveIncomingDraftStatusChange(draft.status, requested);

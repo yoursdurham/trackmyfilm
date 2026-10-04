@@ -89,7 +89,10 @@ export default function Dashboard() {
       }
       return r.json();
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["filmOrders"] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["filmOrders"] });
+      queryClient.invalidateQueries({ queryKey: ["incomingDrafts"] });
+    },
     onError: (err: Error) => toast.error(err.message),
   });
 

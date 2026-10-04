@@ -64,6 +64,8 @@ export interface IncomingSquarespaceDraft {
   notes: string | null;
   import_source: string;
   status: IncomingDraftStatus;
+  /** Set when Approve & Receive creates the film order. Deleting that order cascades. */
+  film_order_id?: string | null;
   created_at?: string;
   updated_at?: string;
 }
