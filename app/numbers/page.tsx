@@ -26,8 +26,14 @@ export default async function Numbers() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
-  if (!user || !isAdminUser(user)) {
-    redirect("/");
+  if (!user) {
+    redirect("/login");
+  }
+
+  // Non-admins stay in the staff app. Sending them to "/" is rewritten to the
+  // public tracking page, which is not an order detail.
+  if (!isAdminUser(user)) {
+    redirect("/dashboard");
   }
 
   const orders = await getOrders("desc");

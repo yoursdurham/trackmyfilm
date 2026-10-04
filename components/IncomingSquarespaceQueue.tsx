@@ -181,11 +181,17 @@ export default function IncomingSquarespaceQueue() {
           {drafts.map((draft) => (
             <li key={draft.id} className="flex flex-col gap-3 py-3 sm:flex-row sm:items-start sm:justify-between">
               <div className="min-w-0">
-                <p className="font-medium text-slate-800">
+                <div className="font-medium text-slate-800">
                   <span className="mr-2 rounded-full bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700">Pending Intake</span>
-                  {draft.squarespace_order_number}
+                  <button
+                    type="button"
+                    className="font-medium text-amber-800 hover:underline"
+                    onClick={() => openIncomingDraft(draft)}
+                  >
+                    {draft.squarespace_order_number}
+                  </button>
                   <span className="font-normal text-slate-500"> · {draft.customer_name}</span>
-                </p>
+                </div>
                 <p className="truncate text-sm text-slate-500">
                   {draft.customer_email || "No email"}
                   {" · "}

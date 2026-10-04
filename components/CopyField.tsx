@@ -1,5 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 import { Check, Copy } from "lucide-react";
+import Link from "next/link";
 import { useState } from "react";
 
 export default function CopyField({
@@ -12,6 +13,7 @@ export default function CopyField({
   icon: Icon,
   showLabel = false,
   inlineLabel = false,
+  valueHref,
 }: {
   label: string;
   value?: string | null;
@@ -22,6 +24,8 @@ export default function CopyField({
   icon?: LucideIcon;
   showLabel?: boolean;
   inlineLabel?: boolean;
+  /** When set, the value itself opens this staff route. The copy button still copies the text. */
+  valueHref?: string;
 }) {
   const [copied, setCopied] = useState(false);
   const displayValue = value?.trim();
@@ -35,6 +39,19 @@ export default function CopyField({
     window.setTimeout(() => setCopied(false), 1000);
   };
 
+  const valueClass = `min-w-0 truncate ${valueClassName}`;
+  const valueNode = valueHref ? (
+    <Link
+      href={valueHref}
+      className={`${valueClass} hover:underline`}
+      onClick={(event) => event.stopPropagation()}
+    >
+      {displayValue}
+    </Link>
+  ) : (
+    <span className={valueClass}>{displayValue}</span>
+  );
+
   if (variant === "metadata") {
     return (
       <div className={`flex items-center gap-2 text-sm text-slate-600 ${className}`}>
@@ -44,7 +61,7 @@ export default function CopyField({
             <div className="flex min-w-0 items-baseline gap-2">
               <span className="shrink-0 text-xs font-medium uppercase tracking-wide text-slate-400">{label}</span>
               {displayValue ? (
-                <span className={`min-w-0 truncate ${valueClassName}`}>{displayValue}</span>
+                valueNode
               ) : (
                 <span className="min-w-0 truncate italic text-slate-300">—</span>
               )}
@@ -55,7 +72,7 @@ export default function CopyField({
                 <p className="text-xs font-medium uppercase tracking-wide text-slate-400">{label}</p>
               ) : null}
               {displayValue ? (
-                <p className={`truncate ${valueClassName}`}>{displayValue}</p>
+                valueNode
               ) : (
                 <p className="truncate italic text-slate-300">—</p>
               )}
@@ -84,7 +101,7 @@ export default function CopyField({
           <p className="text-xs font-medium uppercase tracking-wide text-slate-400">{label}</p>
         ) : null}
         {displayValue ? (
-          <p className={`truncate ${valueClassName}`}>{displayValue}</p>
+          valueNode
         ) : (
           <p className="truncate text-sm italic text-slate-300">—</p>
         )}

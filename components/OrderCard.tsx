@@ -37,6 +37,7 @@ import {
   type ScanDeliveryBatch,
 } from "@/lib/scan-batch";
 import { formatScanSizeLabel } from "@/lib/scan-size-display";
+import { staffOrderDetailPath } from "@/lib/staff-navigation";
 import { isValidWetransferLink, ensureHttps } from "@/lib/validation";
 import type { FilmOrder, FilmProcess, FilmType, OrderStatus, RollDetail } from "@/lib/types";
 
@@ -85,6 +86,8 @@ interface Props {
   selectable?: boolean;
   selected?: boolean;
   onSelectedChange?: (selected: boolean) => void;
+  initialDetailsOpen?: boolean;
+  linkOrderNumber?: boolean;
 }
 
 export default function OrderCard({
@@ -96,6 +99,8 @@ export default function OrderCard({
   selectable = false,
   selected = false,
   onSelectedChange,
+  initialDetailsOpen = false,
+  linkOrderNumber = true,
 }: Props) {
   const [showLinkDialog, setShowLinkDialog] = useState(false);
   const [showForceDialog, setShowForceDialog] = useState(false);
@@ -109,7 +114,7 @@ export default function OrderCard({
   const [sendPartialEmail, setSendPartialEmail] = useState(true);
   const [isSendingPartial, setIsSendingPartial] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
-  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(initialDetailsOpen);
   const [isEditingOrder, setIsEditingOrder] = useState(false);
   const [orderDraft, setOrderDraft] = useState<OrderDraft | null>(null);
   const [isSavingOrder, setIsSavingOrder] = useState(false);
@@ -418,6 +423,7 @@ export default function OrderCard({
             <CopyField
               label="Order #"
               value={order.order_number}
+              valueHref={linkOrderNumber ? staffOrderDetailPath(order.id) : undefined}
               variant="metadata"
               inlineLabel
               className="min-w-0 flex-1"
