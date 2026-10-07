@@ -1,16 +1,14 @@
 # TrackMyFilm — Owner Guide & Documentation
 
-> Last updated: April 2026
-> Built for Yours Durham by Daniel Matias
+> Last updated: October 2026
+> 
 
 ---
 
 ## How to Log In
 
-Go to **trackmyfilm.com** and sign in with:
+Go to **trackmyfilm.com** and sign in
 
-- **Email:** `hello@yoursdurham.com`
-- **Password:** `YoursDurham2026!`
 
 **Forgot your password?**
 Click "Forgot password?" on the login page → enter your email → check `hello@yoursdurham.com` for a reset link → click it → set a new password. You'll be redirected to the dashboard automatically.
