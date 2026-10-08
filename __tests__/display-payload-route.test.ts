@@ -31,6 +31,7 @@ vi.mock("@/lib/studio-calendar-cache", () => ({
 }));
 
 import { GET, PATCH } from "@/app/api/displays/[slug]/route";
+import { displayBuildId } from "@/lib/display";
 
 const row = {
   id: "display-1",
@@ -83,8 +84,9 @@ describe("GET /api/displays/:slug", () => {
     const body = await response.json();
     expect(body).toEqual({
       mode: "custom_message",
-      theme: "yours-clean",
+      theme: "crt-green",
       refreshSeconds: 30,
+      buildId: displayBuildId(),
       data: { message: "Quiet hour" },
     });
     expect(body).not.toHaveProperty("email");
@@ -124,6 +126,7 @@ describe("GET /api/displays/:slug", () => {
       mode: "film_stats",
       theme: "yours-clean",
       refreshSeconds: 30,
+      buildId: displayBuildId(),
       data: {
         rollsProcessing: 12,
         receivedToday: 3,

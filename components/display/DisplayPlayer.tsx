@@ -2,7 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
+  DISPLAY_RELOAD_STORAGE_KEY,
   clampRefreshSeconds,
+  displayNeedsReload,
+  displayUsesCrtTheme,
   isDisplayPayload,
   toPublicDisplayPayload,
   type DisplayPayload,
@@ -12,18 +15,41 @@ import YoursCleanScreen from "@/components/display/YoursCleanScreen";
 
 const IDLE: DisplayPayload = {
   mode: "idle",
-  theme: "yours-clean",
+  theme: "crt-green",
   refreshSeconds: 30,
+  buildId: "dev",
   data: {},
 };
+
+function lastReloadAt(): number | null {
+  try {
+    const raw = window.sessionStorage.getItem(DISPLAY_RELOAD_STORAGE_KEY);
+    if (!raw) return null;
+    const time = Number(raw);
+    return Number.isFinite(time) ? time : null;
+  } catch {
+    return null;
+  }
+}
+
+function rememberReload(now: number) {
+  try {
+    window.sessionStorage.setItem(DISPLAY_RELOAD_STORAGE_KEY, String(now));
+  } catch {
+    // A kiosk has sessionStorage. If it is blocked, reload anyway.
+  }
+}
 
 export default function DisplayPlayer({
   slug,
   initial,
+  loadedBuildId,
   preview = false,
 }: {
   slug: string;
   initial: DisplayPayload | null;
+  /** Build id baked into this page load. Later polls compare against it. */
+  loadedBuildId: string;
   preview?: boolean;
 }) {
   const [payload, setPayload] = useState<DisplayPayload | null>(initial);
@@ -48,7 +74,20 @@ export default function DisplayPlayer({
         if (response.ok) {
           const body: unknown = await response.json();
           if (isDisplayPayload(body)) {
-            setPayload(toPublicDisplayPayload(body));
+            const next = toPublicDisplayPayload(body);
+            const now = Date.now();
+            if (displayNeedsReload({
+              loadedBuildId,
+              payloadBuildId: next.buildId,
+              mode: next.mode,
+              now,
+              lastReloadAt: lastReloadAt(),
+            })) {
+              rememberReload(now);
+              window.location.reload();
+              return;
+            }
+            setPayload(next);
             setMissing(false);
           }
         } else if (response.status === 404 && !payloadRef.current) {
@@ -77,11 +116,14 @@ export default function DisplayPlayer({
       controller.abort();
       window.clearInterval(timer);
     };
-  }, [slug, refreshSeconds, preview]);
+  }, [slug, refreshSeconds, preview, loadedBuildId]);
 
   const screen = payload ?? IDLE;
   const notice = missing && !payload ? "This screen is not set up yet." : null;
-  if (screen.theme === "crt-green" || screen.mode === "film_menu") {
+  if (screen.mode === "film_stats" || screen.mode === "film_status") {
+    return <YoursCleanScreen payload={screen} notice={notice} />;
+  }
+  if (displayUsesCrtTheme(screen.mode) || screen.theme === "crt-green") {
     return <CrtGreenScreen payload={screen} notice={notice} />;
   }
   return <YoursCleanScreen payload={screen} notice={notice} />;
