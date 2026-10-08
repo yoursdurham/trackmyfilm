@@ -298,14 +298,14 @@ describe("toPublicDisplayPayload", () => {
         sessionType: "1 Hour Session",
         start: "2:00 PM",
         end: "3:00 PM",
-        infoLines: ["Wi-Fi: Trinity Design Build 5G, password Trinity64", { doorCode: "4821" }],
+        infoLines: ["Wi-Fi: ExampleNet, password example123", { doorCode: "4821" }],
         checkoutLines: ["Please put furniture back where it was"],
         doorCode: "4821",
         parking: "the gravel lot behind the bakery",
         description: "Phone: 919-555-0148",
       },
     });
-    expect(welcome.data.infoLines).toEqual(["Wi-Fi: Trinity Design Build 5G, password Trinity64"]);
+    expect(welcome.data.infoLines).toEqual(["Wi-Fi: ExampleNet, password example123"]);
     expect(welcome.data).not.toHaveProperty("checkoutLines");
     expect(JSON.stringify(welcome)).not.toMatch(/4821|gravel|919-555-0148/);
 
@@ -316,7 +316,7 @@ describe("toPublicDisplayPayload", () => {
       data: {
         firstName: "Faith",
         end: "3:00 PM",
-        infoLines: ["Wi-Fi: Trinity Design Build 5G, password Trinity64"],
+        infoLines: ["Wi-Fi: ExampleNet, password example123"],
         checkoutLines: ["Please put furniture back where it was", "Press the lock on the door on your way out."],
         doorCode: "4821",
       },
@@ -326,7 +326,7 @@ describe("toPublicDisplayPayload", () => {
       "Press the lock on the door on your way out.",
     ]);
     expect(ending.data).not.toHaveProperty("infoLines");
-    expect(JSON.stringify(ending)).not.toMatch(/4821|Trinity64/);
+    expect(JSON.stringify(ending)).not.toMatch(/4821|example123/);
   });
 });
 

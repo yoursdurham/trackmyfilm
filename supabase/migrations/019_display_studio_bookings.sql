@@ -16,7 +16,7 @@
 alter table displays add column if not exists show_studio_bookings boolean not null default true;
 
 alter table displays add column if not exists studio_info_lines jsonb not null default $info$[
-  "Wi-Fi: Trinity Design Build 5G, password Trinity64",
+  "Wi-Fi: ask us for the network and password",
   "Bathrooms: through the hall and to the left",
   "The conference room isn't ours, so please only pass through it to reach the bathroom or kitchen",
   "Feel free to rearrange furniture, but please put it back when you're done"

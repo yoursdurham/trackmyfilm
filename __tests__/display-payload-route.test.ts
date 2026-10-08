@@ -192,7 +192,7 @@ describe("GET /api/displays/:slug", () => {
       override_mode: null,
       override_payload: null,
       show_studio_bookings: true,
-      studio_info_lines: ["Wi-Fi: Trinity Design Build 5G, password Trinity64"],
+      studio_info_lines: ["Wi-Fi: ExampleNet, password example123"],
       studio_checkout_lines: ["Press the lock on the door on your way out."],
     });
     mockGetCachedStudioAgenda.mockResolvedValue({
@@ -220,7 +220,7 @@ describe("GET /api/displays/:slug", () => {
       sessionType: "1 Hour Session",
       start: "2:00 PM",
       end: "3:00 PM",
-      infoLines: ["Wi-Fi: Trinity Design Build 5G, password Trinity64"],
+      infoLines: ["Wi-Fi: ExampleNet, password example123"],
     });
     expect(body.data).not.toHaveProperty("checkoutLines");
     expect(body).not.toHaveProperty("calendar");

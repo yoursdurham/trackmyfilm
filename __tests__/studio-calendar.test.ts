@@ -25,7 +25,7 @@ const screen: DisplayResolveInput["display"] = {
   is_enabled: true,
   override_mode: null,
   override_payload: null,
-  studio_info_lines: ["Wi-Fi: Trinity Design Build 5G, password Trinity64"],
+  studio_info_lines: ["Wi-Fi: ExampleNet, password example123"],
   studio_checkout_lines: [
     "Please put furniture back where it was",
     "Press the lock on the door on your way out.",
@@ -143,7 +143,7 @@ describe("studio window boundaries", () => {
     expect(payload.mode).toBe(mode);
     if (firstName) expect(payload.data.firstName).toBe(firstName);
     if (mode === "studio_welcome" || mode === "studio_active") {
-      expect(payload.data.infoLines).toEqual(["Wi-Fi: Trinity Design Build 5G, password Trinity64"]);
+      expect(payload.data.infoLines).toEqual(["Wi-Fi: ExampleNet, password example123"]);
       expect(payload.data).not.toHaveProperty("checkoutLines");
     } else if (mode === "studio_ending_soon") {
       expect(payload.data.checkoutLines).toEqual([
@@ -165,7 +165,7 @@ describe("studio window boundaries", () => {
       override_payload: { message: "Back in a minute" },
     });
     expect(payload).toMatchObject({ mode: "custom_message", data: { message: "Back in a minute" } });
-    expect(JSON.stringify(payload)).not.toMatch(/Faith|Trinity64|919/);
+    expect(JSON.stringify(payload)).not.toMatch(/Faith|example123|919/);
   });
 });
 

@@ -35,7 +35,7 @@ const row = {
   override_mode: null,
   override_payload: null,
   show_studio_bookings: true,
-  studio_info_lines: ["Wi-Fi: Trinity Design Build 5G, password Trinity64"],
+  studio_info_lines: ["Wi-Fi: ExampleNet, password example123"],
   studio_checkout_lines: ["Press the lock on the door on your way out."],
 };
 
@@ -90,7 +90,7 @@ describe("GET /api/displays", () => {
       slug: "studio-vertical",
       showStudioBookings: true,
       resolvedMode: "studio_welcome",
-      studioInfoLines: ["Wi-Fi: Trinity Design Build 5G, password Trinity64"],
+      studioInfoLines: ["Wi-Fi: ExampleNet, password example123"],
       studioCheckoutLines: ["Press the lock on the door on your way out."],
     });
     expect(JSON.stringify(body)).not.toMatch(/Faith|faith\.oates|sessionType/);

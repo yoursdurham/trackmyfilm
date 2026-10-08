@@ -8,7 +8,7 @@ export const STUDIO_LINE_MAX = 180;
 export const STUDIO_LINE_LIMIT = 8;
 
 export const DEFAULT_STUDIO_INFO_LINES = [
-  "Wi-Fi: Trinity Design Build 5G, password Trinity64",
+  "Wi-Fi: ask us for the network and password",
   "Bathrooms: through the hall and to the left",
   "The conference room isn't ours, so please only pass through it to reach the bathroom or kitchen",
   "Feel free to rearrange furniture, but please put it back when you're done",
