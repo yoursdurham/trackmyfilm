@@ -6,6 +6,7 @@ import {
   sortCustomersByMostOrders,
   sortCustomersForList,
 } from "../lib/customer-stats";
+import { FILM_METRICS_CONFIG } from "../lib/film-metrics-config";
 import type { FilmOrder } from "../lib/types";
 
 const baseOrder = (overrides: Partial<FilmOrder> = {}): FilmOrder => ({
@@ -60,6 +61,33 @@ describe("computeCustomerStats", () => {
     expect(stats.common_film_type).toBe("120");
     expect(stats.common_film_process).toBe("Black & White");
     expect(stats.average_turnaround_days).toBe(4);
+  });
+
+  it("leaves a 9.9-day order in the average and drops one of exactly 10 days", () => {
+    const start = Date.parse("2026-01-01T10:00:00.000Z");
+    const day = 24 * 60 * 60 * 1000;
+    const stats = computeCustomerStats([
+      baseOrder(),
+      baseOrder({
+        id: "order-fast",
+        order_number: "JE1002",
+        roll_count: 1,
+        scans_sent_at: new Date(start + 9.9 * day).toISOString(),
+      }),
+      baseOrder({
+        id: "order-slow",
+        order_number: "JE1003",
+        roll_count: 5,
+        scans_sent_at: new Date(start + 10 * day).toISOString(),
+      }),
+    ]);
+
+    expect(FILM_METRICS_CONFIG.maxTurnaroundDays).toBe(10);
+    // 4 days and rounded 9.9 days. The 10-day order is omitted.
+    // With that order included the average would round to 8.
+    expect(stats.average_turnaround_days).toBe(7);
+    expect(stats.total_orders).toBe(3);
+    expect(stats.total_rolls).toBe(8);
   });
 
   it("counts 110 film type from roll_details", () => {

@@ -2,7 +2,7 @@ import { ORDER_STATUS } from "@/lib/constants";
 import { FILM_METRICS_CONFIG } from "@/lib/film-metrics-config";
 import { isProcessOnlyOrder, isProcessOnlyRoll } from "@/lib/order-service";
 import type { FilmOrder } from "@/lib/types";
-import { getReceivedAtLabDate, getScansSentDate } from "@/lib/turnaround-time";
+import { getReceivedAtLabDate, getScansSentDate, isTurnaroundOutlier } from "@/lib/turnaround-time";
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
@@ -261,7 +261,7 @@ function addTurnaround(
 ) {
   if (rolls <= 0 || !start || !end) return;
   const elapsed = end.getTime() - start.getTime();
-  if (elapsed < 0) return;
+  if (elapsed < 0 || isTurnaroundOutlier(elapsed)) return;
   if (end.getTime() > now.getTime()) return;
   const windowStart = now.getTime() - FILM_METRICS_CONFIG.turnaroundWindowDays * MS_PER_DAY;
   if (end.getTime() < windowStart) return;

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
+import { FILM_METRICS_CONFIG } from "../lib/film-metrics-config";
 import {
   calculateTurnaroundForDateRange,
   calculateTurnaroundForPeriod,
@@ -97,17 +98,50 @@ describe("turnaround-time", () => {
       }),
     ];
 
+    // The third order is exactly 10 days (20 → 10 days ago) and is left out.
+    // Before that cutoff the all/30-day average was 6.667 days across 3 orders.
     expect(calculateTurnaroundForPeriod(orders, "all")).toEqual({
-      orderCount: 3,
-      averageDays: expect.closeTo(6.667, 2),
+      orderCount: 2,
+      averageDays: 5,
     });
     expect(calculateTurnaroundForPeriod(orders, "7d")).toEqual({
       orderCount: 1,
       averageDays: 5,
     });
     expect(calculateTurnaroundForPeriod(orders, "30d")).toEqual({
-      orderCount: 3,
-      averageDays: expect.closeTo(6.667, 2),
+      orderCount: 2,
+      averageDays: 5,
+    });
+  });
+
+  it("keeps a 9.9-day turnaround and drops one of exactly 10 days", () => {
+    const now = new Date("2026-06-17T12:00:00.000Z");
+    const day = 24 * 60 * 60 * 1000;
+    const included = makeOrder({
+      id: "just-under",
+      at_lab_at: new Date(now.getTime() - 9.9 * day).toISOString(),
+      scans_sent_at: now.toISOString(),
+    });
+    const excluded = makeOrder({
+      id: "at-cutoff",
+      at_lab_at: new Date(now.getTime() - 10 * day).toISOString(),
+      scans_sent_at: now.toISOString(),
+    });
+
+    expect(FILM_METRICS_CONFIG.maxTurnaroundDays).toBe(10);
+    expect(getTurnaroundDays(included)).toBeCloseTo(9.9, 5);
+    expect(getTurnaroundDays(excluded)).toBe(10);
+    expect(calculateTurnaroundForPeriod([included, excluded], "all")).toEqual({
+      orderCount: 1,
+      averageDays: expect.closeTo(9.9, 5),
+    });
+    expect(calculateTurnaroundForDateRange(
+      [included, excluded],
+      new Date(now.getTime() - day),
+      now,
+    )).toEqual({
+      orderCount: 1,
+      averageDays: expect.closeTo(9.9, 5),
     });
   });
 

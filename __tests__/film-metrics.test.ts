@@ -309,5 +309,76 @@ describe("computeFilmMetrics", () => {
     expect(FILM_METRICS_CONFIG.weekStartsOn).toBe(0);
     expect(FILM_METRICS_CONFIG.turnaroundWindowDays).toBe(30);
     expect(FILM_METRICS_CONFIG.minimumTurnaroundSamples).toBe(3);
+    expect(FILM_METRICS_CONFIG.maxTurnaroundDays).toBe(10);
+  });
+
+  it("drops 10-day turnarounds from both averages without changing the other counts", () => {
+    const sent = new Date(NOW.getTime() - 1 * DAY);
+    const metrics = computeFilmMetrics([
+      makeOrder({
+        id: "color-kept",
+        status: "Scans Sent",
+        film_process: "Color",
+        roll_count: 3,
+        scans_sent_at: sent.toISOString(),
+        at_lab_at: new Date(sent.getTime() - 4 * DAY).toISOString(),
+        received_by_yours_at: sent.toISOString(),
+      }),
+      makeOrder({
+        id: "color-outlier",
+        status: "Scans Sent",
+        film_process: "Color",
+        roll_count: 3,
+        scans_sent_at: sent.toISOString(),
+        at_lab_at: new Date(sent.getTime() - 20 * DAY).toISOString(),
+        received_by_yours_at: sent.toISOString(),
+      }),
+      makeOrder({
+        id: "bw-kept",
+        status: "Scans Sent",
+        film_process: "Black & White",
+        roll_count: 3,
+        scans_sent_at: sent.toISOString(),
+        at_lab_at: new Date(sent.getTime() - 9.9 * DAY).toISOString(),
+      }),
+      makeOrder({
+        id: "bw-cutoff",
+        status: "Scans Sent",
+        film_process: "Black & White",
+        roll_count: 3,
+        scans_sent_at: sent.toISOString(),
+        at_lab_at: new Date(sent.getTime() - 10 * DAY).toISOString(),
+      }),
+      makeOrder({
+        id: "still-at-lab",
+        status: "Received at Lab",
+        film_process: "Color",
+        roll_count: 2,
+        at_lab_at: new Date(NOW.getTime() - 12 * DAY).toISOString(),
+      }),
+    ], NOW);
+
+    // Color before the cutoff: (3×4 + 3×20) / 6 = 12. After: 4.
+    // Black & white before: (3×9.9 + 3×10) / 6 = 9.95, shown as 10.0. After: 9.9.
+    expect(metrics.averageColorTurnaroundDays).toBe(4);
+    expect(metrics.averageBwTurnaroundDays).toBe(9.9);
+    expect(metrics.rollsProcessing).toBe(2);
+    expect(metrics.scansSentToday).toBe(0);
+    expect(metrics.scansSentThisWeek).toBe(12);
+    expect(metrics.receivedToday).toBe(0);
+    expect(metrics.receivedThisWeek).toBe(6);
+    expect(metrics.nextLabRun).toBe("Friday 12:00 PM");
+
+    const onlyOutliers = computeFilmMetrics([
+      makeOrder({
+        id: "color-only-outlier",
+        film_process: "Color",
+        roll_count: 3,
+        scans_sent_at: sent.toISOString(),
+        at_lab_at: new Date(sent.getTime() - 10 * DAY).toISOString(),
+      }),
+    ], NOW);
+    expect(onlyOutliers.averageColorTurnaroundDays).toBeNull();
+    expect(onlyOutliers.scansSentThisWeek).toBe(3);
   });
 });

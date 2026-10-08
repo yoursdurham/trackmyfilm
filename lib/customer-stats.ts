@@ -5,6 +5,7 @@
 import type { FilmOrder, FilmProcess, FilmType, RollDetail } from "./types";
 import { computeCalculatedPreferences } from "./customer-preference-calculations";
 import { getOrderRollDetails } from "./order-roll-utils";
+import { isTurnaroundOutlier } from "./turnaround-time";
 
 export { getOrderRollDetails } from "./order-roll-utils";
 
@@ -110,7 +111,7 @@ function getTurnaroundDays(order: FilmOrder): number | null {
     ?? (order.status === "Ready for Pickup" ? order.status_updated_at : null);
   if (!start || !end) return null;
   const ms = new Date(end).getTime() - new Date(start).getTime();
-  if (ms < 0) return null;
+  if (!Number.isFinite(ms) || ms < 0 || isTurnaroundOutlier(ms)) return null;
   return Math.round(ms / (1000 * 60 * 60 * 24));
 }
 
