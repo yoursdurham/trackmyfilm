@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { cn } from "@/lib/utils";
 import Providers from "@/components/Providers";
-import RecoverySessionRedirect from "@/components/RecoverySessionRedirect";
 import { Analytics } from "@vercel/analytics/next";
 
 export const metadata: Metadata = {
@@ -23,10 +22,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={cn("h-full", "font-sans")}>
       <body className="min-h-full flex flex-col">
-        <Providers>
-          <RecoverySessionRedirect />
-          {children}
-        </Providers>
+        <Providers>{children}</Providers>
         <Analytics />
       </body>
     </html>

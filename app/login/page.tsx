@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2, AlertCircle, CheckCircle } from "lucide-react";
+import RecoverySessionRedirect from "@/components/RecoverySessionRedirect";
 
 function LoginForm() {
   const router = useRouter();
@@ -138,6 +139,7 @@ const SPROCKET_COUNT = 14;
 export default function LoginPage() {
   return (
     <div className="min-h-screen flex">
+      <RecoverySessionRedirect />
 
       {/* ── Left branding panel ─────────────────────────────── */}
       <div className="hidden lg:flex lg:w-[58%] relative flex-col overflow-hidden"
