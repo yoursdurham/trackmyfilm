@@ -8,6 +8,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { BarChart3, DollarSign, LogOut, Monitor, Plus, Search, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import NewDropoffForm from "@/components/NewDropoffForm";
+import { NUMBERS_PATH } from "@/lib/numbers-access";
 import type { Customer, IncomingSquarespaceDraft } from "@/lib/types";
 
 const NEW_DROPOFF_EVENT = "tmf:new-dropoff";
@@ -24,7 +25,7 @@ export function openIncomingDraft(draft: IncomingSquarespaceDraft) {
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: Search },
   { href: "/reports", label: "Reports", icon: BarChart3 },
-  { href: "/numbers", label: "Numbers", icon: DollarSign },
+  { href: NUMBERS_PATH, label: "Numbers", icon: DollarSign },
   { href: "/customers", label: "Customers", icon: Users },
   { href: "/displays", label: "Displays", icon: Monitor },
 ];
