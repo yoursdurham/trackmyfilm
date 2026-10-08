@@ -56,3 +56,34 @@ body {
     border-color: var(--border);
   }
 }
+
+/* crt-green theme. One transform animation; scanlines are a static overlay. */
+@keyframes crt-scroll {
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(0, -50%, 0); }
+}
+
+.crt-scroll {
+  animation: crt-scroll var(--crt-duration, 140s) linear infinite;
+}
+
+.crt-frame::before {
+  content: "";
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(124, 255, 107, 0.045) 0px,
+    rgba(124, 255, 107, 0.045) 1px,
+    transparent 1px,
+    transparent 5px
+  );
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .crt-scroll {
+    animation: none;
+  }
+}

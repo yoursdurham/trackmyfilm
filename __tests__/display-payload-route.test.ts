@@ -5,6 +5,7 @@ const mockRequireAuth = vi.fn();
 const mockGetDisplayBySlug = vi.fn();
 const mockUpdateDisplay = vi.fn();
 const mockGetCachedFilmMetrics = vi.fn();
+const mockGetCachedFilmMenu = vi.fn();
 
 vi.mock("@/lib/api-auth", () => ({
   requireAuth: (...args: unknown[]) => mockRequireAuth(...args),
@@ -17,6 +18,11 @@ vi.mock("@/lib/db", () => ({
 
 vi.mock("@/lib/film-metrics-cache", () => ({
   getCachedFilmMetrics: (...args: unknown[]) => mockGetCachedFilmMetrics(...args),
+}));
+
+vi.mock("@/lib/film-menu-cache", () => ({
+  getCachedFilmMenu: (...args: unknown[]) => mockGetCachedFilmMenu(...args),
+  clearFilmMenuCache: () => {},
 }));
 
 import { GET, PATCH } from "@/app/api/displays/[slug]/route";
@@ -115,6 +121,53 @@ describe("GET /api/displays/:slug", () => {
       },
     });
     expect(JSON.stringify(body)).not.toMatch(/secret@|Ada|revenue/);
+    expect(mockGetCachedFilmMenu).not.toHaveBeenCalled();
+  });
+
+  it("returns only the film menu when that mode is selected", async () => {
+    mockGetDisplayBySlug.mockResolvedValue({
+      ...row,
+      mode: "film_menu",
+      override_mode: null,
+      override_payload: null,
+    });
+    mockGetCachedFilmMenu.mockResolvedValue({
+      title: "YOUR'S FILM MENU",
+      subtitle: "Durham, North Carolina",
+      banner: ["PRICES SUBJECT TO CHANGE"],
+      sections: [{
+        title: "35MM FILM",
+        items: [
+          { name: "Expired 35mm/120 Roll", price: "$7" },
+          { name: "Kodak Gold 200 - 35mm", price: "$12" },
+        ],
+      }],
+      notes: [{ text: "Please rewind your film." }],
+      customer_email: "secret@example.com",
+    });
+
+    const response = await get();
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.theme).toBe("crt-green");
+    expect(body.mode).toBe("film_menu");
+    expect(body.data).toEqual({
+      menu: {
+        title: "YOUR'S FILM MENU",
+        subtitle: "Durham, North Carolina",
+        banner: ["PRICES SUBJECT TO CHANGE"],
+        sections: [{
+          title: "35MM FILM",
+          items: [
+            { name: "Expired 35mm/120 Roll", price: "$7" },
+            { name: "Kodak Gold 200 - 35mm", price: "$12" },
+          ],
+        }],
+        notes: [{ text: "Please rewind your film." }],
+      },
+    });
+    expect(mockGetCachedFilmMetrics).not.toHaveBeenCalled();
+    expect(JSON.stringify(body)).not.toMatch(/secret@|guest@/);
   });
 
   it("does not look up a malformed slug", async () => {
