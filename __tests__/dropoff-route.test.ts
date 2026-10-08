@@ -24,6 +24,7 @@ vi.mock("@/lib/email-service", () => ({
 }));
 
 import { POST } from "@/app/api/dropoff/route";
+import { orderNumbersMatch } from "../lib/validation";
 
 const basePayload = {
   customer_name: "Jane Doe",
@@ -160,6 +161,39 @@ describe("POST /api/dropoff — 110 film", () => {
     const orderArg = mockCreateOrder.mock.calls[0][0];
     expect(orderArg.film_type).toBe("110");
     expect(orderArg.roll_count).toBe(2);
+  });
+
+  it("rejects 01034 when 1034 already exists, and the other way around", async () => {
+    mockGetOrderByNumber.mockImplementation(async (orderNumber: string) => (
+      orderNumbersMatch(String(orderNumber), "1034")
+        ? { id: "existing", order_number: "1034" }
+        : null
+    ));
+
+    for (const orderNumber of ["01034", "1034", "001034"]) {
+      const res = await POST(new Request("http://localhost/api/dropoff", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...basePayload, order_number: orderNumber }),
+      }));
+      expect(res.status).toBe(409);
+      const body = await res.json();
+      expect(body.error).toMatch(/already exists/);
+    }
+    expect(mockCreateOrder).not.toHaveBeenCalled();
+    expect(mockGetOrderByNumber).toHaveBeenCalledWith("01034");
+    expect(mockGetOrderByNumber).toHaveBeenCalledWith("1034");
+  });
+
+  it("stores a new Squarespace number with its leading zero", async () => {
+    mockGetOrderByNumber.mockResolvedValue(null);
+    const res = await POST(new Request("http://localhost/api/dropoff", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...basePayload, order_number: " 01034 " }),
+    }));
+    expect(res.status).toBe(201);
+    expect(mockCreateOrder.mock.calls[0][0].order_number).toBe("01034");
   });
 
   it("rejects invalid film_type in roll_details", async () => {

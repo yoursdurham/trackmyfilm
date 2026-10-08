@@ -96,19 +96,24 @@ export function isValidEmail(email: string): boolean {
 }
 
 /**
- * Normalises an order number: trim + uppercase.
- * Leading zeros are kept. Squarespace stores "01050"; that exact text is what we save.
+ * Storage form for an order number: trim + uppercase.
+ * Leading zeros stay in the saved text. Squarespace "01050" is stored as "01050".
+ * Comparisons use orderNumberMatchKey, which strips those zeros.
  */
 export function normalizeOrderNumber(num: string): string {
   return num.trim().toUpperCase();
 }
 
 /**
- * Comparison key for duplicate checks. "01050", "1050", and "001050" share one key.
- * A number that is only zeros stays "0".
+ * Comparison key: trim, uppercase, strip leading zeros.
+ * "01034", "1034", and "001034" share "1034". A value that is only zeros stays "0".
+ * Letters and other non-numeric prefixes are left in place, so "ORD-001" stays
+ * "ORD-001" and "JE01034" stays "JE01034". A blank value stays blank, not "0".
  */
 export function orderNumberMatchKey(orderNumber: string): string {
-  const stripped = normalizeOrderNumber(orderNumber).replace(/^0+/, "");
+  const normalized = normalizeOrderNumber(orderNumber);
+  if (!normalized) return "";
+  const stripped = normalized.replace(/^0+/, "");
   return stripped.length > 0 ? stripped : "0";
 }
 
@@ -116,10 +121,41 @@ export function orderNumbersMatch(left: string, right: string): boolean {
   return orderNumberMatchKey(left) === orderNumberMatchKey(right);
 }
 
-/** Case-insensitive Postgres pattern (~*) for order numbers that differ only by leading zeros. */
+/**
+ * When several stored rows share a key, prefer the one whose saved text matches
+ * the query (still keeping its leading zeros). Otherwise keep the first row,
+ * which callers pass newest-first.
+ */
+export function preferStoredOrderNumber<T>(
+  rows: readonly T[],
+  query: string,
+  readNumber: (row: T) => string,
+): T | null {
+  if (rows.length === 0) return null;
+  const wanted = normalizeOrderNumber(query);
+  return rows.find((row) => normalizeOrderNumber(readNumber(row)) === wanted) ?? rows[0];
+}
+
+/**
+ * Staff search. A partial name or number still matches as a substring, and
+ * "01034" matches a stored "1034" (and the other way around).
+ */
+export function orderNumberMatchesSearch(storedOrderNumber: string, query: string): boolean {
+  const needle = query.trim().toLowerCase();
+  if (!needle) return false;
+  if (storedOrderNumber.toLowerCase().includes(needle)) return true;
+  return orderNumbersMatch(storedOrderNumber, query);
+}
+
+/**
+ * Case-insensitive Postgres pattern (~*) for order numbers that differ only by leading zeros.
+ * Blank queries match blank stored values only, never an order numbered "0".
+ */
 export function orderNumberMatchPattern(orderNumber: string): string {
-  const key = orderNumberMatchKey(orderNumber).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return `^[[:space:]]*0*${key}[[:space:]]*$`;
+  const key = orderNumberMatchKey(orderNumber);
+  if (!key) return "^[[:space:]]*$";
+  const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return `^[[:space:]]*0*${escaped}[[:space:]]*$`;
 }
 
 /**

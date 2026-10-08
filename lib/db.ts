@@ -15,7 +15,7 @@ import {
   PENDING_INTAKE_STATUS,
 } from "./incoming-drafts";
 import { buildCustomerStatsMap, computeCustomerStats, sortCustomersByLatestOrder } from "./customer-stats";
-import { orderNumberMatchPattern } from "./validation";
+import { normalizeOrderNumber, orderNumberMatchPattern, preferStoredOrderNumber } from "./validation";
 
 type CustomerInsert = Omit<Customer, "id" | "created_at">;
 
@@ -55,29 +55,42 @@ export async function getOrderById(id: string): Promise<FilmOrder | null> {
   return data as FilmOrder | null;
 }
 
+const ORDER_NUMBER_MATCH_LIMIT = 100;
+
+// Lookups compare the normalized key (leading zeros stripped) and return the
+// stored row unchanged. "01034" finds a saved "1034", and the other way around.
+
+function orderNumberLookup(orderNumber: string): string | null {
+  const stored = normalizeOrderNumber(orderNumber);
+  return stored ? stored : null;
+}
+
 export async function getOrderByNumber(orderNumber: string): Promise<FilmOrder | null> {
+  if (!orderNumberLookup(orderNumber)) return null;
   const { data, error } = await getSupabase()
     .from("film_orders")
     .select("*")
-    .eq("order_number", orderNumber)
-    .maybeSingle();
+    .regexIMatch("order_number", orderNumberMatchPattern(orderNumber))
+    .order("created_at", { ascending: false })
+    .limit(ORDER_NUMBER_MATCH_LIMIT);
   if (error) throw new Error(error.message);
-  return data as FilmOrder | null;
+  return preferStoredOrderNumber((data ?? []) as FilmOrder[], orderNumber, (row) => row.order_number);
 }
 
 export async function getOrderByNumberAndEmail(
   orderNumber: string,
   email: string
 ): Promise<FilmOrder | null> {
+  if (!orderNumberLookup(orderNumber)) return null;
   const { data, error } = await getSupabase()
     .from("film_orders")
     .select("*")
-    .eq("order_number", orderNumber)
+    .regexIMatch("order_number", orderNumberMatchPattern(orderNumber))
     .ilike("customer_email", email)
-    .limit(1)
-    .maybeSingle();
+    .order("created_at", { ascending: false })
+    .limit(ORDER_NUMBER_MATCH_LIMIT);
   if (error) throw new Error(error.message);
-  return data as FilmOrder | null;
+  return preferStoredOrderNumber((data ?? []) as FilmOrder[], orderNumber, (row) => row.order_number);
 }
 
 export async function getOrdersByCustomerId(customerId: string): Promise<FilmOrder[]> {
@@ -150,10 +163,11 @@ export async function getOrdersPendingDelayEmail(): Promise<FilmOrder[]> {
 // Do not add customer reads, order creation, or email sends on that path.
 
 export async function orderNumberExists(orderNumber: string): Promise<boolean> {
+  if (!orderNumberLookup(orderNumber)) return false;
   const { data, error } = await getSupabase()
     .from("film_orders")
     .select("id")
-    .filter("order_number", "imatch", orderNumberMatchPattern(orderNumber))
+    .regexIMatch("order_number", orderNumberMatchPattern(orderNumber))
     .limit(1);
   if (error) throw new Error(error.message);
   return (data?.length ?? 0) > 0;
@@ -182,14 +196,19 @@ export async function getIncomingDraftById(id: string): Promise<IncomingSquaresp
 export async function getIncomingDraftByOrderNumber(
   orderNumber: string
 ): Promise<IncomingSquarespaceDraft | null> {
+  if (!orderNumberLookup(orderNumber)) return null;
   const { data, error } = await getSupabase()
     .from("incoming_squarespace_drafts")
     .select("*")
-    .filter("squarespace_order_number", "imatch", orderNumberMatchPattern(orderNumber))
-    .limit(1);
+    .regexIMatch("squarespace_order_number", orderNumberMatchPattern(orderNumber))
+    .order("created_at", { ascending: false })
+    .limit(ORDER_NUMBER_MATCH_LIMIT);
   if (error) throw new Error(error.message);
-  const row = data?.[0];
-  return row ? row as IncomingSquarespaceDraft : null;
+  return preferStoredOrderNumber(
+    (data ?? []) as IncomingSquarespaceDraft[],
+    orderNumber,
+    (row) => row.squarespace_order_number,
+  );
 }
 
 export async function getIncomingDraftByExternalId(
@@ -286,14 +305,14 @@ export async function deleteIncomingDraftsForOrder(order: {
     const { error } = await getSupabase()
       .from("incoming_squarespace_drafts")
       .delete()
-      .eq("squarespace_order_number", orderNumber);
+      .regexIMatch("squarespace_order_number", orderNumberMatchPattern(orderNumber));
     if (error) throw new Error(error.message);
   }
   for (const externalOrderId of match.externalOrderIds) {
     const { error } = await getSupabase()
       .from("incoming_squarespace_drafts")
       .delete()
-      .eq("external_order_id", externalOrderId);
+      .regexIMatch("external_order_id", orderNumberMatchPattern(externalOrderId));
     if (error) throw new Error(error.message);
   }
 }

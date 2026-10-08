@@ -14,6 +14,7 @@ import OrderCard from "@/components/OrderCard";
 import BulkStatusActionBar from "@/components/BulkStatusActionBar";
 import { getUrgentAgeDays, isUrgent } from "@/lib/order-urgency";
 import { ORDER_STATUS } from "@/lib/constants";
+import { orderNumberMatchesSearch } from "@/lib/validation";
 import type { FilmOrder } from "@/lib/types";
 
 const statusFilters = [
@@ -174,7 +175,7 @@ export default function Dashboard() {
         (activeFilter === "urgent" ? isUrgent(order) : order.status === activeFilter);
       const matchesSearch = !searchQuery ||
         order.customer_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        order.order_number?.toLowerCase().includes(searchQuery.toLowerCase());
+        orderNumberMatchesSearch(order.order_number ?? "", searchQuery);
       return matchesFilter && matchesSearch;
     })
     .sort((a, b) => {

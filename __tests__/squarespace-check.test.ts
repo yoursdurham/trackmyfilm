@@ -49,6 +49,7 @@ import {
   squarespaceLookbackWindow,
 } from "../lib/squarespace-orders";
 import { importSquarespaceOrders } from "../lib/squarespace-import";
+import { orderNumbersMatch } from "../lib/validation";
 
 const ORDER_ID = "585d498fdee9f31a60284a37";
 
@@ -286,6 +287,35 @@ describe("importSquarespaceOrders", () => {
     const inserted = deps.createIncomingDraft.mock.calls[0][0];
     expect(inserted.external_order_id).toBe(ORDER_ID);
     expect(inserted.roll_details[0].film_process).toBe("Color");
+  });
+
+  it("skips 01034 when 1034 already exists, and 1034 when 01034 already exists", async () => {
+    const filmOrders = ["1034", "01037"];
+    const drafts = ["01035"];
+    deps.orderNumberExists.mockImplementation(async (orderNumber: string) => (
+      filmOrders.some((stored) => orderNumbersMatch(stored, orderNumber))
+    ));
+    deps.getIncomingDraftByOrderNumber.mockImplementation(async (orderNumber: string) => (
+      drafts.some((stored) => orderNumbersMatch(stored, orderNumber))
+        ? { id: "draft-padded", status: "Pending Intake" }
+        : null
+    ));
+
+    const summary = await importSquarespaceOrders([
+      filmOrder({ id: "padded-existing", orderNumber: "01034" }),
+      filmOrder({ id: "plain-existing", orderNumber: "1037" }),
+      filmOrder({ id: "draft-zero-variant", orderNumber: "1035" }),
+      filmOrder({ id: "fresh", orderNumber: "1036" }),
+    ], deps);
+
+    expect(summary.skippedDuplicate).toBe(3);
+    expect(summary.imported).toBe(1);
+    expect(summary.importedOrderNumbers).toEqual(["1036"]);
+    expect(summary.errors).toEqual([]);
+    expect(deps.orderNumberExists).toHaveBeenCalledWith("01034");
+    expect(deps.orderNumberExists).toHaveBeenCalledWith("1037");
+    expect(deps.createIncomingDraft).toHaveBeenCalledTimes(1);
+    expect(deps.createIncomingDraft.mock.calls[0][0].squarespace_order_number).toBe("1036");
   });
 });
 
