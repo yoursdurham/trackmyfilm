@@ -6,6 +6,7 @@
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Customer, CustomerSummary, FilmOrder, IncomingSquarespaceDraft } from "./types";
+import type { DisplayRow, HeartbeatClient } from "./display";
 import {
   buildIncomingDraftInsert,
   incomingDraftDeleteMatch,
@@ -439,4 +440,51 @@ export async function deleteCustomer(id: string): Promise<void> {
     .delete()
     .eq("id", id);
   if (error) throw new Error(error.message);
+}
+
+// ─── Displays ────────────────────────────────────────────────────────────────
+
+export async function listDisplays(): Promise<DisplayRow[]> {
+  const { data, error } = await getSupabase()
+    .from("displays")
+    .select("*")
+    .order("name", { ascending: true });
+  if (error) throw new Error(error.message);
+  return (data ?? []) as DisplayRow[];
+}
+
+export async function getDisplayBySlug(slug: string): Promise<DisplayRow | null> {
+  const { data, error } = await getSupabase()
+    .from("displays")
+    .select("*")
+    .eq("slug", slug)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return data as DisplayRow | null;
+}
+
+export async function updateDisplay(slug: string, patch: Partial<DisplayRow>): Promise<DisplayRow | null> {
+  const { data, error } = await getSupabase()
+    .from("displays")
+    .update({ ...patch, updated_at: new Date().toISOString() })
+    .eq("slug", slug)
+    .select("*")
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return data as DisplayRow | null;
+}
+
+export async function touchDisplayHeartbeat(slug: string, client: HeartbeatClient): Promise<boolean> {
+  const { data, error } = await getSupabase()
+    .from("displays")
+    .update({
+      last_seen: new Date().toISOString(),
+      last_client: client,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("slug", slug)
+    .select("id")
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return Boolean(data);
 }

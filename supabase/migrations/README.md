@@ -14,6 +14,7 @@ Run these in order in: **Supabase Dashboard → SQL Editor → New Query**
 | `014_add_scan_notes.sql` | Adds optional `scan_notes` on `film_orders` for scans_sent emails | Yes — when using customer scan notes |
 | `015_incoming_squarespace_drafts.sql` | Creates `incoming_squarespace_drafts` (Pending Intake queue) | Yes — before using Squarespace intake |
 | `016_hard_delete_intake_rows.sql` | Deletes leftover dismissed and orphaned intake rows, and links accepted drafts to film orders with `ON DELETE CASCADE` | Yes — after 015, before relying on re-import after dismiss or delete |
+| `017_displays.sql` | Creates `displays` (RLS on, no policies) and seeds `studio-vertical` | Yes — before using Displays or `/display/studio-vertical`. Safe to run again. |
 
 ## Notes
 

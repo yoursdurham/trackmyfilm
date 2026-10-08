@@ -19,7 +19,10 @@ function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const resetLinkError = searchParams.get("error") === "reset"
+    ? "That reset link is invalid or has expired. Request a new one."
+    : null;
+  const [error, setError] = useState<string | null>(resetLinkError);
   const [success, setSuccess] = useState<string | null>(null);
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -43,8 +46,11 @@ function LoginForm() {
     setError(null);
     setSuccess(null);
     const supabase = createClient();
+    // /auth/confirm exchanges the recovery code for a session cookie, then
+    // sends the browser to /login/update-password. The default Supabase email
+    // appends ?code= to this URL. The token-hash template skips the code.
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/login/update-password`,
+      redirectTo: `${window.location.origin}/auth/confirm`,
     });
     setLoading(false);
     if (error) { setError(error.message); return; }

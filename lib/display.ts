@@ -1,0 +1,403 @@
+/**
+ * Display engine for physical screens.
+ *
+ * The resolver is pure: it picks one state from the display row plus optional
+ * studio, film, and playlist inputs. Those sources are absent in phase 1.
+ * Later phases pass them in; they do not need a new priority function.
+ *
+ * Priority (spec section 7.1):
+ *   100  manual override (custom message today)
+ *    80  active studio session, including the ending-soon window
+ *    70  studio welcome window
+ *    50  upcoming session
+ *    10  playlist, or the screen's default mode when no playlist is playing
+ *
+ * Studio time windows are classified by the caller with `now` before this
+ * function runs, so the clock and the calendar stay outside the renderer.
+ */
+
+export const DISPLAY_THEME = "yours-clean";
+export const DEFAULT_REFRESH_SECONDS = 30;
+export const MIN_REFRESH_SECONDS = 10;
+export const MAX_REFRESH_SECONDS = 300;
+/** A screen is online if it checked in within this window (three 30s polls). */
+export const DISPLAY_ONLINE_WINDOW_MS = 90_000;
+export const CUSTOM_MESSAGE_MAX_LENGTH = 280;
+export const DISPLAY_SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+export const DISPLAY_PRIORITY = {
+  override: 100,
+  studioActive: 80,
+  studioWelcome: 70,
+  studioUpcoming: 50,
+  playlistOrDefault: 10,
+} as const;
+
+export const STUDIO_DATA_KEYS = ["firstName", "sessionType", "start", "end"] as const;
+export const FILM_STATS_DATA_KEYS = [
+  "rollsProcessing",
+  "receivedToday",
+  "scansSentThisWeek",
+  "averageColorTurnaroundDays",
+  "averageBwTurnaroundDays",
+  "nextLabRun",
+] as const;
+export const FILM_STATUS_DATA_KEYS = [
+  "averageColorTurnaroundDays",
+  "averageBwTurnaroundDays",
+  "nextLabRun",
+] as const;
+
+export const SELECTABLE_DEFAULT_MODES = [
+  { value: "idle", label: "Branded idle" },
+] as const;
+
+export type DisplayOrientation = "portrait" | "landscape";
+
+export interface DisplayRow {
+  id: string;
+  slug: string;
+  name: string;
+  location: string | null;
+  orientation: DisplayOrientation;
+  resolution: string | null;
+  mode: string;
+  playlist_id: string | null;
+  theme: string | null;
+  is_enabled: boolean;
+  last_seen: string | null;
+  last_client: Record<string, unknown> | null;
+  override_mode: string | null;
+  override_payload: unknown;
+  created_at?: string;
+  updated_at?: string;
+}
+
+/** Safe studio fields. Callers may pass a wider booking object; extra keys are dropped. */
+export interface StudioSessionView {
+  firstName?: string | null;
+  sessionType?: string | null;
+  start?: string | null;
+  end?: string | null;
+  [key: string]: unknown;
+}
+
+export interface StudioDisplayInput {
+  active?: StudioSessionView | null;
+  /** Last minutes of the active session. Wins over `active` when both are set. */
+  endingSoon?: StudioSessionView | null;
+  welcome?: StudioSessionView | null;
+  upcoming?: StudioSessionView | null;
+}
+
+export interface FilmMetricsInput {
+  rollsProcessing?: number | null;
+  receivedToday?: number | null;
+  scansSentThisWeek?: number | null;
+  averageColorTurnaroundDays?: number | null;
+  averageBwTurnaroundDays?: number | null;
+  nextLabRun?: string | null;
+  [key: string]: unknown;
+}
+
+export interface PlaylistItemInput {
+  mode: string;
+  durationSeconds?: number;
+  enabled?: boolean;
+  data?: Record<string, unknown> | null;
+}
+
+export interface PlaylistInput {
+  items: PlaylistItemInput[];
+  /** Index into the enabled items, chosen by the caller from the clock. */
+  activeIndex?: number;
+}
+
+export interface DisplayResolveInput {
+  display: Pick<DisplayRow, "mode" | "theme" | "is_enabled" | "override_mode" | "override_payload"> & {
+    refresh_seconds?: number | null;
+  };
+  now?: Date;
+  studio?: StudioDisplayInput | null;
+  film?: FilmMetricsInput | null;
+  playlist?: PlaylistInput | null;
+}
+
+export interface DisplayPayload {
+  mode: string;
+  theme: string;
+  refreshSeconds: number;
+  data: Record<string, unknown>;
+}
+
+export interface ResolvedDisplay extends DisplayPayload {
+  priority: number;
+}
+
+export interface HeartbeatClient {
+  appVersion: string | null;
+  userAgent: string | null;
+}
+
+const DATA_KEYS_BY_MODE: Record<string, readonly string[]> = {
+  idle: [],
+  custom_message: ["message"],
+  studio_active: STUDIO_DATA_KEYS,
+  studio_welcome: STUDIO_DATA_KEYS,
+  studio_upcoming: STUDIO_DATA_KEYS,
+  studio_ending_soon: STUDIO_DATA_KEYS,
+  film_stats: FILM_STATS_DATA_KEYS,
+  film_status: FILM_STATUS_DATA_KEYS,
+};
+
+export function isDisplaySlug(slug: string): boolean {
+  return slug.length <= 64 && DISPLAY_SLUG_PATTERN.test(slug);
+}
+
+export function isSelectableDefaultMode(mode: string): boolean {
+  return SELECTABLE_DEFAULT_MODES.some((option) => option.value === mode);
+}
+
+/** Plain text only. Tags are removed, not decoded into HTML. */
+export function sanitizeCustomMessage(input: unknown): string {
+  if (typeof input !== "string") return "";
+  const withoutTags = input.replace(/<[^>]*>/g, "");
+  const withoutControls = withoutTags.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, "");
+  return withoutControls
+    .replace(/\r\n/g, "\n")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim()
+    .slice(0, CUSTOM_MESSAGE_MAX_LENGTH);
+}
+
+function plainText(input: unknown, max: number): string | null {
+  const clean = sanitizeCustomMessage(input).replace(/\n/g, " ").trim();
+  if (!clean) return null;
+  return clean.slice(0, max);
+}
+
+function messageFromPayload(payload: unknown): string {
+  if (!payload || typeof payload !== "object") return "";
+  return sanitizeCustomMessage((payload as { message?: unknown }).message);
+}
+
+function pickStudio(source: StudioSessionView | null | undefined): Record<string, string> {
+  if (!source) return {};
+  const data: Record<string, string> = {};
+  for (const key of STUDIO_DATA_KEYS) {
+    const value = plainText(source[key], 80);
+    if (value) data[key] = value;
+  }
+  return data;
+}
+
+function pickFilm(film: FilmMetricsInput | null | undefined, keys: readonly string[]): Record<string, unknown> {
+  if (!film) return {};
+  const data: Record<string, unknown> = {};
+  for (const key of keys) {
+    const value = film[key];
+    if (typeof value === "number" && Number.isFinite(value)) {
+      data[key] = value;
+    } else if (key === "nextLabRun") {
+      const text = plainText(value, 80);
+      if (text) data[key] = text;
+    }
+  }
+  return data;
+}
+
+export function clampRefreshSeconds(value: number | null | undefined): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) return DEFAULT_REFRESH_SECONDS;
+  return Math.min(MAX_REFRESH_SECONDS, Math.max(MIN_REFRESH_SECONDS, Math.round(value)));
+}
+
+function themeOf(theme: string | null | undefined): string {
+  const trimmed = theme?.trim();
+  return trimmed || DISPLAY_THEME;
+}
+
+function dataForMode(
+  mode: string,
+  input: DisplayResolveInput,
+  itemData?: Record<string, unknown> | null,
+): Record<string, unknown> {
+  if (mode === "custom_message") {
+    const message = sanitizeCustomMessage(itemData?.message);
+    return message ? { message } : {};
+  }
+  if (mode === "studio_ending_soon") return pickStudio(input.studio?.endingSoon);
+  if (mode === "studio_active") return pickStudio(input.studio?.active);
+  if (mode === "studio_welcome") return pickStudio(input.studio?.welcome);
+  if (mode === "studio_upcoming") return pickStudio(input.studio?.upcoming);
+  if (mode === "film_stats") return pickFilm(input.film, FILM_STATS_DATA_KEYS);
+  if (mode === "film_status") return pickFilm(input.film, FILM_STATUS_DATA_KEYS);
+  return {};
+}
+
+function activePlaylistItem(playlist: PlaylistInput | null | undefined): PlaylistItemInput | null {
+  if (!playlist?.items?.length) return null;
+  const enabled = playlist.items.filter((item) => item.enabled !== false && item.mode?.trim());
+  if (!enabled.length) return null;
+  const index = playlist.activeIndex ?? 0;
+  const safeIndex = ((Math.trunc(index) % enabled.length) + enabled.length) % enabled.length;
+  return enabled[safeIndex] ?? null;
+}
+
+export function resolveDisplayState(input: DisplayResolveInput): ResolvedDisplay {
+  const theme = themeOf(input.display.theme);
+  const seconds = clampRefreshSeconds(input.display.refresh_seconds);
+  // Reserved for the studio-window classifier. Phase 1 callers pass the row only.
+  void input.now;
+
+  if (input.display.is_enabled === false) {
+    return {
+      mode: "idle",
+      theme,
+      refreshSeconds: seconds,
+      data: {},
+      priority: DISPLAY_PRIORITY.playlistOrDefault,
+    };
+  }
+
+  const candidates: { mode: string; priority: number; data: Record<string, unknown> }[] = [];
+
+  const overrideMode = input.display.override_mode?.trim() || "";
+  if (overrideMode) {
+    const overrideData = overrideMode === "custom_message"
+      ? dataForMode(overrideMode, input, { message: messageFromPayload(input.display.override_payload) })
+      : dataForMode(overrideMode, input);
+    const usable = overrideMode !== "custom_message" || typeof overrideData.message === "string";
+    if (usable) {
+      candidates.push({ mode: overrideMode, priority: DISPLAY_PRIORITY.override, data: overrideData });
+    }
+  }
+
+  if (input.studio?.endingSoon) {
+    candidates.push({
+      mode: "studio_ending_soon",
+      priority: DISPLAY_PRIORITY.studioActive,
+      data: pickStudio(input.studio.endingSoon),
+    });
+  } else if (input.studio?.active) {
+    candidates.push({
+      mode: "studio_active",
+      priority: DISPLAY_PRIORITY.studioActive,
+      data: pickStudio(input.studio.active),
+    });
+  }
+
+  if (input.studio?.welcome) {
+    candidates.push({
+      mode: "studio_welcome",
+      priority: DISPLAY_PRIORITY.studioWelcome,
+      data: pickStudio(input.studio.welcome),
+    });
+  }
+
+  if (input.studio?.upcoming) {
+    candidates.push({
+      mode: "studio_upcoming",
+      priority: DISPLAY_PRIORITY.studioUpcoming,
+      data: pickStudio(input.studio.upcoming),
+    });
+  }
+
+  const playlistItem = activePlaylistItem(input.playlist);
+  if (playlistItem) {
+    candidates.push({
+      mode: playlistItem.mode,
+      priority: DISPLAY_PRIORITY.playlistOrDefault,
+      data: dataForMode(playlistItem.mode, input, playlistItem.data ?? null),
+    });
+  } else {
+    const defaultMode = input.display.mode?.trim() || "idle";
+    const data = dataForMode(defaultMode, input);
+    const mode = defaultMode === "custom_message" && typeof data.message !== "string" ? "idle" : defaultMode;
+    candidates.push({
+      mode,
+      priority: DISPLAY_PRIORITY.playlistOrDefault,
+      data: mode === "idle" && defaultMode === "custom_message" ? {} : data,
+    });
+  }
+
+  candidates.sort((a, b) => b.priority - a.priority);
+  const winner = candidates[0];
+
+  return {
+    mode: winner.mode,
+    theme,
+    refreshSeconds: seconds,
+    data: winner.data,
+    priority: winner.priority,
+  };
+}
+
+/** The only object a public display response is allowed to contain. */
+export function toPublicDisplayPayload(resolved: {
+  mode?: unknown;
+  theme?: unknown;
+  refreshSeconds?: unknown;
+  data?: unknown;
+}): DisplayPayload {
+  const mode = typeof resolved.mode === "string" && resolved.mode.trim() ? resolved.mode.trim() : "idle";
+  const allowed = DATA_KEYS_BY_MODE[mode] ?? [];
+  const source = resolved.data && typeof resolved.data === "object"
+    ? resolved.data as Record<string, unknown>
+    : {};
+  const data: Record<string, unknown> = {};
+  for (const key of allowed) {
+    if (key in source) data[key] = source[key];
+  }
+  if (mode === "custom_message") {
+    const message = sanitizeCustomMessage(data.message);
+    if (message) data.message = message;
+    else delete data.message;
+  }
+  return {
+    mode,
+    theme: themeOf(typeof resolved.theme === "string" ? resolved.theme : null),
+    refreshSeconds: clampRefreshSeconds(
+      typeof resolved.refreshSeconds === "number" ? resolved.refreshSeconds : null,
+    ),
+    data,
+  };
+}
+
+export function publicPayloadForDisplay(
+  row: DisplayResolveInput["display"],
+  extras?: Omit<DisplayResolveInput, "display">,
+): DisplayPayload {
+  return toPublicDisplayPayload(resolveDisplayState({ display: row, ...extras }));
+}
+
+export function isDisplayOnline(lastSeen: string | null | undefined, now = Date.now()): boolean {
+  if (!lastSeen) return false;
+  const time = new Date(lastSeen).getTime();
+  if (Number.isNaN(time)) return false;
+  const age = now - time;
+  return age <= DISPLAY_ONLINE_WINDOW_MS && age >= -60_000;
+}
+
+export function parseHeartbeatClient(body: unknown, userAgent: string | null): HeartbeatClient {
+  let appVersion: string | null = null;
+  if (body && typeof body === "object" && "appVersion" in body) {
+    const value = (body as { appVersion?: unknown }).appVersion;
+    if (typeof value === "string") {
+      const clean = value.replace(/[^\w.\-]/g, "").slice(0, 40);
+      appVersion = clean || null;
+    }
+  }
+  const agent = userAgent?.replace(/[\u0000-\u001F\u007F]/g, "").trim().slice(0, 180) || null;
+  return { appVersion, userAgent: agent };
+}
+
+export function isDisplayPayload(value: unknown): value is DisplayPayload {
+  if (!value || typeof value !== "object") return false;
+  const record = value as Record<string, unknown>;
+  return typeof record.mode === "string"
+    && typeof record.theme === "string"
+    && typeof record.refreshSeconds === "number"
+    && !!record.data
+    && typeof record.data === "object";
+}

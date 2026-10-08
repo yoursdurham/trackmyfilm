@@ -5,7 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { BarChart3, DollarSign, LogOut, Plus, Search, Users } from "lucide-react";
+import { BarChart3, DollarSign, LogOut, Monitor, Plus, Search, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import NewDropoffForm from "@/components/NewDropoffForm";
 import type { Customer, IncomingSquarespaceDraft } from "@/lib/types";
@@ -26,6 +26,7 @@ const navItems = [
   { href: "/reports", label: "Reports", icon: BarChart3 },
   { href: "/numbers", label: "Numbers", icon: DollarSign },
   { href: "/customers", label: "Customers", icon: Users },
+  { href: "/displays", label: "Displays", icon: Monitor },
 ];
 
 export default function InternalHeader({

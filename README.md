@@ -72,6 +72,8 @@ Example body (35mm C41, High-Res, 4x6 prints, Portra 800, 1 roll):
 
 Before using the queue, run `supabase/migrations/015_incoming_squarespace_drafts.sql` in the Supabase SQL editor, then `supabase/migrations/016_hard_delete_intake_rows.sql`. See `supabase/migrations/README.md`.
 
+Before using Displays, run `supabase/migrations/017_displays.sql` in the same SQL editor. It is safe to run more than once and seeds the `studio-vertical` screen.
+
 ### 3. Database
 
 Run both migration files in **Supabase Dashboard → SQL Editor**:
@@ -95,6 +97,8 @@ Open [http://localhost:3000](http://localhost:3000) → redirects to login.
 |---|---|---|
 | `/login` | Public | Sign in |
 | `/login/update-password` | Public | Password reset (via email link) |
+| `/display/studio-vertical` | Public | Studio screen. The Pi opens this URL. |
+| `/displays` | Login required | Manage screens |
 | `/dashboard` | Login required | Manage film orders |
 | `/customers` | Login required | Manage customers |
 | `/tracking` | Login required | Order status lookup |

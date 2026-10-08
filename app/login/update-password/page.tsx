@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -16,6 +17,24 @@ export default function UpdatePasswordPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [sessionState, setSessionState] = useState<"checking" | "ready" | "missing">("checking");
+
+  useEffect(() => {
+    const supabase = createClient();
+    let cancelled = false;
+    void supabase.auth.getSession().then(async ({ data }) => {
+      if (!data.session) {
+        if (!cancelled) setSessionState("missing");
+        return;
+      }
+      const { data: userData, error: userError } = await supabase.auth.getUser();
+      if (cancelled) return;
+      setSessionState(userData.user && !userError ? "ready" : "missing");
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,7 +55,11 @@ export default function UpdatePasswordPage() {
     setLoading(false);
 
     if (error) {
-      setError(error.message);
+      setError(
+        error.message === "Auth session missing!"
+          ? "This reset link is no longer active. Request a new one from the sign-in page."
+          : error.message,
+      );
       return;
     }
 
@@ -64,6 +87,22 @@ export default function UpdatePasswordPage() {
               <div className="flex items-start gap-2 p-3 rounded-lg bg-emerald-50 border border-emerald-200">
                 <CheckCircle className="w-4 h-4 text-emerald-600 mt-0.5 flex-shrink-0" />
                 <p className="text-sm text-emerald-700">Password updated! Redirecting to dashboard...</p>
+              </div>
+            ) : sessionState === "checking" ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="w-5 h-5 animate-spin text-amber-500" />
+              </div>
+            ) : sessionState === "missing" ? (
+              <div className="space-y-4">
+                <div className="flex items-start gap-2 p-3 rounded-lg bg-red-50 border border-red-200">
+                  <AlertCircle className="w-4 h-4 text-red-600 mt-0.5 flex-shrink-0" />
+                  <p className="text-sm text-red-700">
+                    This reset link is invalid or has expired. Request a new one and open it on this device.
+                  </p>
+                </div>
+                <Link href="/login" className="block text-center text-sm text-amber-700 hover:text-amber-800">
+                  Back to sign in
+                </Link>
               </div>
             ) : (
               <form onSubmit={handleSubmit} className="space-y-4">
