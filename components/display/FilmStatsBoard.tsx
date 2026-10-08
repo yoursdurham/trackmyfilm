@@ -51,10 +51,10 @@ export default function FilmStatsBoard({ data }: { data: Record<string, unknown>
   return (
     <div className="flex min-h-0 w-full flex-1 flex-col justify-between py-[0.6vh]">
       <section data-stat="rolls-processing" className="border-t border-[var(--accent-purple)]/40 pt-[1.6vh]">
-        <Kicker>In process</Kicker>
+        <Kicker>Rolls in process</Kicker>
         <Figure value={countLabel(data.rollsProcessing)} featured />
         <p className="mt-[0.8vh] text-[clamp(0.95rem,1.45vh,1.7rem)] text-[var(--text-muted)]">
-          Scan orders in house or at the lab
+          Scan rolls in house or at the lab
         </p>
       </section>
 
