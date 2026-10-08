@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   DISPLAY_ONLINE_WINDOW_MS,
   DISPLAY_PRIORITY,
+  displayBuildId,
   isDisplayOnline,
   publicPayloadForDisplay,
   resolveDisplayState,
@@ -39,7 +40,7 @@ describe("resolveDisplayState", () => {
     const result = resolve();
     expect(result).toMatchObject({
       mode: "idle",
-      theme: "yours-clean",
+      theme: "crt-green",
       refreshSeconds: 30,
       priority: DISPLAY_PRIORITY.playlistOrDefault,
       data: {},
@@ -202,6 +203,7 @@ describe("resolveDisplayState", () => {
     });
 
     expect(result.mode).toBe("film_stats");
+    expect(result.theme).toBe("yours-clean");
     expect(result.data).toEqual({
       rollsProcessing: 8,
       receivedToday: 2,
@@ -224,7 +226,7 @@ describe("resolveDisplayState", () => {
 });
 
 describe("toPublicDisplayPayload", () => {
-  it("returns only mode, theme, refreshSeconds, and whitelisted data", () => {
+  it("returns mode, theme, refreshSeconds, buildId, and whitelisted data", () => {
     const dirty = {
       mode: "film_stats",
       theme: "yours-clean",
@@ -245,11 +247,12 @@ describe("toPublicDisplayPayload", () => {
     };
     const payload = toPublicDisplayPayload(dirty);
 
-    expect(Object.keys(payload).sort()).toEqual(["data", "mode", "refreshSeconds", "theme"]);
+    expect(Object.keys(payload).sort()).toEqual(["buildId", "data", "mode", "refreshSeconds", "theme"]);
     expect(payload).toEqual({
       mode: "film_stats",
       theme: "yours-clean",
       refreshSeconds: 30,
+      buildId: displayBuildId(),
       data: {
         rollsProcessing: 4,
         nextLabRun: "Friday 12:00 PM",
@@ -280,8 +283,9 @@ describe("toPublicDisplayPayload", () => {
 
     expect(payload).toEqual({
       mode: "custom_message",
-      theme: "yours-clean",
+      theme: "crt-green",
       refreshSeconds: 30,
+      buildId: displayBuildId(),
       data: { message: "Hello there" },
     });
     expect(JSON.stringify(payload)).not.toMatch(/a@b.com|555|secret|lab@|jessica@|180/);

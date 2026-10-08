@@ -153,6 +153,8 @@ export interface DisplayPayload {
   mode: string;
   theme: string;
   refreshSeconds: number;
+  /** Deployment that produced this payload. The player reloads when it changes. */
+  buildId: string;
   data: Record<string, unknown>;
 }
 
@@ -163,6 +165,25 @@ export interface ResolvedDisplay extends DisplayPayload {
 export interface HeartbeatClient {
   appVersion: string | null;
   userAgent: string | null;
+}
+
+/** Idle, a custom message, and studio booking states use the CRT screen. Film stats stay yours-clean. */
+const CRT_DEFAULT_MODES = new Set([
+  "idle",
+  "custom_message",
+  "studio_active",
+  "studio_welcome",
+  "studio_upcoming",
+  "studio_ending_soon",
+  "film_menu",
+]);
+
+export function displayUsesCrtTheme(mode: string): boolean {
+  return CRT_DEFAULT_MODES.has(mode);
+}
+
+export function isKnownDisplayMode(mode: string): boolean {
+  return Object.prototype.hasOwnProperty.call(DATA_KEYS_BY_MODE, mode);
 }
 
 const DATA_KEYS_BY_MODE: Record<string, readonly string[]> = {
@@ -264,6 +285,61 @@ function themeOf(theme: string | null | undefined): string {
   return trimmed || DISPLAY_THEME;
 }
 
+function themeForMode(mode: string, stored: string | null | undefined): string {
+  if (displayUsesCrtTheme(mode)) return CRT_GREEN_THEME;
+  return themeOf(stored);
+}
+
+export const DISPLAY_DEV_BUILD_ID = "dev";
+/** One automatic refresh every few minutes, so a stuck bundle cannot reload in a loop. */
+export const DISPLAY_RELOAD_COOLDOWN_MS = 3 * 60 * 1000;
+export const DISPLAY_RELOAD_STORAGE_KEY = "tmf-display-reload-at";
+
+function cleanBuildId(value: string | undefined): string {
+  if (!value) return "";
+  return value.trim().replace(/[^\w.-]/g, "").slice(0, 80);
+}
+
+/** Vercel commit or deployment id, or a stable dev constant when neither is set. */
+export function displayBuildId(env?: {
+  VERCEL_GIT_COMMIT_SHA?: string;
+  VERCEL_DEPLOYMENT_ID?: string;
+}): string {
+  const source = env ?? {
+    VERCEL_GIT_COMMIT_SHA: process.env.VERCEL_GIT_COMMIT_SHA,
+    VERCEL_DEPLOYMENT_ID: process.env.VERCEL_DEPLOYMENT_ID,
+  };
+  return cleanBuildId(source.VERCEL_GIT_COMMIT_SHA)
+    || cleanBuildId(source.VERCEL_DEPLOYMENT_ID)
+    || DISPLAY_DEV_BUILD_ID;
+}
+
+export function payloadBuildId(value: unknown): string {
+  return cleanBuildId(typeof value === "string" ? value : "") || displayBuildId();
+}
+
+/**
+ * Reload when the server was deployed since this page loaded, or when the
+ * payload mode is newer than this bundle. A recent reload blocks another.
+ */
+export function displayNeedsReload(input: {
+  loadedBuildId: string;
+  payloadBuildId?: string | null;
+  mode: string;
+  now: number;
+  lastReloadAt?: number | null;
+}): boolean {
+  const incoming = cleanBuildId(input.payloadBuildId ?? "");
+  const buildChanged = incoming.length > 0 && incoming !== input.loadedBuildId;
+  const unknownMode = !isKnownDisplayMode(input.mode);
+  if (!buildChanged && !unknownMode) return false;
+  const last = input.lastReloadAt;
+  if (typeof last === "number" && Number.isFinite(last) && input.now - last < DISPLAY_RELOAD_COOLDOWN_MS) {
+    return false;
+  }
+  return true;
+}
+
 function dataForMode(
   mode: string,
   input: DisplayResolveInput,
@@ -314,7 +390,6 @@ function activePlaylistItem(playlist: PlaylistInput | null | undefined): Playlis
 }
 
 export function resolveDisplayState(input: DisplayResolveInput): ResolvedDisplay {
-  const theme = themeOf(input.display.theme);
   const seconds = clampRefreshSeconds(input.display.refresh_seconds);
   // Reserved for the studio-window classifier. Phase 1 callers pass the row only.
   void input.now;
@@ -322,8 +397,9 @@ export function resolveDisplayState(input: DisplayResolveInput): ResolvedDisplay
   if (input.display.is_enabled === false) {
     return {
       mode: "idle",
-      theme,
+      theme: CRT_GREEN_THEME,
       refreshSeconds: seconds,
+      buildId: displayBuildId(),
       data: {},
       priority: DISPLAY_PRIORITY.playlistOrDefault,
     };
@@ -395,8 +471,9 @@ export function resolveDisplayState(input: DisplayResolveInput): ResolvedDisplay
 
   return {
     mode: winner.mode,
-    theme: winner.mode === "film_menu" ? CRT_GREEN_THEME : theme,
+    theme: themeForMode(winner.mode, input.display.theme),
     refreshSeconds: seconds,
+    buildId: displayBuildId(),
     data: winner.data,
     priority: winner.priority,
   };
@@ -407,6 +484,7 @@ export function toPublicDisplayPayload(resolved: {
   mode?: unknown;
   theme?: unknown;
   refreshSeconds?: unknown;
+  buildId?: unknown;
   data?: unknown;
 }): DisplayPayload {
   const mode = typeof resolved.mode === "string" && resolved.mode.trim() ? resolved.mode.trim() : "idle";
@@ -444,12 +522,11 @@ export function toPublicDisplayPayload(resolved: {
   }
   return {
     mode,
-    theme: mode === "film_menu"
-      ? CRT_GREEN_THEME
-      : themeOf(typeof resolved.theme === "string" ? resolved.theme : null),
+    theme: themeForMode(mode, typeof resolved.theme === "string" ? resolved.theme : null),
     refreshSeconds: clampRefreshSeconds(
       typeof resolved.refreshSeconds === "number" ? resolved.refreshSeconds : null,
     ),
+    buildId: payloadBuildId(resolved.buildId),
     data,
   };
 }
@@ -485,6 +562,7 @@ export function parseHeartbeatClient(body: unknown, userAgent: string | null): H
 export function isDisplayPayload(value: unknown): value is DisplayPayload {
   if (!value || typeof value !== "object") return false;
   const record = value as Record<string, unknown>;
+  if ("buildId" in record && typeof record.buildId !== "string") return false;
   return typeof record.mode === "string"
     && typeof record.theme === "string"
     && typeof record.refreshSeconds === "number"

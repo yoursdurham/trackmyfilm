@@ -1,7 +1,7 @@
 import DisplayPlayer from "@/components/display/DisplayPlayer";
 import { getDisplayBySlug } from "@/lib/db";
 import { publicPayloadWithFilm } from "@/lib/display-screen";
-import { isDisplaySlug, type DisplayPayload } from "@/lib/display";
+import { displayBuildId, isDisplaySlug, type DisplayPayload } from "@/lib/display";
 
 export const dynamic = "force-dynamic";
 
@@ -30,6 +30,7 @@ export default async function DisplayPage({
     <DisplayPlayer
       slug={slug}
       initial={initial}
+      loadedBuildId={displayBuildId()}
       preview={preview === "1"}
     />
   );
