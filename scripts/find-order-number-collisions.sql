@@ -11,6 +11,7 @@
 --
 -- An empty result means no stored pair currently collides.
 -- A row here is a pair that already slipped in. Do not merge those rows from this script.
+-- Run one statement at a time so the SQL editor shows that result.
 
 -- Film orders that collide with each other.
 with keyed as (
