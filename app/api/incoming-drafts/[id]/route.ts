@@ -2,7 +2,8 @@
  * PATCH /api/incoming-drafts/:id
  * Logged-in staff only.
  *   { status: "accepted" } marks the draft accepted. Does not create a film order or send email.
- *   { status: "dismissed" } hard-deletes the row so the Squarespace order can be imported again.
+ *   { status: "dismissed" } hard-deletes the row. A later Check Squarespace can import
+ *   that order again when it was placed in the last 7 days.
  *
  * DELETE /api/incoming-drafts/:id
  * Logged-in staff only. Hard-deletes the row in any status. Does not create or delete a film order.

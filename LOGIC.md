@@ -22,7 +22,7 @@ The main page. Every film order appears as a card.
 - Filter orders by status using the tabs at the top
 - Search by customer name or order number
 - Click **New Drop-off** to log a new order
-- **Pending Intake** lists Squarespace orders that have been imported but not received yet. No confirmation email goes out at import. **Check Squarespace** pulls recent store orders and adds film-processing ones that are not already in the system. In-person Point of Sale orders are skipped. `01050` and `1050` count as the same order number. When the film is in hand, click **Approve & Receive** (leave “Send confirmation email” checked unless you want to skip it). That marks the order Received by Yours and sends the usual email. **Dismiss** deletes that intake row so the same Squarespace order can be imported again. Deleting a film order also deletes a matching intake row. Edit first if a detail needs correcting.
+- **Pending Intake** lists Squarespace orders that have been imported but not received yet. No confirmation email goes out at import. **Check Squarespace** pulls store orders placed in the last 7 days and adds film-processing ones that are not already in the system. An order only counts if it was placed in those 7 days, not merely edited or fulfilled then. In-person Point of Sale orders are skipped. `01050` and `1050` count as the same order number. When the film is in hand, click **Approve & Receive** (leave “Send confirmation email” checked unless you want to skip it). That marks the order Received by Yours and sends the usual email. **Dismiss** deletes that intake row. A later check can import that Squarespace order again when it was placed in the last 7 days. Deleting a film order also deletes a matching intake row. Edit first if a detail needs correcting. Dismiss and delete do not remove other drafts or film orders.
 - Click **Update Status** on any card to advance the order
 
 ### 2. Customers (`/customers`)
@@ -282,7 +282,7 @@ All of these must be set in **Vercel → Project → Settings → Environment Va
 
 1. In **Supabase Dashboard → SQL Editor → New Query**, run `supabase/migrations/015_incoming_squarespace_drafts.sql`, then `supabase/migrations/016_hard_delete_intake_rows.sql`.
 2. Set `SQUARESPACE_INTAKE_SECRET` in Vercel (and in local `.env` if you are testing the assistant).
-3. The assistant creates Pending Intake items only. Approve & Receive is what creates the real order and sends the drop-off email. **Check Squarespace** can also create Pending Intake items from the Squarespace Orders API when `SQUARESPACE_API_KEY` is set. Dismiss deletes the intake row. Deleting a film order deletes a matching intake row. Hand-entered drop-offs are unchanged.
+3. The assistant creates Pending Intake items only. Approve & Receive is what creates the real order and sends the drop-off email. **Check Squarespace** can also create Pending Intake items from the Squarespace Orders API when `SQUARESPACE_API_KEY` is set. It only brings in orders placed in the last 7 days. Dismiss deletes the intake row. Deleting a film order deletes a matching intake row. Hand-entered drop-offs are unchanged. Already-imported drafts and film orders are left in place.
 
 ### Custom Domain
 - Vercel: `trackmyfilm.com` — A record pointing to `76.76.21.21`, CNAME `www` → `cname.vercel-dns.com`

@@ -16,8 +16,13 @@ import type { RollDetail } from "./types";
 export const SQUARESPACE_API_KEY_ENV = "SQUARESPACE_API_KEY";
 export const SQUARESPACE_ORDERS_ENDPOINT = "https://api.squarespace.com/1.0/commerce/orders";
 export const SQUARESPACE_USER_AGENT = "TrackMyFilm (trackmyfilm.com)";
-/** How far back Check Squarespace looks, by modifiedOn. */
-export const SQUARESPACE_LOOKBACK_DAYS = 60;
+/**
+ * How far back Check Squarespace looks.
+ * The Orders API window is modifiedOn (modifiedAfter / modifiedBefore).
+ * Intake also requires createdOn within this same span, so an older order
+ * that was only edited or fulfilled recently is not turned into a draft.
+ */
+export const SQUARESPACE_LOOKBACK_DAYS = 7;
 export const SQUARESPACE_MAX_PAGES = 20;
 
 const MISSING_KEY_MESSAGE =
@@ -87,9 +92,13 @@ export function buildSquarespaceOrdersUrl(page: {
   return url.toString();
 }
 
+export function squarespaceLookbackMs(): number {
+  return SQUARESPACE_LOOKBACK_DAYS * 24 * 60 * 60 * 1000;
+}
+
 export function squarespaceLookbackWindow(now: Date): { modifiedAfter: string; modifiedBefore: string } {
   const modifiedBefore = now.toISOString();
-  const after = new Date(now.getTime() - SQUARESPACE_LOOKBACK_DAYS * 24 * 60 * 60 * 1000);
+  const after = new Date(now.getTime() - squarespaceLookbackMs());
   return { modifiedAfter: after.toISOString(), modifiedBefore };
 }
 
@@ -330,6 +339,57 @@ function orderNumberFrom(order: Record<string, unknown>): string | undefined {
   const raw = readString(order.orderNumber);
   const trimmed = raw?.trim();
   return trimmed || undefined;
+}
+
+/**
+ * createdOn must be a date string, same shape already used for the drop-off
+ * date (YYYY-MM-DD, optionally with a time). Missing or unreadable values
+ * are not a timestamp.
+ */
+export function parseSquarespaceCreatedOn(value: unknown): Date | null {
+  const raw = readString(value);
+  if (!raw) return null;
+  const trimmed = raw.trim();
+  if (!/^\d{4}-\d{2}-\d{2}/.test(trimmed)) return null;
+  const createdOn = new Date(trimmed);
+  if (Number.isNaN(createdOn.getTime())) return null;
+  return createdOn;
+}
+
+/**
+ * Keep orders placed on or after now minus the lookback. The API already
+ * limited the page to recently modified orders; this drops ones that were
+ * only modified inside the window. Orders with no usable createdOn are
+ * reported like other bad Squarespace data and are not imported.
+ * Nothing already stored is deleted or updated.
+ */
+export function selectSquarespaceOrdersForIntake(
+  orders: unknown[],
+  now: Date,
+): { orders: unknown[]; invalid: SquarespaceCheckError[] } {
+  const cutoff = now.getTime() - squarespaceLookbackMs();
+  const eligible: unknown[] = [];
+  const invalid: SquarespaceCheckError[] = [];
+
+  for (const order of orders) {
+    const record = asRecord(order);
+    if (!record) {
+      eligible.push(order);
+      continue;
+    }
+    const createdOn = parseSquarespaceCreatedOn(record.createdOn);
+    if (!createdOn) {
+      invalid.push({
+        orderNumber: orderNumberFrom(record),
+        message: "Squarespace order is missing a valid createdOn date",
+      });
+      continue;
+    }
+    if (createdOn.getTime() < cutoff) continue;
+    eligible.push(order);
+  }
+
+  return { orders: eligible, invalid };
 }
 
 function mapFilmLine(line: Record<string, unknown>, index: number):
