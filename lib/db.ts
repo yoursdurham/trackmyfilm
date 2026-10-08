@@ -15,7 +15,14 @@ import {
   PENDING_INTAKE_STATUS,
 } from "./incoming-drafts";
 import { buildCustomerStatsMap, computeCustomerStats, sortCustomersByLatestOrder } from "./customer-stats";
-import { normalizeOrderNumber, orderNumberMatchPattern, preferStoredOrderNumber } from "./validation";
+import {
+  emailsMatchExact,
+  exactEmailIlikePattern,
+  normalizeEmail,
+  normalizeOrderNumber,
+  orderNumberMatchPattern,
+  preferStoredOrderNumber,
+} from "./validation";
 
 type CustomerInsert = Omit<Customer, "id" | "created_at">;
 
@@ -81,16 +88,20 @@ export async function getOrderByNumberAndEmail(
   orderNumber: string,
   email: string
 ): Promise<FilmOrder | null> {
-  if (!orderNumberLookup(orderNumber)) return null;
+  const normalizedEmail = normalizeEmail(email);
+  if (!orderNumberLookup(orderNumber) || !normalizedEmail) return null;
   const { data, error } = await getSupabase()
     .from("film_orders")
     .select("*")
     .regexIMatch("order_number", orderNumberMatchPattern(orderNumber))
-    .ilike("customer_email", email)
+    .ilike("customer_email", exactEmailIlikePattern(normalizedEmail))
     .order("created_at", { ascending: false })
     .limit(ORDER_NUMBER_MATCH_LIMIT);
   if (error) throw new Error(error.message);
-  return preferStoredOrderNumber((data ?? []) as FilmOrder[], orderNumber, (row) => row.order_number);
+  const matches = ((data ?? []) as FilmOrder[]).filter((row) =>
+    emailsMatchExact(row.customer_email, normalizedEmail)
+  );
+  return preferStoredOrderNumber(matches, orderNumber, (row) => row.order_number);
 }
 
 export async function getOrdersByCustomerId(customerId: string): Promise<FilmOrder[]> {
@@ -373,18 +384,22 @@ export async function getCustomerProfile(id: string) {
 }
 
 export async function getCustomerByEmail(email: string, userId?: string | null): Promise<Customer | null> {
+  const normalized = normalizeEmail(email);
+  if (!normalized) return null;
+
   let query = getSupabase()
     .from("customers")
     .select("*")
-    .ilike("email", email);
+    .ilike("email", exactEmailIlikePattern(normalized));
 
   if (userId) {
     query = query.eq("user_id", userId);
   }
 
-  const { data, error } = await query.maybeSingle();
+  const { data, error } = await query.limit(20);
   if (error) throw new Error(error.message);
-  return data as Customer | null;
+  const matches = ((data ?? []) as Customer[]).filter((row) => emailsMatchExact(row.email, normalized));
+  return matches[0] ?? null;
 }
 
 export async function getCustomerByNormalizedName(normalizedName: string): Promise<Customer[]> {

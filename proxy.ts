@@ -1,8 +1,9 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { PASSWORD_UPDATE_PATH } from "@/lib/auth-redirect";
+import { isStaffEmail, isStaffPath } from "@/lib/staff-auth";
 
-const PROTECTED = ["/dashboard", "/customers", "/numbers", "/displays"];
+const NOT_STAFF_ERROR = "not-staff";
 
 function requestHasAuthHandoff(url: URL) {
   return url.searchParams.has("code")
@@ -12,6 +13,7 @@ function requestHasAuthHandoff(url: URL) {
 
 export async function proxy(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
+  const authCookies: { name: string; value: string; options?: Parameters<NextResponse["cookies"]["set"]>[2] }[] = [];
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -22,15 +24,29 @@ export async function proxy(request: NextRequest) {
           return request.cookies.getAll();
         },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
+          cookiesToSet.forEach(({ name, value, options }) => {
+            request.cookies.set(name, value);
+            const index = authCookies.findIndex((cookie) => cookie.name === name);
+            const next = { name, value, options };
+            if (index >= 0) authCookies[index] = next;
+            else authCookies.push(next);
+          });
           supabaseResponse = NextResponse.next({ request });
-          cookiesToSet.forEach(({ name, value, options }) =>
+          authCookies.forEach(({ name, value, options }) =>
             supabaseResponse.cookies.set(name, value, options)
           );
         },
       },
     }
   );
+
+  function redirectKeepingAuthCookies(url: URL) {
+    const redirect = NextResponse.redirect(url);
+    authCookies.forEach(({ name, value, options }) => {
+      redirect.cookies.set(name, value, options);
+    });
+    return redirect;
+  }
 
   // Refresh session — required for SSR auth to stay alive
   const { data: { user } } = await supabase.auth.getUser();
@@ -45,14 +61,25 @@ export async function proxy(request: NextRequest) {
     if (!confirmUrl.searchParams.get("next")) {
       confirmUrl.searchParams.set("next", PASSWORD_UPDATE_PATH);
     }
-    const redirect = NextResponse.redirect(confirmUrl);
-    supabaseResponse.cookies.getAll().forEach((cookie) => {
-      redirect.cookies.set(cookie);
-    });
-    return redirect;
+    return redirectKeepingAuthCookies(confirmUrl);
   }
 
-  const isProtected = PROTECTED.some((p) => path === p || path.startsWith(p + "/"));
+  const isProtected = isStaffPath(path);
+  const staff = user ? isStaffEmail(user.email) : false;
+
+  // Signed-in account that is not on STAFF_EMAILS. Sign them out so the
+  // session cannot be reused, and tell them why on the login page.
+  if (user && !staff && (isProtected || path === "/login")) {
+    await supabase.auth.signOut();
+    if (path === "/login" && request.nextUrl.searchParams.get("error") === NOT_STAFF_ERROR) {
+      return supabaseResponse;
+    }
+    const loginUrl = request.nextUrl.clone();
+    loginUrl.pathname = "/login";
+    loginUrl.search = "";
+    loginUrl.searchParams.set("error", NOT_STAFF_ERROR);
+    return redirectKeepingAuthCookies(loginUrl);
+  }
 
   // Unauthenticated user hitting a protected route → send to login
   if (isProtected && !user) {
@@ -62,8 +89,8 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  // Authenticated user hitting /login → send to dashboard
-  if (path === "/login" && user) {
+  // Authenticated staff hitting /login → send to dashboard
+  if (path === "/login" && user && staff) {
     const dashboardUrl = request.nextUrl.clone();
     dashboardUrl.pathname = "/dashboard";
     return NextResponse.redirect(dashboardUrl);

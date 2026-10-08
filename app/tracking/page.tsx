@@ -22,10 +22,8 @@ import Image from "next/image";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import FilmProcessBadge from "@/components/FilmProcessBadge";
-import { isProcessOnlyOrder } from "@/lib/order-service";
-import { getPartialScanProgress, isMixedScanOrder } from "@/lib/scan-batch";
-import { orderNoteForCustomerDisplay } from "@/lib/tracking-public";
-import type { FilmOrder, OrderStatus, StatusHistoryEntry } from "@/lib/types";
+import { orderNoteForCustomerDisplay, type PublicTrackingOrder } from "@/lib/tracking-public";
+import type { OrderStatus, StatusHistoryEntry } from "@/lib/types";
 import RecoverySessionRedirect from "@/components/RecoverySessionRedirect";
 
 type StatusStep = {
@@ -37,14 +35,13 @@ type StatusStep = {
   activeLine: string;
 };
 
-type CommittedSearch = {
-  term: string;
-  type: "order" | "email";
-};
+type CommittedSearch =
+  | { type: "order"; orderNumber: string; email: string }
+  | { type: "email"; email: string };
 
 type TrackingResult = {
   customerName: string | null;
-  orders: FilmOrder[];
+  orders: PublicTrackingOrder[];
 };
 
 const RESEND_LINK_COOLDOWN_SECONDS = 20;
@@ -181,11 +178,14 @@ function OrderTimeline({
   );
 }
 
+const RESEND_LINK_FALLBACK =
+  "If this order is ready, we'll email the download link. If you already requested one, please try again later.";
+
 async function fetchTrackedOrders(search: CommittedSearch): Promise<TrackingResult> {
   const param =
     search.type === "order"
-      ? `order_number=${encodeURIComponent(search.term)}`
-      : `email=${encodeURIComponent(search.term)}`;
+      ? `order_number=${encodeURIComponent(search.orderNumber)}&email=${encodeURIComponent(search.email)}`
+      : `email=${encodeURIComponent(search.email)}`;
 
   const response = await fetch(`/api/orders/track?${param}`);
   if (!response.ok) {
@@ -195,8 +195,8 @@ async function fetchTrackedOrders(search: CommittedSearch): Promise<TrackingResu
   const data = await response.json();
 
   if (search.type === "email") {
-    const customerName = data.customer
-      ? `${data.customer.first_name} ${data.customer.last_name ?? ""}`.trim()
+    const customerName = typeof data.first_name === "string" && data.first_name.trim()
+      ? data.first_name.trim()
       : null;
 
     return {
@@ -213,34 +213,25 @@ async function fetchTrackedOrders(search: CommittedSearch): Promise<TrackingResu
 
 function TrackingContent() {
   const searchParams = useSearchParams();
-  const [searchTerm, setSearchTerm] = useState("");
-  const [committed, setCommitted] = useState<CommittedSearch | null>(null);
+  const urlOrder = (searchParams.get("order") || searchParams.get("order_number") || "").trim();
+  const urlEmail = (searchParams.get("email") || "").trim();
+  const urlSearch: CommittedSearch | null = urlOrder && urlEmail
+    ? { type: "order", orderNumber: urlOrder, email: urlEmail }
+    : urlEmail
+      ? { type: "email", email: urlEmail }
+      : null;
+  const [orderDraft, setOrderDraft] = useState<string | null>(null);
+  const [emailDraft, setEmailDraft] = useState<string | null>(null);
+  const [manualSearch, setManualSearch] = useState<CommittedSearch | "cleared" | null>(null);
   const [resendingOrderId, setResendingOrderId] = useState<string | null>(null);
   const [resendCooldowns, setResendCooldowns] = useState<Record<string, number>>({});
   const [resendMessages, setResendMessages] = useState<Record<string, string>>({});
-    useEffect(() => {
-    const orderFromUrl = searchParams.get("order");
-    const emailFromUrl = searchParams.get("email");
+  const orderTerm = orderDraft ?? urlOrder;
+  const emailTerm = emailDraft ?? urlEmail;
+  const committed = manualSearch === "cleared" ? null : (manualSearch ?? urlSearch);
 
-    if (orderFromUrl) {
-      setSearchTerm(orderFromUrl);
-      setCommitted({
-        term: orderFromUrl,
-        type: "order",
-      });
-      return;
-    }
-
-    if (emailFromUrl) {
-      setSearchTerm(emailFromUrl);
-      setCommitted({
-        term: emailFromUrl,
-        type: "email",
-      });
-    }
-  }, [searchParams]);
-
-  const normalizedSearchTerm = searchTerm.trim();
+  const normalizedOrderTerm = orderTerm.trim();
+  const normalizedEmailTerm = emailTerm.trim();
   const hasSearched = committed !== null;
 
   const {
@@ -248,7 +239,7 @@ function TrackingContent() {
     isLoading,
     isError,
   } = useQuery<TrackingResult>({
-    queryKey: ["trackOrders", committed?.term, committed?.type],
+    queryKey: ["trackOrders", committed],
     queryFn: () => fetchTrackedOrders(committed as CommittedSearch),
     enabled: committed !== null,
   });
@@ -273,32 +264,48 @@ function TrackingContent() {
     return () => window.clearInterval(timer);
   }, [resendCooldowns]);
 
-  const handleSearch = (type: "order" | "email") => {
-    if (!normalizedSearchTerm) return;
-    setCommitted({ term: normalizedSearchTerm, type });
+  const handleTrackOrder = () => {
+    if (!normalizedOrderTerm || !normalizedEmailTerm) return;
+    setManualSearch({
+      type: "order",
+      orderNumber: normalizedOrderTerm,
+      email: normalizedEmailTerm,
+    });
+  };
+
+  const handleTrackEmail = () => {
+    if (!normalizedEmailTerm) return;
+    setManualSearch({ type: "email", email: normalizedEmailTerm });
   };
 
   const handleEnterKey = (event: React.KeyboardEvent<HTMLInputElement>) => {
-    if (event.key !== "Enter" || !normalizedSearchTerm) return;
-    handleSearch(normalizedSearchTerm.includes("@") ? "email" : "order");
+    if (event.key !== "Enter") return;
+    if (normalizedOrderTerm && normalizedEmailTerm) {
+      handleTrackOrder();
+      return;
+    }
+    if (normalizedEmailTerm) handleTrackEmail();
   };
 
   const handleReset = () => {
-    setSearchTerm("");
-    setCommitted(null);
+    setOrderDraft("");
+    setEmailDraft("");
+    setManualSearch("cleared");
     setResendMessages({});
     setResendCooldowns({});
   };
 
-  const handleResendDownloadLink = async (order: FilmOrder) => {
+  const handleResendDownloadLink = async (order: PublicTrackingOrder) => {
     if ((resendCooldowns[order.id] ?? 0) > 0) return;
 
-    const email = order.customer_email || (committed?.type === "email" ? committed.term : "");
+    const email = committed?.email ?? "";
+    if (!email) return;
+
     setResendingOrderId(order.id);
     setResendMessages((current) => ({ ...current, [order.id]: "" }));
 
     try {
-      await fetch("/api/resend-link", {
+      const response = await fetch("/api/resend-link", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -308,8 +315,11 @@ function TrackingContent() {
           email,
         }),
       });
-
-      setResendMessages((current) => ({ ...current, [order.id]: "Link sent" }));
+      const body = await response.json().catch(() => null) as { message?: string } | null;
+      setResendMessages((current) => ({
+        ...current,
+        [order.id]: body?.message || RESEND_LINK_FALLBACK,
+      }));
       setResendCooldowns((current) => ({
         ...current,
         [order.id]: RESEND_LINK_COOLDOWN_SECONDS,
@@ -317,7 +327,7 @@ function TrackingContent() {
     } catch {
       setResendMessages((current) => ({
         ...current,
-        [order.id]: "Unable to send right now. Please try again soon.",
+        [order.id]: RESEND_LINK_FALLBACK,
       }));
     } finally {
       setResendingOrderId(null);
@@ -353,22 +363,37 @@ function TrackingContent() {
       <main className="mx-auto max-w-5xl px-4 pb-10 sm:px-6 lg:px-8">
         <Card className="mb-14 rounded-[24px] border border-[var(--border-soft)] bg-[var(--card-bg)] shadow-sm ring-0">
           <CardContent className="p-6 sm:p-8">
-            <div className="relative mb-4 w-full">
-              <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
-              <Input
-                placeholder="Enter order number or email..."
-                value={searchTerm}
-                onChange={(event) => setSearchTerm(event.target.value)}
-                onKeyDown={handleEnterKey}
-                className="h-12 rounded-xl border-[#E1DDD6] bg-[var(--card-bg)] pl-11 text-sm shadow-none ring-0 focus-visible:border-[#B19FBF] focus-visible:ring-2 focus-visible:ring-[#B19FBF]/20 sm:text-base"
-              />
+            <div className="mb-4 flex flex-col gap-3">
+              <div className="relative w-full">
+                <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
+                <Input
+                  aria-label="Order number"
+                  placeholder="Order number"
+                  value={orderTerm}
+                  onChange={(event) => setOrderDraft(event.target.value)}
+                  onKeyDown={handleEnterKey}
+                  className="h-12 rounded-xl border-[#E1DDD6] bg-[var(--card-bg)] pl-11 text-sm shadow-none ring-0 focus-visible:border-[#B19FBF] focus-visible:ring-2 focus-visible:ring-[#B19FBF]/20 sm:text-base"
+                />
+              </div>
+              <div className="relative w-full">
+                <Mail className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
+                <Input
+                  aria-label="Email address"
+                  type="email"
+                  placeholder="Email on the order"
+                  value={emailTerm}
+                  onChange={(event) => setEmailDraft(event.target.value)}
+                  onKeyDown={handleEnterKey}
+                  className="h-12 rounded-xl border-[#E1DDD6] bg-[var(--card-bg)] pl-11 text-sm shadow-none ring-0 focus-visible:border-[#B19FBF] focus-visible:ring-2 focus-visible:ring-[#B19FBF]/20 sm:text-base"
+                />
+              </div>
             </div>
 
             <div className="flex flex-col gap-3 sm:flex-row">
               <button
                 type="button"
-                onClick={() => handleSearch("order")}
-                disabled={!normalizedSearchTerm || isLoading}
+                onClick={handleTrackOrder}
+                disabled={!normalizedOrderTerm || !normalizedEmailTerm || isLoading}
                 className="flex flex-1 items-center justify-start gap-3 rounded-xl bg-[#B19FBF] px-4 py-4 text-left text-white transition-transform active:scale-[0.99] disabled:opacity-50 sm:justify-center sm:text-center"
               >
                 {isLoading ? (
@@ -381,8 +406,8 @@ function TrackingContent() {
 
               <button
                 type="button"
-                onClick={() => handleSearch("email")}
-                disabled={!normalizedSearchTerm || isLoading}
+                onClick={handleTrackEmail}
+                disabled={!normalizedEmailTerm || isLoading}
                 className="flex flex-1 items-center justify-start gap-3 rounded-xl bg-[#B19FBF] px-4 py-4 text-left text-white transition-transform active:scale-[0.99] disabled:opacity-50 sm:justify-center sm:text-center"
               >
                 {isLoading ? (
@@ -428,7 +453,7 @@ function TrackingContent() {
               <p className="text-slate-500">
                 {committed?.type === "email"
                   ? "No orders found for this email address"
-                  : "Order number not found. Please check and try again."}
+                  : "No orders found. Check the order number and email, then try again."}
               </p>
             </motion.div>
           ) : orders.length > 0 ? (
@@ -445,9 +470,8 @@ function TrackingContent() {
               ) : null}
 
               {orders.map((order) => {
-                const processOnlyOrder = isProcessOnlyOrder(order);
-                const mixedScanOrder = isMixedScanOrder(order);
-                const partialProgress = mixedScanOrder ? getPartialScanProgress(order) : [];
+                const processOnlyOrder = order.process_only;
+                const partialProgress = order.scan_progress;
                 const customerOrderNote = orderNoteForCustomerDisplay(order.notes);
 
                 return (
@@ -461,7 +485,9 @@ function TrackingContent() {
                         <h2 className="mb-1 text-xl font-bold text-slate-800">
                           Order #{order.order_number}
                         </h2>
-                        <p className="text-slate-600">{order.customer_name}</p>
+                        {order.first_name ? (
+                          <p className="text-slate-600">{order.first_name}</p>
+                        ) : null}
                       </div>
                       <div
                         className={`rounded-full px-4 py-2 text-sm font-medium ${getStatusBadgeClass(
@@ -478,7 +504,7 @@ function TrackingContent() {
                       processOnly={processOnlyOrder}
                     />
 
-                    {mixedScanOrder && order.status !== "Scans Sent" && partialProgress.some((p) => p.delivered || !p.delivered) ? (
+                    {partialProgress.length > 0 && order.status !== "Scans Sent" ? (
                       <div className="mt-6 rounded-lg border border-purple-100 bg-purple-50/60 px-4 py-3 text-sm text-slate-700">
                         <p className="mb-2 font-semibold text-purple-900">Scan delivery progress</p>
                         <ul className="space-y-1.5">
@@ -658,11 +684,7 @@ function TrackingContent() {
                         </button>
                         {resendMessages[order.id] ? (
                           <p
-                            className={`text-center text-sm font-medium ${
-                              resendMessages[order.id] === "Link sent"
-                                ? "text-[#5E8068]"
-                                : "text-red-500"
-                            }`}
+                            className="text-center text-sm font-medium text-slate-600"
                           >
                             {resendMessages[order.id]}
                           </p>

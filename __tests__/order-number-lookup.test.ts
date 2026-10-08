@@ -32,8 +32,7 @@ vi.mock("@/lib/db", () => ({
 }));
 
 import { GET as trackOrder } from "@/app/api/orders/track/route";
-import { POST as resendLink } from "@/app/api/resend-link/route";
-import { POST as createOrderRoute } from "@/app/api/orders/route";
+import { POST as resendLink, RESEND_LINK_MESSAGE, resetResendLinkStateForTests } from "@/app/api/resend-link/route";
 import { PATCH as updateOrderRoute } from "@/app/api/orders/[id]/route";
 
 const STORED = {
@@ -54,6 +53,7 @@ function matchesStored(orderNumber: string) {
 describe("order number lookups", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    resetResendLinkStateForTests();
     mockRequireAuth.mockResolvedValue({ id: "user-1" });
     mockGetOrderByNumber.mockImplementation(async (orderNumber: string) => {
       if (orderNumbersMatch(orderNumber, "1034")) return { ...STORED, order_number: "1034" };
@@ -68,18 +68,19 @@ describe("order number lookups", () => {
     mockGetOrderById.mockResolvedValue({ id: "order-1034", order_number: "1034" });
   });
 
-  it("tracks 01034 and 1034 to the same stored order", async () => {
-    const padded = await trackOrder(new Request("http://localhost/api/orders/track?order_number=01034"));
-    const plain = await trackOrder(new Request("http://localhost/api/orders/track?order_number=1034"));
-    const other = await trackOrder(new Request("http://localhost/api/orders/track?order_number=1035"));
+  it("tracks 01034 and 1034 to the same stored order when the email matches", async () => {
+    const padded = await trackOrder(new Request("http://localhost/api/orders/track?order_number=01034&email=ada@example.com"));
+    const plain = await trackOrder(new Request("http://localhost/api/orders/track?order_number=1034&email=ADA@example.com"));
+    const other = await trackOrder(new Request("http://localhost/api/orders/track?order_number=1035&email=ada@example.com"));
 
     expect(padded.status).toBe(200);
     expect(plain.status).toBe(200);
-    expect(await padded.json()).toMatchObject([{ order_number: "1034" }]);
+    expect(await padded.json()).toMatchObject([{ order_number: "1034", first_name: "Ada" }]);
     expect(await plain.json()).toMatchObject([{ order_number: "1034" }]);
     expect(await other.json()).toEqual([]);
-    expect(mockGetOrderByNumber).toHaveBeenCalledWith("01034");
-    expect(mockGetOrderByNumber).toHaveBeenCalledWith("1034");
+    expect(mockGetOrderByNumberAndEmail).toHaveBeenCalledWith("01034", "ada@example.com");
+    expect(mockGetOrderByNumberAndEmail).toHaveBeenCalledWith("1034", "ada@example.com");
+    expect(mockGetOrderByNumber).not.toHaveBeenCalled();
   });
 
   it("resends a link for either leading-zero form", async () => {
@@ -105,32 +106,86 @@ describe("order number lookups", () => {
     errorSpy.mockRestore();
   });
 
-  it("rejects a new order when the other leading-zero form already exists", async () => {
-    const padded = await createOrderRoute(new Request("http://localhost/api/orders", {
+  it("does not email a download link when the address is not an exact match", async () => {
+    process.env.RESEND_API_KEY = "test-key";
+    process.env.RESEND_TEMPLATE_SCANS_SENT = "tmpl";
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ id: "email-1" }), { status: 200 })
+    );
+
+    const wildcard = await resendLink(new Request("http://localhost/api/resend-link", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ order_number: "01034", customer_name: "Ada" }),
+      body: JSON.stringify({ orderNumber: "1034", email: "%" }),
     }));
-    const plain = await createOrderRoute(new Request("http://localhost/api/orders", {
+    const other = await resendLink(new Request("http://localhost/api/resend-link", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ order_number: "1037", customer_name: "Ada" }),
+      body: JSON.stringify({ orderNumber: "1034", email: "someone@example.com" }),
     }));
 
-    expect(padded.status).toBe(409);
-    expect(plain.status).toBe(409);
-    expect(mockCreateOrder).not.toHaveBeenCalled();
+    expect(await wildcard.json()).toEqual({ success: true, message: RESEND_LINK_MESSAGE });
+    expect(await other.json()).toEqual({ success: true, message: RESEND_LINK_MESSAGE });
+    expect(fetchSpy).not.toHaveBeenCalled();
+    fetchSpy.mockRestore();
   });
 
-  it("keeps the leading zero when creating an order number that is not taken", async () => {
-    mockGetOrderByNumber.mockResolvedValue(null);
-    const res = await createOrderRoute(new Request("http://localhost/api/orders", {
+  it("waits an hour between download-link emails and uses the same message when the order is missing", async () => {
+    process.env.RESEND_API_KEY = "test-key";
+    process.env.RESEND_TEMPLATE_SCANS_SENT = "tmpl";
+    mockGetOrderByNumberAndEmail.mockResolvedValue({
+      ...STORED,
+      last_emailed_at: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
+    });
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ id: "email-1" }), { status: 200 })
+    );
+
+    const cooled = await resendLink(new Request("http://localhost/api/resend-link", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ order_number: "01099", customer_name: "Ada" }),
+      body: JSON.stringify({ orderNumber: "1034", email: "ada@example.com" }),
     }));
-    expect(res.status).toBe(201);
-    expect(mockCreateOrder.mock.calls[0][0].order_number).toBe("01099");
+
+    mockGetOrderByNumberAndEmail.mockResolvedValue(null);
+    const missing = await resendLink(new Request("http://localhost/api/resend-link", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ orderNumber: "9999", email: "nope@example.com" }),
+    }));
+
+    expect(await cooled.json()).toEqual({ success: true, message: RESEND_LINK_MESSAGE });
+    expect(await missing.json()).toEqual({ success: true, message: RESEND_LINK_MESSAGE });
+    expect(fetchSpy).not.toHaveBeenCalled();
+    fetchSpy.mockRestore();
+  });
+
+  it("sends again once last_emailed_at is older than an hour", async () => {
+    process.env.RESEND_API_KEY = "test-key";
+    process.env.RESEND_TEMPLATE_SCANS_SENT = "tmpl";
+    mockGetOrderByNumberAndEmail.mockResolvedValue({
+      ...STORED,
+      customer_email: "Ada@Example.com",
+      last_emailed_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+    });
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ id: "email-1" }), { status: 200 })
+    );
+
+    const res = await resendLink(new Request("http://localhost/api/resend-link", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ orderNumber: "1034", email: "ada@example.com" }),
+    }));
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ success: true, message: RESEND_LINK_MESSAGE });
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(mockUpdateOrder).toHaveBeenCalledWith("order-1034", expect.objectContaining({
+      last_emailed_at: expect.any(String),
+      email_status: "sent",
+    }));
+    fetchSpy.mockRestore();
   });
 
   it("rejects an edit that collides with the other leading-zero form", async () => {

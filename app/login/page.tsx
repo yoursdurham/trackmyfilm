@@ -22,7 +22,9 @@ function LoginForm() {
   const [loading, setLoading] = useState(false);
   const resetLinkError = searchParams.get("error") === "reset"
     ? "That reset link is invalid or has expired. Request a new one."
-    : null;
+    : searchParams.get("error") === "not-staff"
+      ? "This account does not have staff access."
+      : null;
   const [error, setError] = useState<string | null>(resetLinkError);
   const [success, setSuccess] = useState<string | null>(null);
 

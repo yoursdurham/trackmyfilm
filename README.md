@@ -31,6 +31,12 @@ Required:
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 - `SUPABASE_SERVICE_ROLE_KEY`
 
+Staff access (set these in Vercel; do not prefix them with `NEXT_PUBLIC_`):
+- `STAFF_EMAILS` — comma-separated emails that may use the dashboard, customers, reports, numbers, and displays pages, and the staff APIs. Comparison is case-insensitive. When this is set, any other signed-in account is signed out and shown "This account does not have staff access." Staff API calls from those accounts return 403. When `STAFF_EMAILS` is missing or blank, any signed-in Supabase user is still treated as staff and a warning is logged, so deploying this change cannot lock the shop out before the list is added. Add it before relying on that protection.
+- `ADMIN_EMAILS` — comma-separated emails that may open `/numbers`, in addition to Supabase users whose `app_metadata.role` is `admin`. If `ADMIN_EMAILS` is unset, `NEXT_PUBLIC_ADMIN_EMAILS` is still read so an existing value keeps working. `user_metadata.role` is not used. `/numbers` stays closed to everyone else.
+
+`/display/*`, `GET /api/displays/[slug]`, and the display heartbeat stay public so the studio Pi does not need a login.
+
 Optional (needed for emails):
 - `RESEND_API_KEY` + three template IDs
 
@@ -87,7 +93,7 @@ Run both migration files in **Supabase Dashboard → SQL Editor**:
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) → redirects to login.
+Open [http://localhost:3000](http://localhost:3000) → redirects to the public tracking page.
 
 ---
 
@@ -97,11 +103,13 @@ Open [http://localhost:3000](http://localhost:3000) → redirects to login.
 |---|---|---|
 | `/login` | Public | Sign in |
 | `/login/update-password` | Public | Password reset (via email link) |
+| `/tracking` | Public | Order status lookup. An order number also needs the email on the order. Email-only lookup still lists that customer's orders. |
 | `/display/studio-vertical` | Public | Studio screen. The Pi opens this URL. |
-| `/displays` | Login required | Manage screens |
-| `/dashboard` | Login required | Manage film orders |
-| `/customers` | Login required | Manage customers |
-| `/tracking` | Login required | Order status lookup |
+| `/displays` | Staff | Manage screens |
+| `/dashboard` | Staff | Manage film orders |
+| `/customers` | Staff | Manage customers |
+| `/reports` | Staff | Shop reports |
+| `/numbers` | Admin | Revenue numbers |
 
 ## Scripts
 

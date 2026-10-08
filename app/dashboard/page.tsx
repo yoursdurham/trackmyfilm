@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { Suspense, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -57,20 +58,15 @@ function formatDisplayDate(date: string) {
   }).format(parsed);
 }
 
-export default function Dashboard() {
+function Dashboard() {
+  const searchParams = useSearchParams();
   const [activeFilter, setActiveFilter] = useState("all");
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchQuery, setSearchQuery] = useState(() => searchParams.get("search") ?? "");
   const [selectedTimeFrame, setSelectedTimeFrame] = useState<TimeFrameKey>("all");
   const [customStartDate, setCustomStartDate] = useState("");
   const [customEndDate, setCustomEndDate] = useState("");
   const [selectedOrderIds, setSelectedOrderIds] = useState<Set<string>>(new Set());
   const queryClient = useQueryClient();
-
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const initialSearch = params.get("search");
-    if (initialSearch) setSearchQuery(initialSearch);
-  }, []);
 
   const { data: orders = [], isLoading } = useQuery<FilmOrder[]>({
     queryKey: ["filmOrders"],
@@ -192,10 +188,11 @@ export default function Dashboard() {
 
   const isReceivedTab = activeFilter === ORDER_STATUS.RECEIVED_BY_YOURS;
   const showBulkSelection = isReceivedTab;
-
-  useEffect(() => {
+  const [selectionFilter, setSelectionFilter] = useState(activeFilter);
+  if (activeFilter !== selectionFilter) {
+    setSelectionFilter(activeFilter);
     if (!isReceivedTab) setSelectedOrderIds(new Set());
-  }, [isReceivedTab]);
+  }
 
   const visibleOrderIds = filteredOrders.map((order) => order.id);
   const allVisibleSelected = visibleOrderIds.length > 0 &&
@@ -385,5 +382,13 @@ export default function Dashboard() {
         />
       ) : null}
     </div>
+  );
+}
+
+export default function DashboardPage() {
+  return (
+    <Suspense fallback={null}>
+      <Dashboard />
+    </Suspense>
   );
 }

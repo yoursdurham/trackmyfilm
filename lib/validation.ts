@@ -84,6 +84,29 @@ export function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
+/**
+ * Exact match on the trimmed, lowercased email. `%` and `_` are literal
+ * characters, never LIKE wildcards.
+ */
+export function emailsMatchExact(
+  stored: string | null | undefined,
+  input: string | null | undefined
+): boolean {
+  const left = normalizeEmail(stored ?? "");
+  const right = normalizeEmail(input ?? "");
+  if (!left || !right) return false;
+  return left === right;
+}
+
+/**
+ * ILIKE pattern for one exact email. Backslash, `%`, and `_` are escaped so
+ * the pattern cannot match a different address. Callers still confirm with
+ * emailsMatchExact, which does not depend on the database escape rules.
+ */
+export function exactEmailIlikePattern(email: string): string {
+  return normalizeEmail(email).replace(/[\\%_]/g, (char) => `\\${char}`);
+}
+
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /**
