@@ -20,6 +20,13 @@ export const FILM_METRICS_CONFIG = {
   /** Rolling window for Received at Lab → Scans Sent, in exact 24-hour days. */
   turnaroundWindowDays: 30,
   /**
+   * Shared cutoff for every turnaround average: the studio screen, Reports,
+   * and a customer's average. A duration of this many exact 24-hour days or
+   * longer is left out. On the studio screen those rolls also do not count
+   * toward minimumTurnaroundSamples.
+   */
+  maxTurnaroundDays: 10,
+  /**
    * Below this many completed rolls on a side, that average is omitted
    * so one or two orders cannot flash a noisy number.
    */

@@ -1,7 +1,13 @@
 import { ORDER_STATUS } from "@/lib/constants";
+import { FILM_METRICS_CONFIG } from "@/lib/film-metrics-config";
 import type { FilmOrder, OrderStatus } from "@/lib/types";
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+/** True when a turnaround is too long to include in an average. */
+export function isTurnaroundOutlier(elapsedMs: number): boolean {
+  return elapsedMs >= FILM_METRICS_CONFIG.maxTurnaroundDays * MS_PER_DAY;
+}
 
 type OrderWithLegacyLabTimestamp = FilmOrder & {
   received_at_lab_at?: string | null;
@@ -80,6 +86,7 @@ function collectTurnaroundDays(
       const turnaroundDays = getTurnaroundDays(order);
       if (!scansSent || turnaroundDays === null) return null;
       if (!includeScansSent(scansSent)) return null;
+      if (isTurnaroundOutlier(turnaroundDays * MS_PER_DAY)) return null;
       return turnaroundDays;
     })
     .filter((days): days is number => days !== null);
