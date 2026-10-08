@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useState, type CSSProperties } from "react";
+import FilmDeparturesBoard from "@/components/display/FilmDeparturesBoard";
 import type { DisplayPayload } from "@/lib/display";
+import { sanitizeFilmDepartures } from "@/lib/film-departures";
 import { sanitizeFilmMenu, type FilmMenu, type FilmMenuNote } from "@/lib/film-menu";
 
 function scrollSeconds(menu: FilmMenu) {
@@ -251,6 +253,7 @@ export default function CrtGreenScreen({
   notice?: string | null;
 }) {
   const menu = payload.mode === "film_menu" ? sanitizeFilmMenu(payload.data.menu) : null;
+  const departures = payload.mode === "film_departures" ? sanitizeFilmDepartures(payload.data.departures) : null;
   const seconds = menu ? scrollSeconds(menu) : 140;
   const mode = notice ? "idle" : payload.mode;
 
@@ -265,7 +268,15 @@ export default function CrtGreenScreen({
       }}
     >
       <div className="crt-frame relative m-[2.2vh] flex flex-1 flex-col overflow-hidden rounded-[1.6vh] bg-[#020602] shadow-[inset_0_0_80px_rgba(0,0,0,0.92),inset_0_0_28px_rgba(124,255,107,0.08)]">
-        {menu ? (
+        {departures ? (
+          <FilmDeparturesBoard board={departures} />
+        ) : payload.mode === "film_departures" ? (
+          <div className="flex h-full items-center justify-center px-[8vw] text-center">
+            <p className="text-[clamp(1.6rem,2.4vh,3rem)] leading-snug tracking-[0.08em]">
+              {notice || "The departures board will be back in a moment."}
+            </p>
+          </div>
+        ) : menu ? (
           <div
             className="crt-scroll absolute inset-x-[5vw] top-[3.2vh]"
             style={{ "--crt-duration": `${seconds}s` } as CSSProperties}

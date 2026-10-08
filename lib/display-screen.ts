@@ -1,3 +1,4 @@
+import { getCachedFilmDepartures } from "@/lib/film-departures-cache";
 import { getCachedFilmMenu } from "@/lib/film-menu-cache";
 import { getCachedFilmMetrics } from "@/lib/film-metrics-cache";
 import {
@@ -6,6 +7,7 @@ import {
   type DisplayResolveInput,
   type StudioDisplayInput,
 } from "@/lib/display";
+import type { FilmDepartures } from "@/lib/film-departures";
 import type { FilmMenu } from "@/lib/film-menu";
 import type { FilmMetrics } from "@/lib/film-metrics";
 import { getCachedStudioAgenda } from "@/lib/studio-calendar-cache";
@@ -27,6 +29,10 @@ export function displayNeedsFilmMenu(display: DisplayResolveInput["display"]): b
   return winningMode(display) === "film_menu";
 }
 
+export function displayNeedsFilmDepartures(display: DisplayResolveInput["display"]): boolean {
+  return winningMode(display) === "film_departures";
+}
+
 /** Bookings can cover the default mode. A manual override already wins, so skip the fetch. */
 export function displayShowsStudioBookings(display: DisplayResolveInput["display"]): boolean {
   if (display.is_enabled === false) return false;
@@ -41,10 +47,12 @@ export async function publicPayloadWithFilm(
 ): Promise<DisplayPayload> {
   const needsMetrics = displayNeedsFilmMetrics(display);
   const needsMenu = displayNeedsFilmMenu(display);
+  const needsDepartures = displayNeedsFilmDepartures(display);
   const needsStudio = displayShowsStudioBookings(display);
 
   let film: FilmMetrics | null = null;
   let menu: FilmMenu | null = null;
+  let departures: FilmDepartures | null = null;
   let studio: StudioDisplayInput | null = null;
   if (needsMetrics) {
     try {
@@ -62,6 +70,14 @@ export async function publicPayloadWithFilm(
       console.error("[film-menu]", message);
     }
   }
+  if (needsDepartures) {
+    try {
+      departures = await getCachedFilmDepartures();
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      console.error("[film-departures]", message);
+    }
+  }
   if (needsStudio) {
     try {
       studio = (await getCachedStudioAgenda(new Date())).input;
@@ -69,10 +85,11 @@ export async function publicPayloadWithFilm(
       console.error("[studio-calendar] unavailable");
     }
   }
-  if (!needsMetrics && !needsMenu && !needsStudio) return publicPayloadForDisplay(display);
+  if (!needsMetrics && !needsMenu && !needsDepartures && !needsStudio) return publicPayloadForDisplay(display);
   return publicPayloadForDisplay(display, {
     ...(film ? { film } : {}),
     ...(menu ? { menu } : {}),
+    ...(departures ? { departures } : {}),
     ...(studio ? { studio } : {}),
   });
 }

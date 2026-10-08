@@ -216,6 +216,59 @@ describe("resolveDisplayState", () => {
     });
   });
 
+  it("shows the departures board on the crt theme and drops private fields", () => {
+    const result = resolve({
+      display: { ...display, mode: "film_departures" },
+      departures: {
+        rows: [{
+          name: "Justin Edwards",
+          rolls: 2,
+          location: "STUDIO",
+          status: "CHECKED IN",
+          since: "OCT 6",
+          email: "justin.edwards@example.com",
+          order_number: "TMF1042",
+        }],
+        people: 1,
+        studioRolls: 2,
+        labRolls: 0,
+        nextLabRun: "Friday 12:00 PM",
+        customer_email: "secret@example.com",
+      },
+    });
+    expect(result.mode).toBe("film_departures");
+    expect(result.theme).toBe("crt-green");
+    expect(result.priority).toBe(DISPLAY_PRIORITY.playlistOrDefault);
+    expect(result.data).toEqual({
+      departures: {
+        rows: [{ name: "JUSTIN E.", rolls: 2, location: "STUDIO", status: "CHECKED IN", since: "OCT 6" }],
+        people: 1,
+        studioRolls: 2,
+        labRolls: 0,
+        nextLabRun: "Friday 12:00 PM",
+      },
+    });
+    expect(JSON.stringify(result)).not.toMatch(/Edwards|example\.com|TMF/);
+  });
+
+  it("lets a studio welcome replace the departures board the same way it replaces film stats", () => {
+    const result = resolve({
+      display: { ...display, mode: "film_departures" },
+      studio: { welcome: session },
+      departures: {
+        rows: [{ name: "JUSTIN E.", rolls: 2, location: "LAB", status: "IN FLIGHT", since: "OCT 8" }],
+        people: 1,
+        studioRolls: 0,
+        labRolls: 2,
+        nextLabRun: "Friday 12:00 PM",
+      },
+    });
+    expect(result.mode).toBe("studio_welcome");
+    expect(result.priority).toBe(DISPLAY_PRIORITY.studioWelcome);
+    expect(result.data).toMatchObject({ firstName: "Jessica" });
+    expect(JSON.stringify(result.data)).not.toMatch(/JUSTIN|OCT 8|IN FLIGHT/);
+  });
+
   it("strips tags and control characters from a custom message", () => {
     expect(sanitizeCustomMessage("Hello <script>alert(1)</script>\n\n\nthere")).toBe(
       "Hello alert(1)\n\nthere",

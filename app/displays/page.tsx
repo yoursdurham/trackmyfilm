@@ -26,6 +26,7 @@ function modeLabel(mode: string) {
   if (mode === "studio_ending_soon") return "Session ending";
   if (mode === "film_stats") return "Film stats";
   if (mode === "film_menu") return "Film menu";
+  if (mode === "film_departures") return "Film departures";
   return mode;
 }
 

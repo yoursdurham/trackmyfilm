@@ -7,6 +7,7 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Customer, CustomerSummary, FilmOrder, IncomingSquarespaceDraft } from "./types";
 import type { DisplayRow, HeartbeatClient } from "./display";
+import { DEPARTURE_ORDER_SELECT, type DepartureOrder } from "./film-departures";
 import { FILM_MENU_SLUG, type FilmMenu } from "./film-menu";
 import {
   buildIncomingDraftInsert,
@@ -50,6 +51,16 @@ export async function getOrders(sort: "desc" | "asc" = "desc"): Promise<FilmOrde
     .order("created_at", { ascending: sort === "asc" });
   if (error) throw new Error(error.message);
   return data as FilmOrder[];
+}
+
+/** In-process orders for the public departures board. Not a select * of every order. */
+export async function getInProcessDepartureOrders(): Promise<DepartureOrder[]> {
+  const { data, error } = await getSupabase()
+    .from("film_orders")
+    .select(DEPARTURE_ORDER_SELECT)
+    .in("status", ["Received by Yours", "Received at Lab"]);
+  if (error) throw new Error(error.message);
+  return (data ?? []) as DepartureOrder[];
 }
 
 export async function getOrderById(id: string): Promise<FilmOrder | null> {

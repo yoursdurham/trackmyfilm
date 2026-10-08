@@ -167,6 +167,43 @@ export function nextLabRunLabel(now: Date): string {
   return `${WEEKDAY_NAMES[fallback]} ${clock}`;
 }
 
+export interface ShopCalendarDate {
+  year: number;
+  month: number;
+  day: number;
+}
+
+/** Calendar date in America/New_York. */
+export function shopCalendarDate(date: Date): ShopCalendarDate {
+  const parts = calendarInShopZone(date);
+  return { year: parts.year, month: parts.month, day: parts.day };
+}
+
+/** Noon in America/New_York. Noon is never a DST gap. */
+export function shopNoonUtc(year: number, month: number, day: number): Date {
+  return shopWallTimeToUtc(year, month, day, 12, 0);
+}
+
+/**
+ * Most recent Tuesday or Friday at 12:00 PM America/New_York that is not after `now`.
+ * Before noon on a run day, this is the previous run.
+ */
+export function lastLabRunAt(now: Date): Date {
+  const { weekdays, hour, minute } = FILM_METRICS_CONFIG.labRuns;
+  const today = calendarInShopZone(now);
+  const runDays = new Set<number>(weekdays);
+
+  for (let offset = 0; offset < 8; offset += 1) {
+    const date = addCalendarDays(today.year, today.month, today.day, -offset);
+    if (!runDays.has(date.weekdayIndex)) continue;
+    const instant = shopWallTimeToUtc(date.year, date.month, date.day, hour, minute);
+    if (instant.getTime() <= now.getTime()) return instant;
+  }
+
+  const fallback = addCalendarDays(today.year, today.month, today.day, -7);
+  return shopWallTimeToUtc(fallback.year, fallback.month, fallback.day, hour, minute);
+}
+
 function processKind(process?: string | null): "color" | "bw" | "both" | "other" {
   if (!process) return "other";
   const normalized = process.toLowerCase().replace(/[^a-z]/g, "");
@@ -182,7 +219,12 @@ function processKind(process?: string | null): "color" | "bw" | "both" | "other"
   return "other";
 }
 
-function positiveRollCount(order: FilmOrder): number {
+export interface RollCountSource {
+  roll_count?: number | null;
+  roll_details?: readonly unknown[] | null;
+}
+
+function positiveRollCount(order: RollCountSource): number {
   if (typeof order.roll_count === "number" && Number.isFinite(order.roll_count) && order.roll_count > 0) {
     return Math.floor(order.roll_count);
   }
@@ -190,8 +232,8 @@ function positiveRollCount(order: FilmOrder): number {
 }
 
 /** Every physical roll on the order, including develop-only rolls. */
-function rollsOnOrder(order: FilmOrder): number {
-  if (order.roll_details?.length) return order.roll_details.length;
+export function rollsOnOrder(order: RollCountSource): number {
+  if (Array.isArray(order.roll_details) && order.roll_details.length > 0) return order.roll_details.length;
   return positiveRollCount(order);
 }
 
