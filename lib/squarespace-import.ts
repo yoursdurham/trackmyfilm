@@ -1,12 +1,15 @@
 /**
  * Writes classified Squarespace orders into incoming_squarespace_drafts.
- * Creates Pending Intake rows only. Does not create film orders or send email.
+ * Creates Pending Intake rows only, and only for orders placed within the
+ * lookback. Does not create film orders, send email, or change drafts and
+ * film orders that are already stored.
  */
 
 import type { IncomingDraftInput } from "./incoming-drafts";
 import {
   classifySquarespaceOrder,
   emptySquarespaceCheckSummary,
+  selectSquarespaceOrdersForIntake,
   type SquarespaceCheckSummary,
 } from "./squarespace-orders";
 
@@ -27,10 +30,13 @@ function isUniqueViolation(err: unknown): boolean {
 export async function importSquarespaceOrders(
   orders: unknown[],
   deps: SquarespaceImportDeps,
+  now: Date = new Date(),
 ): Promise<SquarespaceCheckSummary> {
   const summary = emptySquarespaceCheckSummary();
+  const selected = selectSquarespaceOrdersForIntake(orders, now);
+  summary.errors.push(...selected.invalid);
 
-  for (const order of orders) {
+  for (const order of selected.orders) {
     const classified = classifySquarespaceOrder(order);
     if (classified.kind === "skip_pos") {
       summary.skippedPos += 1;

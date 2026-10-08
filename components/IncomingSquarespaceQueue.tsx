@@ -256,8 +256,8 @@ export default function IncomingSquarespaceQueue() {
             <AlertDialogTitle>Dismiss this Squarespace order?</AlertDialogTitle>
             <AlertDialogDescription>
               {dismissTarget
-                ? `${dismissTarget.squarespace_order_number} for ${dismissTarget.customer_name} will be deleted. It will not become a drop-off, and that Squarespace order can be imported again.`
-                : "It will be deleted and will not become a drop-off. That Squarespace order can be imported again."}
+                ? `${dismissTarget.squarespace_order_number} for ${dismissTarget.customer_name} will be deleted. It will not become a drop-off. Check Squarespace can import it again if the order was placed in the last 7 days.`
+                : "It will be deleted and will not become a drop-off. Check Squarespace can import it again if the order was placed in the last 7 days."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

@@ -46,6 +46,7 @@ import {
   SQUARESPACE_API_KEY_ENV,
   SQUARESPACE_LOOKBACK_DAYS,
   SQUARESPACE_USER_AGENT,
+  selectSquarespaceOrdersForIntake,
   squarespaceLookbackWindow,
 } from "../lib/squarespace-orders";
 import { importSquarespaceOrders } from "../lib/squarespace-import";
@@ -209,11 +210,13 @@ describe("classifySquarespaceOrder", () => {
 });
 
 describe("buildSquarespaceOrdersUrl", () => {
-  it("time-boxes the first page and does not filter fulfillment status", () => {
+  it("time-boxes the first page to 7 days and does not filter fulfillment status", () => {
+    expect(SQUARESPACE_LOOKBACK_DAYS).toBe(7);
     const now = new Date("2026-10-04T12:00:00.000Z");
     const window = squarespaceLookbackWindow(now);
     expect(window.modifiedBefore).toBe("2026-10-04T12:00:00.000Z");
     const after = new Date(window.modifiedAfter);
+    expect(now.getTime() - after.getTime()).toBe(7 * 24 * 60 * 60 * 1000);
     expect(now.getTime() - after.getTime()).toBe(SQUARESPACE_LOOKBACK_DAYS * 24 * 60 * 60 * 1000);
 
     const url = new URL(buildSquarespaceOrdersUrl(window));
@@ -235,6 +238,9 @@ describe("buildSquarespaceOrdersUrl", () => {
     expect(url.searchParams.has("fulfillmentStatus")).toBe(false);
   });
 });
+
+/** filmOrder() is dated 2026-10-01, which is inside this check. */
+const CHECK_NOW = new Date("2026-10-04T12:00:00.000Z");
 
 describe("importSquarespaceOrders", () => {
   const deps = {
@@ -275,7 +281,7 @@ describe("importSquarespaceOrders", () => {
       filmOrder({ id: "existing-draft", orderNumber: "01061" }),
       filmOrder({ id: "external-dup", orderNumber: "01063" }),
       filmOrder({ id: "race", orderNumber: "01062" }),
-    ], deps);
+    ], deps, CHECK_NOW);
 
     expect(summary.imported).toBe(1);
     expect(summary.importedOrderNumbers).toEqual(["01050"]);
@@ -306,7 +312,7 @@ describe("importSquarespaceOrders", () => {
       filmOrder({ id: "plain-existing", orderNumber: "1037" }),
       filmOrder({ id: "draft-zero-variant", orderNumber: "1035" }),
       filmOrder({ id: "fresh", orderNumber: "1036" }),
-    ], deps);
+    ], deps, CHECK_NOW);
 
     expect(summary.skippedDuplicate).toBe(3);
     expect(summary.imported).toBe(1);
@@ -316,6 +322,72 @@ describe("importSquarespaceOrders", () => {
     expect(deps.orderNumberExists).toHaveBeenCalledWith("1037");
     expect(deps.createIncomingDraft).toHaveBeenCalledTimes(1);
     expect(deps.createIncomingDraft.mock.calls[0][0].squarespace_order_number).toBe("1036");
+  });
+
+  it("keeps orders placed in the last 7 days and skips an older order that was only modified recently", async () => {
+    const now = new Date("2026-10-08T15:00:00.000Z");
+    const day = 24 * 60 * 60 * 1000;
+    const yesterday = new Date(now.getTime() - day).toISOString();
+    const summary = await importSquarespaceOrders([
+      filmOrder({
+        id: "old-edited",
+        orderNumber: "01090",
+        createdOn: new Date(now.getTime() - 8 * day).toISOString(),
+        modifiedOn: yesterday,
+      }),
+      filmOrder({
+        id: "placed-recently",
+        orderNumber: "01091",
+        createdOn: new Date(now.getTime() - 2 * day).toISOString(),
+        modifiedOn: yesterday,
+      }),
+      filmOrder({
+        id: "placed-on-cutoff",
+        orderNumber: "01096",
+        createdOn: new Date(now.getTime() - 7 * day).toISOString(),
+      }),
+    ], deps, now);
+
+    expect(summary.imported).toBe(2);
+    expect(summary.importedOrderNumbers).toEqual(["01091", "01096"]);
+    expect(summary.skippedDuplicate).toBe(0);
+    expect(summary.skippedNoFilm).toBe(0);
+    expect(summary.skippedPos).toBe(0);
+    expect(summary.errors).toEqual([]);
+    expect(deps.createIncomingDraft).toHaveBeenCalledTimes(2);
+    expect(deps.orderNumberExists).not.toHaveBeenCalledWith("01090");
+    expect(deps.getIncomingDraftByOrderNumber).not.toHaveBeenCalledWith("01090");
+  });
+
+  it("skips orders with a missing or unparseable createdOn and does not save a draft", async () => {
+    const now = new Date("2026-10-08T15:00:00.000Z");
+    const summary = await importSquarespaceOrders([
+      filmOrder({ id: "missing-created", orderNumber: "01092", createdOn: undefined }),
+      filmOrder({ id: "blank-created", orderNumber: "01093", createdOn: "   " }),
+      filmOrder({ id: "bad-created", orderNumber: "01094", createdOn: "not-a-date" }),
+      filmOrder({ id: "impossible-created", orderNumber: "01095", createdOn: "2026-99-99" }),
+      filmOrder({ id: "placed-recently", orderNumber: "01091", createdOn: "2026-10-06T15:00:00.000Z" }),
+    ], deps, now);
+
+    expect(summary.importedOrderNumbers).toEqual(["01091"]);
+    expect(summary.errors.map((error) => error.orderNumber)).toEqual(["01092", "01093", "01094", "01095"]);
+    expect(summary.errors.every((error) => /createdOn/i.test(error.message))).toBe(true);
+    expect(deps.createIncomingDraft).toHaveBeenCalledTimes(1);
+    expect(deps.orderNumberExists).not.toHaveBeenCalledWith("01092");
+  });
+});
+
+describe("selectSquarespaceOrdersForIntake", () => {
+  it("uses a 7 day createdOn cutoff of now minus 7×24 hours", () => {
+    const now = new Date("2026-10-08T15:00:00.000Z");
+    const day = 24 * 60 * 60 * 1000;
+    const selected = selectSquarespaceOrdersForIntake([
+      filmOrder({ id: "old-edited", orderNumber: "01090", createdOn: new Date(now.getTime() - 8 * day).toISOString(), modifiedOn: new Date(now.getTime() - day).toISOString() }),
+      filmOrder({ id: "recent", orderNumber: "01091", createdOn: new Date(now.getTime() - 2 * day).toISOString() }),
+    ], now);
+    expect(selected.orders).toHaveLength(1);
+    expect((selected.orders[0] as { orderNumber: string }).orderNumber).toBe("01091");
+    expect(selected.invalid).toEqual([]);
   });
 });
 
@@ -332,6 +404,7 @@ describe("POST /api/incoming-drafts/check", () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllGlobals();
     delete process.env[SQUARESPACE_API_KEY_ENV];
   });
@@ -359,12 +432,20 @@ describe("POST /api/incoming-drafts/check", () => {
   });
 
   it("pages with the documented headers and imports only new film orders", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-04T12:00:00.000Z"));
     const fetchMock = vi.mocked(fetch);
     fetchMock
       .mockResolvedValueOnce(new Response(JSON.stringify({
         pagination: { hasNextPage: true, nextPageCursor: "page-2" },
         result: [
           filmOrder({ fulfillmentStatus: "PENDING" }),
+          filmOrder({
+            id: "old-edited",
+            orderNumber: "01099",
+            createdOn: "2026-09-26T12:00:00.000Z",
+            modifiedOn: "2026-10-03T12:00:00.000Z",
+          }),
           filmOrder({ id: "pos-counter", orderNumber: "01080", channel: "pos", channelName: "Point of Sale" }),
           filmOrder({ id: "camera", orderNumber: "200", lineItems: [{ productName: "Point and Shoot Camera", quantity: 1 }] }),
         ],
@@ -395,7 +476,8 @@ describe("POST /api/incoming-drafts/check", () => {
     const first = fetchMock.mock.calls[0];
     const firstUrl = new URL(String(first[0]));
     expect(firstUrl.searchParams.has("fulfillmentStatus")).toBe(false);
-    expect(firstUrl.searchParams.get("modifiedAfter")).toBeTruthy();
+    expect(firstUrl.searchParams.get("modifiedAfter")).toBe("2026-09-27T12:00:00.000Z");
+    expect(firstUrl.searchParams.get("modifiedBefore")).toBe("2026-10-04T12:00:00.000Z");
     const firstInit = first[1] as RequestInit;
     const firstHeaders = new Headers(firstInit.headers);
     expect(firstHeaders.get("Authorization")).toBe("Bearer test-squarespace-key");
@@ -412,6 +494,7 @@ describe("POST /api/incoming-drafts/check", () => {
     const created = mockCreateIncomingDraft.mock.calls.map((call) => call[0].squarespace_order_number);
     expect(created).toEqual(["01050", "01070"]);
     expect(mockOrderNumberExists).toHaveBeenCalledWith("01050");
+    expect(mockOrderNumberExists).not.toHaveBeenCalledWith("01099");
   });
 });
 
