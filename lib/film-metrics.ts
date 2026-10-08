@@ -195,6 +195,24 @@ function rollsOnOrder(order: FilmOrder): number {
   return positiveRollCount(order);
 }
 
+/**
+ * Scanned rolls only. A Process Only order contributes nothing.
+ * Mixed orders count the rolls that are not Process Only.
+ * Orders with no roll details use the existing roll count unless the order is Process Only.
+ */
+function scannedRollsOnOrder(order: FilmOrder): number {
+  if (isProcessOnlyOrder(order)) return 0;
+  if (order.roll_details?.length) {
+    let scanned = 0;
+    for (const roll of order.roll_details) {
+      if (isProcessOnlyRoll(roll)) continue;
+      scanned += 1;
+    }
+    return scanned;
+  }
+  return positiveRollCount(order);
+}
+
 function sideWeights(order: FilmOrder): SideWeight {
   const empty = { color: 0, bw: 0, both: 0 };
   if (isProcessOnlyOrder(order)) return empty;
@@ -303,7 +321,7 @@ export function computeFilmMetrics(orders: FilmOrder[], now = new Date()): FilmM
 
   for (const order of orders) {
     const rolls = rollsOnOrder(order);
-    if (IN_PROCESS.has(order.status)) rollsProcessing += rolls;
+    if (IN_PROCESS.has(order.status)) rollsProcessing += scannedRollsOnOrder(order);
 
     const received = receivedKey(order, now);
     if (received && received <= todayKey) {
