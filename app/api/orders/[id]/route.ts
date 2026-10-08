@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { getOrderById, updateOrder, deleteOrder, deleteIncomingDraftsForOrder, getCustomerById, updateCustomer } from "@/lib/db";
-import { ensureHttps } from "@/lib/validation";
+import { getOrderById, getOrderByNumber, updateOrder, deleteOrder, deleteIncomingDraftsForOrder, getCustomerById, updateCustomer } from "@/lib/db";
+import { ensureHttps, normalizeOrderNumber } from "@/lib/validation";
 import { requireAuth } from "@/lib/api-auth";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -42,8 +42,25 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       ? ensureHttps(rawWetransferLink)
       : rawWetransferLink;
 
+    let nextOrderNumber = order_number;
+    if (typeof order_number === "string" && order_number.trim()) {
+      const storedNumber = normalizeOrderNumber(order_number);
+      const current = await getOrderById(id);
+      if (!current) return NextResponse.json({ error: "Order not found" }, { status: 404 });
+      const taken = await getOrderByNumber(storedNumber);
+      if (taken && taken.id !== id) {
+        return NextResponse.json(
+          { error: `Order number ${storedNumber} already exists` },
+          { status: 409 },
+        );
+      }
+      // Keep the text the staff saved, including leading zeros. Do not rewrite
+      // an existing number down to its comparison key.
+      nextOrderNumber = storedNumber;
+    }
+
     const order = await updateOrder(id, {
-      order_number, customer_name, customer_email, status, status_history, status_updated_at,
+      order_number: nextOrderNumber, customer_name, customer_email, status, status_history, status_updated_at,
       film_type, film_process, film_stock, roll_count, dropoff_date, dropoff_number,
       roll_details, prints_4x6, scan_notes,
       color_scans_wetransfer_link, color_scans_delivered_at, color_partial_email_sent_at,

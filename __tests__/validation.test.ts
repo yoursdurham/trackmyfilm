@@ -8,7 +8,9 @@ import {
   normalizeOrderNumber,
   orderNumberMatchKey,
   orderNumberMatchPattern,
+  orderNumberMatchesSearch,
   orderNumbersMatch,
+  preferStoredOrderNumber,
   isValidUrl,
   ensureHttps,
   isValidEmail,
@@ -239,6 +241,8 @@ describe("normalizeOrderNumber", () => {
   it("keeps leading zeros in the stored form", () => {
     expect(normalizeOrderNumber("01050")).toBe("01050");
     expect(normalizeOrderNumber("001050")).toBe("001050");
+    expect(normalizeOrderNumber("000")).toBe("000");
+    expect(normalizeOrderNumber("0")).toBe("0");
   });
 });
 
@@ -263,6 +267,76 @@ describe("order number duplicate key", () => {
     expect(storedMatches(pattern, "001050")).toBe(true);
     expect(storedMatches(pattern, "11050")).toBe(false);
     expect(storedMatches(orderNumberMatchPattern("1050"), "01050")).toBe(true);
+  });
+
+  it("keeps a single zero when the number is only zeros, and does not treat a blank as zero", () => {
+    expect(orderNumberMatchKey("0")).toBe("0");
+    expect(orderNumberMatchKey("00")).toBe("0");
+    expect(orderNumberMatchKey("000")).toBe("0");
+    expect(orderNumberMatchKey("  000  ")).toBe("0");
+    expect(orderNumbersMatch("0", "000")).toBe(true);
+    expect(orderNumbersMatch("000", "0")).toBe(true);
+    expect(orderNumberMatchKey("")).toBe("");
+    expect(orderNumberMatchKey("   ")).toBe("");
+    expect(orderNumbersMatch("", "0")).toBe(false);
+    expect(orderNumbersMatch("000", "0001")).toBe(false);
+    expect(storedMatches(orderNumberMatchPattern("000"), "0")).toBe(true);
+    expect(storedMatches(orderNumberMatchPattern("0"), "000")).toBe(true);
+    expect(storedMatches(orderNumberMatchPattern("0"), "10")).toBe(false);
+    expect(storedMatches(orderNumberMatchPattern(""), "0")).toBe(false);
+  });
+
+  it("leaves non-numeric prefixes and internal zeros unchanged", () => {
+    expect(orderNumberMatchKey("ORD-001")).toBe("ORD-001");
+    expect(orderNumberMatchKey("ord-001")).toBe("ORD-001");
+    expect(orderNumberMatchKey("JE01034")).toBe("JE01034");
+    expect(orderNumberMatchKey("TMF001")).toBe("TMF001");
+    expect(orderNumbersMatch("ORD-001", "ORD-1")).toBe(false);
+    expect(orderNumbersMatch("ORD-001", "ORD-0001")).toBe(false);
+    expect(orderNumbersMatch("JE01034", "JE1034")).toBe(false);
+    expect(orderNumbersMatch("TMF001", "TMF1")).toBe(false);
+    expect(orderNumbersMatch("je1234", "JE1234")).toBe(true);
+    expect(orderNumbersMatch("00JE12", "JE12")).toBe(true);
+    expect(storedMatches(orderNumberMatchPattern("ORD-001"), "ORD-1")).toBe(false);
+    expect(storedMatches(orderNumberMatchPattern("JE1234"), "JE01234")).toBe(false);
+    expect(storedMatches(orderNumberMatchPattern("A.B"), "AXB")).toBe(false);
+    expect(storedMatches(orderNumberMatchPattern("A.B"), "A.B")).toBe(true);
+  });
+
+  it("uses the same rule for the database pattern and in-memory comparison", () => {
+    const samples = [
+      "01034", "1034", "001034", "0", "00", "000", "JE1234", "je1234",
+      "ORD-001", "ORD-1", "JE01034", "TMF001", "11034", "10340", "  1034  ",
+      "", "   ", "0JE12", "A.B", "A+B",
+    ];
+    for (const query of samples) {
+      for (const stored of samples) {
+        expect(storedMatches(orderNumberMatchPattern(query), stored)).toBe(orderNumbersMatch(query, stored));
+      }
+    }
+  });
+
+  it("finds 01034 from a search for 1034 and the other way around", () => {
+    expect(orderNumberMatchesSearch("1034", "01034")).toBe(true);
+    expect(orderNumberMatchesSearch("01034", "1034")).toBe(true);
+    expect(orderNumberMatchesSearch("01034", "001034")).toBe(true);
+    expect(orderNumberMatchesSearch("000", "0")).toBe(true);
+    expect(orderNumberMatchesSearch("1034", "103")).toBe(true);
+    expect(orderNumberMatchesSearch("01034", "10340")).toBe(false);
+    expect(orderNumberMatchesSearch("ORD-001", "ORD-1")).toBe(false);
+    expect(orderNumberMatchesSearch("JE1234", "ann")).toBe(false);
+    expect(orderNumberMatchesSearch("1034", "   ")).toBe(false);
+  });
+
+  it("prefers the stored text that matches the query when two rows share a key", () => {
+    const rows = [
+      { id: "newer", order_number: "01034" },
+      { id: "older", order_number: "1034" },
+    ];
+    expect(preferStoredOrderNumber(rows, "1034", (row) => row.order_number)?.id).toBe("older");
+    expect(preferStoredOrderNumber(rows, "01034", (row) => row.order_number)?.id).toBe("newer");
+    expect(preferStoredOrderNumber(rows, "001034", (row) => row.order_number)?.id).toBe("newer");
+    expect(preferStoredOrderNumber([], "1034", (row: { order_number: string }) => row.order_number)).toBeNull();
   });
 });
 
