@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import FilmStatsBoard from "@/components/display/FilmStatsBoard";
 import type { DisplayPayload } from "@/lib/display";
 
 function messageSize(message: string) {
@@ -38,6 +39,8 @@ export default function YoursCleanScreen({
   const message = payload.mode === "custom_message" && typeof payload.data.message === "string"
     ? payload.data.message
     : null;
+  const filmStats = payload.mode === "film_stats" && !notice;
+  const screenMode = notice ? "idle" : filmStats ? "film_stats" : message ? "custom_message" : "idle";
 
   useEffect(() => {
     const tick = () => setNow(new Date());
@@ -50,7 +53,7 @@ export default function YoursCleanScreen({
 
   return (
     <div
-      data-display-mode={message ? "custom_message" : "idle"}
+      data-display-mode={screenMode}
       className="relative flex h-dvh w-full flex-col overflow-hidden bg-[var(--bg-main)] text-[var(--text-main)] select-none"
     >
       <div
@@ -65,21 +68,33 @@ export default function YoursCleanScreen({
       <div aria-hidden className="pointer-events-none absolute inset-y-0 right-0 w-[0.4vw] min-w-1 bg-[var(--accent-purple)]" />
 
       <div className="flex min-h-0 flex-1 flex-col pl-[8vw] pr-[6vw]">
-        <header className="flex shrink-0 flex-col items-center pt-[7vh]">
+        <header className={`flex shrink-0 flex-col items-center ${filmStats ? "pt-[2.4vh]" : "pt-[7vh]"}`}>
           {/* Static file, not the image optimizer: one small request on a Pi 4. */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src="/logo.png"
             alt="Yours Durham"
-            className="h-[12vh] w-[12vh] max-h-[240px] max-w-[240px] rounded-[12%] object-cover shadow-lg ring-1 ring-black/10"
+            className={`rounded-[12%] object-cover shadow-lg ring-1 ring-black/10 ${
+              filmStats
+                ? "h-[5.2vh] w-[5.2vh] max-h-[150px] max-w-[150px]"
+                : "h-[12vh] w-[12vh] max-h-[240px] max-w-[240px]"
+            }`}
           />
-          <p className="mt-[2.2vh] text-[clamp(0.8rem,2.1vw,1.7rem)] font-medium tracking-[0.42em] text-[var(--accent-purple)] uppercase">
+          <p className={`font-medium tracking-[0.42em] text-[var(--accent-purple)] uppercase ${
+            filmStats
+              ? "mt-[1vh] text-[clamp(0.7rem,1.2vh,1.2rem)]"
+              : "mt-[2.2vh] text-[clamp(0.8rem,2.1vw,1.7rem)]"
+          }`}>
             Durham
           </p>
         </header>
 
-        <main className="flex min-h-0 flex-1 flex-col items-center justify-center px-[2vw] text-center">
-          {notice ? (
+        <main className={`flex min-h-0 flex-1 flex-col px-[2vw] text-center ${
+          filmStats ? "w-full items-stretch py-[1.2vh]" : "items-center justify-center"
+        }`}>
+          {filmStats ? (
+            <FilmStatsBoard data={payload.data} />
+          ) : notice ? (
             <p className="max-w-[18ch] text-[clamp(2rem,6vw,4.5rem)] leading-tight font-medium">
               {notice}
             </p>
@@ -106,14 +121,24 @@ export default function YoursCleanScreen({
           )}
         </main>
 
-        <footer className="flex shrink-0 flex-col items-center pb-[6vh] text-center">
-          <p className="min-h-[1em] text-[clamp(2.5rem,9vw,8vh)] leading-none font-medium tabular-nums">
+        <footer className={`flex shrink-0 flex-col items-center text-center ${filmStats ? "pb-[2.2vh]" : "pb-[6vh]"}`}>
+          <p className={`min-h-[1em] leading-none font-medium tabular-nums ${
+            filmStats ? "text-[clamp(1.4rem,2.4vh,2.6rem)]" : "text-[clamp(2.5rem,9vw,8vh)]"
+          }`}>
             {clock?.time ?? "\u00a0"}
           </p>
-          <p className="mt-[1.4vh] min-h-[1.2em] text-[clamp(1rem,2.5vw,1.8rem)] text-[var(--text-muted)]">
+          <p className={`min-h-[1.2em] text-[var(--text-muted)] ${
+            filmStats
+              ? "mt-[0.6vh] text-[clamp(0.85rem,1.3vh,1.4rem)]"
+              : "mt-[1.4vh] text-[clamp(1rem,2.5vw,1.8rem)]"
+          }`}>
             {clock?.day ?? "\u00a0"}
           </p>
-          <p className="mt-[4vh] text-[clamp(0.85rem,2.2vw,1.5rem)] tracking-[0.28em] text-[var(--accent-purple)] uppercase">
+          <p className={`tracking-[0.28em] text-[var(--accent-purple)] uppercase ${
+            filmStats
+              ? "mt-[1.4vh] text-[clamp(0.75rem,1.2vh,1.25rem)]"
+              : "mt-[4vh] text-[clamp(0.85rem,2.2vw,1.5rem)]"
+          }`}>
             35mm · 120 · 110
           </p>
         </footer>

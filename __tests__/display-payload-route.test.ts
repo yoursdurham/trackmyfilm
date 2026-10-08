@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 const mockRequireAuth = vi.fn();
 const mockGetDisplayBySlug = vi.fn();
 const mockUpdateDisplay = vi.fn();
+const mockGetCachedFilmMetrics = vi.fn();
 
 vi.mock("@/lib/api-auth", () => ({
   requireAuth: (...args: unknown[]) => mockRequireAuth(...args),
@@ -12,6 +13,10 @@ vi.mock("@/lib/api-auth", () => ({
 vi.mock("@/lib/db", () => ({
   getDisplayBySlug: (...args: unknown[]) => mockGetDisplayBySlug(...args),
   updateDisplay: (...args: unknown[]) => mockUpdateDisplay(...args),
+}));
+
+vi.mock("@/lib/film-metrics-cache", () => ({
+  getCachedFilmMetrics: (...args: unknown[]) => mockGetCachedFilmMetrics(...args),
 }));
 
 import { GET, PATCH } from "@/app/api/displays/[slug]/route";
@@ -67,6 +72,49 @@ describe("GET /api/displays/:slug", () => {
     expect(body).not.toHaveProperty("customer_email");
     expect(JSON.stringify(body)).not.toMatch(/guest@|919|do not print/);
     expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(mockGetCachedFilmMetrics).not.toHaveBeenCalled();
+  });
+
+  it("returns whitelisted film stats and never the customer fields on the metrics row", async () => {
+    mockGetDisplayBySlug.mockResolvedValue({
+      ...row,
+      mode: "film_stats",
+      override_mode: null,
+      override_payload: null,
+    });
+    mockGetCachedFilmMetrics.mockResolvedValue({
+      rollsProcessing: 12,
+      receivedToday: 3,
+      receivedThisWeek: 9,
+      scansSentToday: 2,
+      scansSentThisWeek: 7,
+      averageColorTurnaroundDays: 4.5,
+      averageBwTurnaroundDays: null,
+      nextLabRun: "Today 12:00 PM",
+      customer_email: "secret@example.com",
+      customer_name: "Ada Lovelace",
+      revenue: 40,
+    });
+
+    const response = await get();
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body).toEqual({
+      mode: "film_stats",
+      theme: "yours-clean",
+      refreshSeconds: 30,
+      data: {
+        rollsProcessing: 12,
+        receivedToday: 3,
+        receivedThisWeek: 9,
+        scansSentToday: 2,
+        scansSentThisWeek: 7,
+        averageColorTurnaroundDays: 4.5,
+        averageBwTurnaroundDays: null,
+        nextLabRun: "Today 12:00 PM",
+      },
+    });
+    expect(JSON.stringify(body)).not.toMatch(/secret@|Ada|revenue/);
   });
 
   it("does not look up a malformed slug", async () => {
@@ -116,6 +164,22 @@ describe("PATCH /api/displays/:slug", () => {
     expect(body.resolvedMode).toBe("custom_message");
     expect(body.overrideMessage).toBe("Hello  studio");
     expect(body.email).toBeUndefined();
+  });
+
+  it("accepts film stats as a default mode", async () => {
+    mockUpdateDisplay.mockImplementation(async () => ({
+      ...row,
+      mode: "film_stats",
+      override_mode: null,
+      override_payload: null,
+    }));
+    const response = await patch({ mode: "film_stats" });
+    expect(response.status).toBe(200);
+    expect(mockUpdateDisplay).toHaveBeenCalledWith("studio-vertical", { mode: "film_stats" });
+    const body = await response.json();
+    expect(body.defaultMode).toBe("film_stats");
+    expect(body.resolvedMode).toBe("film_stats");
+    expect(body.customer_email).toBeUndefined();
   });
 
   it("clears the override", async () => {

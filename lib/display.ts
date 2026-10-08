@@ -2,8 +2,8 @@
  * Display engine for physical screens.
  *
  * The resolver is pure: it picks one state from the display row plus optional
- * studio, film, and playlist inputs. Those sources are absent in phase 1.
- * Later phases pass them in; they do not need a new priority function.
+ * studio, film, and playlist inputs. Film metrics are computed by the caller
+ * and passed in here; this module never reads the database.
  *
  * Priority (spec section 7.1):
  *   100  manual override (custom message today)
@@ -37,6 +37,8 @@ export const STUDIO_DATA_KEYS = ["firstName", "sessionType", "start", "end"] as 
 export const FILM_STATS_DATA_KEYS = [
   "rollsProcessing",
   "receivedToday",
+  "receivedThisWeek",
+  "scansSentToday",
   "scansSentThisWeek",
   "averageColorTurnaroundDays",
   "averageBwTurnaroundDays",
@@ -50,6 +52,7 @@ export const FILM_STATUS_DATA_KEYS = [
 
 export const SELECTABLE_DEFAULT_MODES = [
   { value: "idle", label: "Branded idle" },
+  { value: "film_stats", label: "Film stats" },
 ] as const;
 
 export type DisplayOrientation = "portrait" | "landscape";
@@ -93,6 +96,8 @@ export interface StudioDisplayInput {
 export interface FilmMetricsInput {
   rollsProcessing?: number | null;
   receivedToday?: number | null;
+  receivedThisWeek?: number | null;
+  scansSentToday?: number | null;
   scansSentThisWeek?: number | null;
   averageColorTurnaroundDays?: number | null;
   averageBwTurnaroundDays?: number | null;
@@ -192,16 +197,28 @@ function pickStudio(source: StudioSessionView | null | undefined): Record<string
   return data;
 }
 
+const NULLABLE_FILM_KEYS = new Set([
+  "averageColorTurnaroundDays",
+  "averageBwTurnaroundDays",
+]);
+
+const NUMERIC_FILM_KEYS = new Set<string>([
+  ...FILM_STATS_DATA_KEYS.filter((key) => key !== "nextLabRun"),
+  ...FILM_STATUS_DATA_KEYS.filter((key) => key !== "nextLabRun"),
+]);
+
 function pickFilm(film: FilmMetricsInput | null | undefined, keys: readonly string[]): Record<string, unknown> {
   if (!film) return {};
   const data: Record<string, unknown> = {};
   for (const key of keys) {
     const value = film[key];
-    if (typeof value === "number" && Number.isFinite(value)) {
-      data[key] = value;
-    } else if (key === "nextLabRun") {
+    if (key === "nextLabRun") {
       const text = plainText(value, 80);
       if (text) data[key] = text;
+    } else if (typeof value === "number" && Number.isFinite(value)) {
+      data[key] = value;
+    } else if (value === null && NULLABLE_FILM_KEYS.has(key)) {
+      data[key] = null;
     }
   }
   return data;
@@ -347,7 +364,17 @@ export function toPublicDisplayPayload(resolved: {
     : {};
   const data: Record<string, unknown> = {};
   for (const key of allowed) {
-    if (key in source) data[key] = source[key];
+    if (!(key in source)) continue;
+    const value = source[key];
+    if (key === "nextLabRun") {
+      const text = plainText(value, 80);
+      if (text) data[key] = text;
+    } else if (NUMERIC_FILM_KEYS.has(key)) {
+      if (typeof value === "number" && Number.isFinite(value)) data[key] = value;
+      else if (value === null && NULLABLE_FILM_KEYS.has(key)) data[key] = null;
+    } else {
+      data[key] = value;
+    }
   }
   if (mode === "custom_message") {
     const message = sanitizeCustomMessage(data.message);
