@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/api-auth";
 import { getDisplayBySlug, updateDisplay } from "@/lib/db";
+import { publicPayloadWithFilm } from "@/lib/display-screen";
 import {
   isDisplaySlug,
   isSelectableDefaultMode,
-  publicPayloadForDisplay,
   sanitizeCustomMessage,
 } from "@/lib/display";
 import { toAdminDisplay } from "@/lib/display-admin";
@@ -28,7 +28,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ slug: s
   try {
     const row = await getDisplayBySlug(slug);
     if (!row) return json({ error: "Unknown screen" }, 404);
-    return json(publicPayloadForDisplay(row));
+    return json(await publicPayloadWithFilm(row));
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Unknown error";
     console.error("[GET /api/displays/:slug]", message);

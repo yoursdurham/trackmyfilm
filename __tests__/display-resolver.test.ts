@@ -138,6 +138,37 @@ describe("resolveDisplayState", () => {
     expect(result.data).toEqual({});
   });
 
+  it("shows film stats from the default mode and drops anything that is not a metric", () => {
+    const result = resolve({
+      display: { ...display, mode: "film_stats" },
+      film: {
+        rollsProcessing: 8,
+        receivedToday: 2,
+        receivedThisWeek: 6,
+        scansSentToday: 1,
+        scansSentThisWeek: 4,
+        averageColorTurnaroundDays: 5.5,
+        averageBwTurnaroundDays: null,
+        nextLabRun: "Friday 12:00 PM",
+        revenue: 400,
+        email: "lab@example.com",
+        customer_name: "Ada",
+      },
+    });
+
+    expect(result.mode).toBe("film_stats");
+    expect(result.data).toEqual({
+      rollsProcessing: 8,
+      receivedToday: 2,
+      receivedThisWeek: 6,
+      scansSentToday: 1,
+      scansSentThisWeek: 4,
+      averageColorTurnaroundDays: 5.5,
+      averageBwTurnaroundDays: null,
+      nextLabRun: "Friday 12:00 PM",
+    });
+  });
+
   it("strips tags and control characters from a custom message", () => {
     expect(sanitizeCustomMessage("Hello <script>alert(1)</script>\n\n\nthere")).toBe(
       "Hello alert(1)\n\nthere",
@@ -158,7 +189,10 @@ describe("toPublicDisplayPayload", () => {
       phone: "555",
       data: {
         rollsProcessing: 4,
+        rollsProcessingNote: "secret@example.com",
         nextLabRun: "Friday 12:00 PM",
+        averageBwTurnaroundDays: null,
+        averageColorTurnaroundDays: "fast",
         email: "secret@example.com",
         revenue: 900,
         privateNotes: "do not show",
@@ -174,6 +208,7 @@ describe("toPublicDisplayPayload", () => {
       data: {
         rollsProcessing: 4,
         nextLabRun: "Friday 12:00 PM",
+        averageBwTurnaroundDays: null,
       },
     });
     expect(JSON.stringify(payload)).not.toMatch(/secret@|555|900|do not show/);

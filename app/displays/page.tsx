@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import InternalHeader from "@/components/InternalHeader";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import FilmMenuEditor from "@/components/displays/FilmMenuEditor";
 import { SELECTABLE_DEFAULT_MODES } from "@/lib/display";
 import type { AdminDisplay } from "@/lib/display-admin";
 
@@ -22,6 +23,7 @@ function modeLabel(mode: string) {
   if (mode === "studio_upcoming") return "Up next";
   if (mode === "studio_ending_soon") return "Session ending";
   if (mode === "film_stats") return "Film stats";
+  if (mode === "film_menu") return "Film menu";
   return mode;
 }
 
@@ -195,6 +197,8 @@ export default function DisplaysPage() {
                       </div>
                     </div>
                   </div>
+
+                  {display.slug === displays[0]?.slug ? <FilmMenuEditor /> : null}
 
                   {previewOpen && (
                     <div className="mt-6 flex flex-col items-center border-t border-stone-100 pt-5">

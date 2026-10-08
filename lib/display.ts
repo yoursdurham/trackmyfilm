@@ -2,8 +2,8 @@
  * Display engine for physical screens.
  *
  * The resolver is pure: it picks one state from the display row plus optional
- * studio, film, and playlist inputs. Those sources are absent in phase 1.
- * Later phases pass them in; they do not need a new priority function.
+ * studio, film, playlist, and film-menu inputs. Callers compute those and
+ * pass them in; this module never reads the database.
  *
  * Priority (spec section 7.1):
  *   100  manual override (custom message today)
@@ -15,6 +15,8 @@
  * Studio time windows are classified by the caller with `now` before this
  * function runs, so the clock and the calendar stay outside the renderer.
  */
+
+import { sanitizeFilmMenu } from "@/lib/film-menu";
 
 export const DISPLAY_THEME = "yours-clean";
 export const DEFAULT_REFRESH_SECONDS = 30;
@@ -37,6 +39,8 @@ export const STUDIO_DATA_KEYS = ["firstName", "sessionType", "start", "end"] as 
 export const FILM_STATS_DATA_KEYS = [
   "rollsProcessing",
   "receivedToday",
+  "receivedThisWeek",
+  "scansSentToday",
   "scansSentThisWeek",
   "averageColorTurnaroundDays",
   "averageBwTurnaroundDays",
@@ -47,9 +51,13 @@ export const FILM_STATUS_DATA_KEYS = [
   "averageBwTurnaroundDays",
   "nextLabRun",
 ] as const;
+export const FILM_MENU_DATA_KEYS = ["menu"] as const;
+export const CRT_GREEN_THEME = "crt-green";
 
 export const SELECTABLE_DEFAULT_MODES = [
   { value: "idle", label: "Branded idle" },
+  { value: "film_stats", label: "Film stats" },
+  { value: "film_menu", label: "Film menu" },
 ] as const;
 
 export type DisplayOrientation = "portrait" | "landscape";
@@ -93,6 +101,8 @@ export interface StudioDisplayInput {
 export interface FilmMetricsInput {
   rollsProcessing?: number | null;
   receivedToday?: number | null;
+  receivedThisWeek?: number | null;
+  scansSentToday?: number | null;
   scansSentThisWeek?: number | null;
   averageColorTurnaroundDays?: number | null;
   averageBwTurnaroundDays?: number | null;
@@ -120,6 +130,8 @@ export interface DisplayResolveInput {
   now?: Date;
   studio?: StudioDisplayInput | null;
   film?: FilmMetricsInput | null;
+  /** Sanitized again before it can reach a public payload. */
+  menu?: unknown;
   playlist?: PlaylistInput | null;
 }
 
@@ -148,6 +160,7 @@ const DATA_KEYS_BY_MODE: Record<string, readonly string[]> = {
   studio_ending_soon: STUDIO_DATA_KEYS,
   film_stats: FILM_STATS_DATA_KEYS,
   film_status: FILM_STATUS_DATA_KEYS,
+  film_menu: FILM_MENU_DATA_KEYS,
 };
 
 export function isDisplaySlug(slug: string): boolean {
@@ -192,16 +205,28 @@ function pickStudio(source: StudioSessionView | null | undefined): Record<string
   return data;
 }
 
+const NULLABLE_FILM_KEYS = new Set([
+  "averageColorTurnaroundDays",
+  "averageBwTurnaroundDays",
+]);
+
+const NUMERIC_FILM_KEYS = new Set<string>([
+  ...FILM_STATS_DATA_KEYS.filter((key) => key !== "nextLabRun"),
+  ...FILM_STATUS_DATA_KEYS.filter((key) => key !== "nextLabRun"),
+]);
+
 function pickFilm(film: FilmMetricsInput | null | undefined, keys: readonly string[]): Record<string, unknown> {
   if (!film) return {};
   const data: Record<string, unknown> = {};
   for (const key of keys) {
     const value = film[key];
-    if (typeof value === "number" && Number.isFinite(value)) {
-      data[key] = value;
-    } else if (key === "nextLabRun") {
+    if (key === "nextLabRun") {
       const text = plainText(value, 80);
       if (text) data[key] = text;
+    } else if (typeof value === "number" && Number.isFinite(value)) {
+      data[key] = value;
+    } else if (value === null && NULLABLE_FILM_KEYS.has(key)) {
+      data[key] = null;
     }
   }
   return data;
@@ -232,6 +257,10 @@ function dataForMode(
   if (mode === "studio_upcoming") return pickStudio(input.studio?.upcoming);
   if (mode === "film_stats") return pickFilm(input.film, FILM_STATS_DATA_KEYS);
   if (mode === "film_status") return pickFilm(input.film, FILM_STATUS_DATA_KEYS);
+  if (mode === "film_menu") {
+    const menu = sanitizeFilmMenu(input.menu);
+    return menu ? { menu } : {};
+  }
   return {};
 }
 
@@ -326,7 +355,7 @@ export function resolveDisplayState(input: DisplayResolveInput): ResolvedDisplay
 
   return {
     mode: winner.mode,
-    theme,
+    theme: winner.mode === "film_menu" ? CRT_GREEN_THEME : theme,
     refreshSeconds: seconds,
     data: winner.data,
     priority: winner.priority,
@@ -347,7 +376,20 @@ export function toPublicDisplayPayload(resolved: {
     : {};
   const data: Record<string, unknown> = {};
   for (const key of allowed) {
-    if (key in source) data[key] = source[key];
+    if (!(key in source)) continue;
+    const value = source[key];
+    if (key === "nextLabRun") {
+      const text = plainText(value, 80);
+      if (text) data[key] = text;
+    } else if (key === "menu") {
+      const menu = sanitizeFilmMenu(value);
+      if (menu) data.menu = menu;
+    } else if (NUMERIC_FILM_KEYS.has(key)) {
+      if (typeof value === "number" && Number.isFinite(value)) data[key] = value;
+      else if (value === null && NULLABLE_FILM_KEYS.has(key)) data[key] = null;
+    } else {
+      data[key] = value;
+    }
   }
   if (mode === "custom_message") {
     const message = sanitizeCustomMessage(data.message);
@@ -356,7 +398,9 @@ export function toPublicDisplayPayload(resolved: {
   }
   return {
     mode,
-    theme: themeOf(typeof resolved.theme === "string" ? resolved.theme : null),
+    theme: mode === "film_menu"
+      ? CRT_GREEN_THEME
+      : themeOf(typeof resolved.theme === "string" ? resolved.theme : null),
     refreshSeconds: clampRefreshSeconds(
       typeof resolved.refreshSeconds === "number" ? resolved.refreshSeconds : null,
     ),

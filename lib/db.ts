@@ -7,6 +7,7 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Customer, CustomerSummary, FilmOrder, IncomingSquarespaceDraft } from "./types";
 import type { DisplayRow, HeartbeatClient } from "./display";
+import { FILM_MENU_SLUG, type FilmMenu } from "./film-menu";
 import {
   buildIncomingDraftInsert,
   incomingDraftDeleteMatch,
@@ -472,6 +473,33 @@ export async function updateDisplay(slug: string, patch: Partial<DisplayRow>): P
     .maybeSingle();
   if (error) throw new Error(error.message);
   return data as DisplayRow | null;
+}
+
+export async function getFilmMenu(): Promise<unknown | null> {
+  const { data, error } = await getSupabase()
+    .from("film_menus")
+    .select("content")
+    .eq("slug", FILM_MENU_SLUG)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return data?.content ?? null;
+}
+
+export async function saveFilmMenu(content: FilmMenu): Promise<FilmMenu> {
+  const { data, error } = await getSupabase()
+    .from("film_menus")
+    .upsert(
+      {
+        slug: FILM_MENU_SLUG,
+        content,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "slug" },
+    )
+    .select("content")
+    .single();
+  if (error) throw new Error(error.message);
+  return data.content as FilmMenu;
 }
 
 export async function touchDisplayHeartbeat(slug: string, client: HeartbeatClient): Promise<boolean> {
