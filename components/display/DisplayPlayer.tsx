@@ -7,6 +7,7 @@ import {
   toPublicDisplayPayload,
   type DisplayPayload,
 } from "@/lib/display";
+import CrtGreenScreen from "@/components/display/CrtGreenScreen";
 import YoursCleanScreen from "@/components/display/YoursCleanScreen";
 
 const IDLE: DisplayPayload = {
@@ -78,10 +79,10 @@ export default function DisplayPlayer({
     };
   }, [slug, refreshSeconds, preview]);
 
-  return (
-    <YoursCleanScreen
-      payload={payload ?? IDLE}
-      notice={missing && !payload ? "This screen is not set up yet." : null}
-    />
-  );
+  const screen = payload ?? IDLE;
+  const notice = missing && !payload ? "This screen is not set up yet." : null;
+  if (screen.theme === "crt-green" || screen.mode === "film_menu") {
+    return <CrtGreenScreen payload={screen} notice={notice} />;
+  }
+  return <YoursCleanScreen payload={screen} notice={notice} />;
 }
