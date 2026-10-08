@@ -6,6 +6,7 @@ const mockGetDisplayBySlug = vi.fn();
 const mockUpdateDisplay = vi.fn();
 const mockGetCachedFilmMetrics = vi.fn();
 const mockGetCachedFilmMenu = vi.fn();
+const mockGetCachedStudioAgenda = vi.fn();
 
 vi.mock("@/lib/api-auth", () => ({
   requireAuth: (...args: unknown[]) => mockRequireAuth(...args),
@@ -23,6 +24,10 @@ vi.mock("@/lib/film-metrics-cache", () => ({
 vi.mock("@/lib/film-menu-cache", () => ({
   getCachedFilmMenu: (...args: unknown[]) => mockGetCachedFilmMenu(...args),
   clearFilmMenuCache: () => {},
+}));
+
+vi.mock("@/lib/studio-calendar-cache", () => ({
+  getCachedStudioAgenda: (...args: unknown[]) => mockGetCachedStudioAgenda(...args),
 }));
 
 import { GET, PATCH } from "@/app/api/displays/[slug]/route";
@@ -54,6 +59,16 @@ describe("GET /api/displays/:slug", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetDisplayBySlug.mockResolvedValue(row);
+    mockGetCachedStudioAgenda.mockResolvedValue({
+      bookings: [],
+      input: null,
+      status: {
+        configured: false,
+        connected: false,
+        bookingsLeftToday: null,
+        nextBookingStart: null,
+      },
+    });
   });
 
   function get(slug = "studio-vertical") {
@@ -170,6 +185,63 @@ describe("GET /api/displays/:slug", () => {
     expect(JSON.stringify(body)).not.toMatch(/secret@|guest@/);
   });
 
+  it("returns the welcome state with studio info and without calendar secrets", async () => {
+    mockGetDisplayBySlug.mockResolvedValue({
+      ...row,
+      mode: "film_stats",
+      override_mode: null,
+      override_payload: null,
+      show_studio_bookings: true,
+      studio_info_lines: ["Wi-Fi: Trinity Design Build 5G, password Trinity64"],
+      studio_checkout_lines: ["Press the lock on the door on your way out."],
+    });
+    mockGetCachedStudioAgenda.mockResolvedValue({
+      bookings: [],
+      input: {
+        welcome: {
+          firstName: "Faith",
+          sessionType: "1 Hour Session",
+          start: "2:00 PM",
+          end: "3:00 PM",
+          email: "faith.oates@example.com",
+          phone: "919-555-0148",
+          price: "$150.00",
+          description: "Door code: 4821. Parking: the gravel lot behind the bakery.",
+        },
+      },
+      status: { configured: true, connected: true, bookingsLeftToday: 2, nextBookingStart: "2:00 PM" },
+    });
+
+    const response = await get();
+    const body = await response.json();
+    expect(body.mode).toBe("studio_welcome");
+    expect(body.data).toEqual({
+      firstName: "Faith",
+      sessionType: "1 Hour Session",
+      start: "2:00 PM",
+      end: "3:00 PM",
+      infoLines: ["Wi-Fi: Trinity Design Build 5G, password Trinity64"],
+    });
+    expect(body.data).not.toHaveProperty("checkoutLines");
+    expect(body).not.toHaveProperty("calendar");
+    expect(JSON.stringify(body)).not.toMatch(/faith\.oates|919-555-0148|150\.00|4821|gravel|bookingsLeftToday/);
+  });
+
+  it("does not ask the calendar when studio bookings are off", async () => {
+    mockGetDisplayBySlug.mockResolvedValue({
+      ...row,
+      mode: "film_stats",
+      override_mode: null,
+      override_payload: null,
+      show_studio_bookings: false,
+    });
+    mockGetCachedFilmMetrics.mockResolvedValue({ rollsProcessing: 1, nextLabRun: "Friday 12:00 PM" });
+    const response = await get();
+    const body = await response.json();
+    expect(body.mode).toBe("film_stats");
+    expect(mockGetCachedStudioAgenda).not.toHaveBeenCalled();
+  });
+
   it("does not look up a malformed slug", async () => {
     const response = await get("../film_orders");
     expect(response.status).toBe(404);
@@ -233,6 +305,36 @@ describe("PATCH /api/displays/:slug", () => {
     expect(body.defaultMode).toBe("film_stats");
     expect(body.resolvedMode).toBe("film_stats");
     expect(body.customer_email).toBeUndefined();
+  });
+
+  it("stores the bookings switch and the guest lines", async () => {
+    mockUpdateDisplay.mockImplementation(async (_slug: string, patch: Record<string, unknown>) => ({
+      ...row,
+      override_mode: null,
+      override_payload: null,
+      ...patch,
+    }));
+    const response = await patch({
+      showStudioBookings: false,
+      studioInfoLines: ["  Wi-Fi: Guest  ", "<b>Bathrooms</b> left"],
+      studioCheckoutLines: ["Put the furniture back"],
+    });
+    expect(response.status).toBe(200);
+    expect(mockUpdateDisplay).toHaveBeenCalledWith("studio-vertical", {
+      show_studio_bookings: false,
+      studio_info_lines: ["Wi-Fi: Guest", "Bathrooms left"],
+      studio_checkout_lines: ["Put the furniture back"],
+    });
+    const body = await response.json();
+    expect(body.showStudioBookings).toBe(false);
+    expect(body.studioInfoLines).toEqual(["Wi-Fi: Guest", "Bathrooms left"]);
+    expect(body.customer_email).toBeUndefined();
+  });
+
+  it("rejects a studio info value that is not a list", async () => {
+    const response = await patch({ studioInfoLines: "Wi-Fi" });
+    expect(response.status).toBe(400);
+    expect(mockUpdateDisplay).not.toHaveBeenCalled();
   });
 
   it("clears the override", async () => {

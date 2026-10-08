@@ -17,6 +17,11 @@
  */
 
 import { sanitizeFilmMenu } from "@/lib/film-menu";
+import {
+  sanitizeStudioLines,
+  studioCheckoutLinesFromRow,
+  studioInfoLinesFromRow,
+} from "@/lib/studio-info";
 
 export const DISPLAY_THEME = "yours-clean";
 export const DEFAULT_REFRESH_SECONDS = 30;
@@ -36,6 +41,8 @@ export const DISPLAY_PRIORITY = {
 } as const;
 
 export const STUDIO_DATA_KEYS = ["firstName", "sessionType", "start", "end"] as const;
+export const STUDIO_INFO_KEY = "infoLines";
+export const STUDIO_CHECKOUT_KEY = "checkoutLines";
 export const FILM_STATS_DATA_KEYS = [
   "rollsProcessing",
   "receivedToday",
@@ -77,6 +84,10 @@ export interface DisplayRow {
   last_client: Record<string, unknown> | null;
   override_mode: string | null;
   override_payload: unknown;
+  show_studio_bookings?: boolean | null;
+  /** Ordered guest notes. Null means the column is missing and the seed copy is used. */
+  studio_info_lines?: unknown;
+  studio_checkout_lines?: unknown;
   created_at?: string;
   updated_at?: string;
 }
@@ -126,6 +137,9 @@ export interface PlaylistInput {
 export interface DisplayResolveInput {
   display: Pick<DisplayRow, "mode" | "theme" | "is_enabled" | "override_mode" | "override_payload"> & {
     refresh_seconds?: number | null;
+    show_studio_bookings?: boolean | null;
+    studio_info_lines?: unknown;
+    studio_checkout_lines?: unknown;
   };
   now?: Date;
   studio?: StudioDisplayInput | null;
@@ -154,10 +168,10 @@ export interface HeartbeatClient {
 const DATA_KEYS_BY_MODE: Record<string, readonly string[]> = {
   idle: [],
   custom_message: ["message"],
-  studio_active: STUDIO_DATA_KEYS,
-  studio_welcome: STUDIO_DATA_KEYS,
+  studio_active: [...STUDIO_DATA_KEYS, STUDIO_INFO_KEY],
+  studio_welcome: [...STUDIO_DATA_KEYS, STUDIO_INFO_KEY],
   studio_upcoming: STUDIO_DATA_KEYS,
-  studio_ending_soon: STUDIO_DATA_KEYS,
+  studio_ending_soon: [...STUDIO_DATA_KEYS, STUDIO_CHECKOUT_KEY],
   film_stats: FILM_STATS_DATA_KEYS,
   film_status: FILM_STATUS_DATA_KEYS,
   film_menu: FILM_MENU_DATA_KEYS,
@@ -203,6 +217,14 @@ function pickStudio(source: StudioSessionView | null | undefined): Record<string
     if (value) data[key] = value;
   }
   return data;
+}
+
+function withStudioLines(
+  data: Record<string, string>,
+  key: typeof STUDIO_INFO_KEY | typeof STUDIO_CHECKOUT_KEY,
+  lines: string[],
+): Record<string, unknown> {
+  return lines.length ? { ...data, [key]: lines } : data;
 }
 
 const NULLABLE_FILM_KEYS = new Set([
@@ -251,9 +273,27 @@ function dataForMode(
     const message = sanitizeCustomMessage(itemData?.message);
     return message ? { message } : {};
   }
-  if (mode === "studio_ending_soon") return pickStudio(input.studio?.endingSoon);
-  if (mode === "studio_active") return pickStudio(input.studio?.active);
-  if (mode === "studio_welcome") return pickStudio(input.studio?.welcome);
+  if (mode === "studio_ending_soon") {
+    return withStudioLines(
+      pickStudio(input.studio?.endingSoon),
+      STUDIO_CHECKOUT_KEY,
+      studioCheckoutLinesFromRow(input.display.studio_checkout_lines),
+    );
+  }
+  if (mode === "studio_active") {
+    return withStudioLines(
+      pickStudio(input.studio?.active),
+      STUDIO_INFO_KEY,
+      studioInfoLinesFromRow(input.display.studio_info_lines),
+    );
+  }
+  if (mode === "studio_welcome") {
+    return withStudioLines(
+      pickStudio(input.studio?.welcome),
+      STUDIO_INFO_KEY,
+      studioInfoLinesFromRow(input.display.studio_info_lines),
+    );
+  }
   if (mode === "studio_upcoming") return pickStudio(input.studio?.upcoming);
   if (mode === "film_stats") return pickFilm(input.film, FILM_STATS_DATA_KEYS);
   if (mode === "film_status") return pickFilm(input.film, FILM_STATUS_DATA_KEYS);
@@ -306,13 +346,13 @@ export function resolveDisplayState(input: DisplayResolveInput): ResolvedDisplay
     candidates.push({
       mode: "studio_ending_soon",
       priority: DISPLAY_PRIORITY.studioActive,
-      data: pickStudio(input.studio.endingSoon),
+      data: dataForMode("studio_ending_soon", input),
     });
   } else if (input.studio?.active) {
     candidates.push({
       mode: "studio_active",
       priority: DISPLAY_PRIORITY.studioActive,
-      data: pickStudio(input.studio.active),
+      data: dataForMode("studio_active", input),
     });
   }
 
@@ -320,7 +360,7 @@ export function resolveDisplayState(input: DisplayResolveInput): ResolvedDisplay
     candidates.push({
       mode: "studio_welcome",
       priority: DISPLAY_PRIORITY.studioWelcome,
-      data: pickStudio(input.studio.welcome),
+      data: dataForMode("studio_welcome", input),
     });
   }
 
@@ -328,7 +368,7 @@ export function resolveDisplayState(input: DisplayResolveInput): ResolvedDisplay
     candidates.push({
       mode: "studio_upcoming",
       priority: DISPLAY_PRIORITY.studioUpcoming,
-      data: pickStudio(input.studio.upcoming),
+      data: dataForMode("studio_upcoming", input),
     });
   }
 
@@ -379,6 +419,12 @@ export function toPublicDisplayPayload(resolved: {
     if (!(key in source)) continue;
     const value = source[key];
     if (key === "nextLabRun") {
+      const text = plainText(value, 80);
+      if (text) data[key] = text;
+    } else if (key === STUDIO_INFO_KEY || key === STUDIO_CHECKOUT_KEY) {
+      const lines = sanitizeStudioLines(value);
+      if (lines.length) data[key] = lines;
+    } else if ((STUDIO_DATA_KEYS as readonly string[]).includes(key)) {
       const text = plainText(value, 80);
       if (text) data[key] = text;
     } else if (key === "menu") {

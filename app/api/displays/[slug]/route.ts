@@ -8,6 +8,7 @@ import {
   sanitizeCustomMessage,
 } from "@/lib/display";
 import { toAdminDisplay } from "@/lib/display-admin";
+import { sanitizeStudioLines } from "@/lib/studio-info";
 
 function json(body: unknown, status = 200) {
   return NextResponse.json(body, {
@@ -56,6 +57,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ slug: 
     mode?: string;
     override_mode?: string | null;
     override_payload?: { message: string } | null;
+    show_studio_bookings?: boolean;
+    studio_info_lines?: string[];
+    studio_checkout_lines?: string[];
   } = {};
 
   if ("mode" in record) {
@@ -63,6 +67,27 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ slug: 
       return json({ error: "That default mode is not available." }, 400);
     }
     patch.mode = record.mode;
+  }
+
+  if ("showStudioBookings" in record) {
+    if (typeof record.showStudioBookings !== "boolean") {
+      return json({ error: "Show studio bookings must be on or off." }, 400);
+    }
+    patch.show_studio_bookings = record.showStudioBookings;
+  }
+
+  if ("studioInfoLines" in record) {
+    if (!Array.isArray(record.studioInfoLines)) {
+      return json({ error: "Studio info must be a list of lines." }, 400);
+    }
+    patch.studio_info_lines = sanitizeStudioLines(record.studioInfoLines);
+  }
+
+  if ("studioCheckoutLines" in record) {
+    if (!Array.isArray(record.studioCheckoutLines)) {
+      return json({ error: "Checkout notes must be a list of lines." }, 400);
+    }
+    patch.studio_checkout_lines = sanitizeStudioLines(record.studioCheckoutLines);
   }
 
   if (record.clearOverride === true) {
