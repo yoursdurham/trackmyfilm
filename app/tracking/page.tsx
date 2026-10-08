@@ -26,6 +26,7 @@ import { isProcessOnlyOrder } from "@/lib/order-service";
 import { getPartialScanProgress, isMixedScanOrder } from "@/lib/scan-batch";
 import { orderNoteForCustomerDisplay } from "@/lib/tracking-public";
 import type { FilmOrder, OrderStatus, StatusHistoryEntry } from "@/lib/types";
+import RecoverySessionRedirect from "@/components/RecoverySessionRedirect";
 
 type StatusStep = {
   status: OrderStatus;
@@ -759,6 +760,7 @@ function TrackingContent() {
 export default function Tracking() {
   return (
     <Suspense fallback={null}>
+      <RecoverySessionRedirect />
       <TrackingContent />
     </Suspense>
   );
