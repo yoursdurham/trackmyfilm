@@ -54,7 +54,7 @@ export default function FilmStatsBoard({ data }: { data: Record<string, unknown>
         <Kicker>In process</Kicker>
         <Figure value={countLabel(data.rollsProcessing)} featured />
         <p className="mt-[0.8vh] text-[clamp(0.95rem,1.45vh,1.7rem)] text-[var(--text-muted)]">
-          In house or at the lab
+          Scan orders in house or at the lab
         </p>
       </section>
 

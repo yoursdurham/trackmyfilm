@@ -53,7 +53,7 @@ describe("next lab run", () => {
 });
 
 describe("computeFilmMetrics", () => {
-  it("counts rolls in house or at the lab, and ignores delivered orders", () => {
+  it("counts scanned rolls in house or at the lab, and ignores delivered orders", () => {
     const metrics = computeFilmMetrics([
       makeOrder({ id: "a", status: "Received by Yours", roll_count: 3, film_process: "Color" }),
       makeOrder({
@@ -67,6 +67,92 @@ describe("computeFilmMetrics", () => {
     ], NOW);
 
     expect(metrics.rollsProcessing).toBe(5);
+  });
+
+  it("does not count a process-only order at the lab as in process", () => {
+    const metrics = computeFilmMetrics([
+      makeOrder({
+        id: "process-only-at-lab",
+        status: "Received at Lab",
+        film_process: "Color",
+        roll_count: 4,
+        roll_details: rolls("Color", 4, "Process Only"),
+        received_by_yours_at: "2026-10-08T15:00:00.000Z",
+      }),
+    ], NOW);
+
+    expect(metrics.rollsProcessing).toBe(0);
+    expect(metrics.receivedToday).toBe(4);
+  });
+
+  it("counts only the scan rolls on a mixed order", () => {
+    const metrics = computeFilmMetrics([
+      makeOrder({
+        id: "mixed",
+        status: "Received by Yours",
+        film_process: "Both",
+        roll_count: 5,
+        roll_details: [
+          ...rolls("Color", 2, "Standard"),
+          ...rolls("Black & White", 1, "High-Res"),
+          ...rolls("Color", 2, "Process Only"),
+        ],
+        received_by_yours_at: "2026-10-08T15:00:00.000Z",
+      }),
+    ], NOW);
+
+    expect(metrics.rollsProcessing).toBe(3);
+    expect(metrics.receivedToday).toBe(5);
+  });
+
+  it("leaves Ready for Pickup and Scans Sent out of in process", () => {
+    const metrics = computeFilmMetrics([
+      makeOrder({
+        id: "pickup",
+        status: "Ready for Pickup",
+        film_process: "Color",
+        roll_count: 3,
+        roll_details: rolls("Color", 3, "Process Only"),
+      }),
+      makeOrder({
+        id: "scans-sent",
+        status: "Scans Sent",
+        film_process: "Color",
+        roll_count: 2,
+        roll_details: rolls("Color", 2),
+      }),
+      makeOrder({
+        id: "still-scanning",
+        status: "Received at Lab",
+        film_process: "Color",
+        roll_count: 1,
+        roll_details: rolls("Color", 1, "TIFF"),
+      }),
+    ], NOW);
+
+    expect(metrics.rollsProcessing).toBe(1);
+  });
+
+  it("uses the existing roll count for a legacy order unless that order is process only", () => {
+    const legacyProcessOnly = makeOrder({
+      id: "legacy-process-only",
+      status: "Received at Lab",
+      film_process: "Color",
+      roll_count: 5,
+    }) as FilmOrder & { scan_size?: string };
+    legacyProcessOnly.scan_size = "Process Only";
+
+    const metrics = computeFilmMetrics([
+      makeOrder({
+        id: "legacy-scan",
+        status: "Received by Yours",
+        film_process: "Color",
+        roll_count: 3,
+      }),
+      legacyProcessOnly,
+    ], NOW);
+
+    expect(metrics.rollsProcessing).toBe(3);
   });
 
   it("buckets received rolls by the New York calendar day and a Sunday week", () => {
