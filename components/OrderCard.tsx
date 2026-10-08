@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -115,6 +115,12 @@ export default function OrderCard({
   const [isSavingOrder, setIsSavingOrder] = useState(false);
   const [displayedNotes, setDisplayedNotes] = useState(order.notes ?? "");
   const [notesDraft, setNotesDraft] = useState(order.notes ?? "");
+  const [notesSource, setNotesSource] = useState(order.notes);
+  if (order.notes !== notesSource) {
+    setNotesSource(order.notes);
+    setDisplayedNotes(order.notes ?? "");
+    setNotesDraft(order.notes ?? "");
+  }
   const [isEditingNotes, setIsEditingNotes] = useState(false);
   const [isSavingNotes, setIsSavingNotes] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -154,11 +160,6 @@ export default function OrderCard({
   const statusOptions = getStatusOptionsForOrder(order);
 
   const currentIdx = STATUS_FLOW.indexOf(order.status);
-
-  useEffect(() => {
-    setDisplayedNotes(order.notes ?? "");
-    setNotesDraft(order.notes ?? "");
-  }, [order.notes]);
 
   const rollDetails = order.roll_details?.length
     ? order.roll_details

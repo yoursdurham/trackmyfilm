@@ -1,11 +1,14 @@
 import { NextResponse } from "next/server";
 import { getOrderByNumberAndEmail, updateOrder } from "@/lib/db";
-import { normalizeEmail, normalizeOrderNumber } from "@/lib/validation";
+import { emailsMatchExact, isWithinDedupWindow, normalizeEmail, normalizeOrderNumber } from "@/lib/validation";
 import { scanNotesForEmail, scanNotesHtml } from "@/lib/scan-notes";
 
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const MAX_REQUESTS_PER_WINDOW = 3;
-const ORDER_EMAIL_COOLDOWN_MS = 60_000;
+const ORDER_EMAIL_COOLDOWN_MS = 60 * 60 * 1000;
+
+export const RESEND_LINK_MESSAGE =
+  "If this order is ready, we'll email the download link. If you already requested one, please try again later.";
 
 type RateLimitEntry = {
   count: number;
@@ -15,8 +18,14 @@ type RateLimitEntry = {
 const rateLimit = new Map<string, RateLimitEntry>();
 const orderCooldownFallback = new Map<string, number>();
 
-function successResponse() {
-  return NextResponse.json({ success: true });
+function genericResponse() {
+  return NextResponse.json({ success: true, message: RESEND_LINK_MESSAGE });
+}
+
+/** Clears in-memory cooldown state. Tests only. */
+export function resetResendLinkStateForTests() {
+  rateLimit.clear();
+  orderCooldownFallback.clear();
 }
 
 function getClientIp(req: Request) {
@@ -44,18 +53,16 @@ function isRateLimited(ip: string) {
 }
 
 function isWithinOrderCooldown(orderId: string, lastEmailedAt?: string | null) {
-  const now = Date.now();
+  if (isWithinDedupWindow(lastEmailedAt)) return true;
   const fallbackSentAt = orderCooldownFallback.get(orderId);
-  const dbSentAt = lastEmailedAt ? new Date(lastEmailedAt).getTime() : 0;
-  const lastSentAt = Math.max(fallbackSentAt ?? 0, Number.isNaN(dbSentAt) ? 0 : dbSentAt);
-
-  return lastSentAt > 0 && now - lastSentAt < ORDER_EMAIL_COOLDOWN_MS;
+  if (!fallbackSentAt) return false;
+  return Date.now() - fallbackSentAt < ORDER_EMAIL_COOLDOWN_MS;
 }
 
 export async function POST(req: Request) {
   const ip = getClientIp(req);
   if (isRateLimited(ip)) {
-    return successResponse();
+    return genericResponse();
   }
 
   try {
@@ -64,24 +71,29 @@ export async function POST(req: Request) {
     const email = body.email ? normalizeEmail(body.email) : "";
 
     if (!orderNumber || !email) {
-      return successResponse();
+      return genericResponse();
     }
 
     const order = await getOrderByNumberAndEmail(orderNumber, email);
-    if (!order || order.status !== "Scans Sent" || !order.wetransfer_link) {
-      return successResponse();
+    if (
+      !order
+      || !emailsMatchExact(order.customer_email, email)
+      || order.status !== "Scans Sent"
+      || !order.wetransfer_link
+    ) {
+      return genericResponse();
     }
 
     if (isWithinOrderCooldown(order.id, order.last_emailed_at)) {
       console.log("[resend-link] Cooldown blocked resend for order:", order.order_number);
-      return successResponse();
+      return genericResponse();
     }
 
     const apiKey = process.env.RESEND_API_KEY;
     const templateId = process.env.RESEND_TEMPLATE_SCANS_SENT;
     if (!apiKey || !templateId) {
       console.error("[resend-link] Missing Resend configuration");
-      return successResponse();
+      return genericResponse();
     }
 
     const variables = {
@@ -127,7 +139,7 @@ export async function POST(req: Request) {
       }).catch((error) => {
         console.error("[resend-link] Failed to record email failure:", error);
       });
-      return successResponse();
+      return genericResponse();
     }
 
     const now = new Date();
@@ -142,9 +154,9 @@ export async function POST(req: Request) {
       console.error("[resend-link] Failed to record email success:", error);
     });
 
-    return successResponse();
+    return genericResponse();
   } catch (error) {
     console.error("[resend-link] Request failed:", error);
-    return successResponse();
+    return genericResponse();
   }
 }

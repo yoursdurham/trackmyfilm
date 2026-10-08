@@ -73,6 +73,7 @@ process.env.SUPABASE_SERVICE_ROLE_KEY = "test-service-role";
 
 import {
   deleteIncomingDraftsForOrder,
+  getCustomerByEmail,
   getIncomingDraftByOrderNumber,
   getOrderByNumber,
   getOrderByNumberAndEmail,
@@ -147,10 +148,49 @@ describe("order number database lookups", () => {
     };
     const found = await getOrderByNumberAndEmail("01034", "ada@example.com");
     expect(found?.id).toBe("plain");
-    expect(state.calls.some((call) => call.method === "ilike" && call.args[0] === "customer_email")).toBe(true);
+    expect(state.calls.some((call) => (
+      call.method === "ilike"
+      && call.args[0] === "customer_email"
+      && call.args[1] === "ada@example.com"
+    ))).toBe(true);
     expect(state.calls.some((call) => (
       call.method === "regexIMatch" && call.args[0] === "order_number"
     ))).toBe(true);
+  });
+
+  it("does not let % or _ wildcards match a different email", async () => {
+    state.result = {
+      data: [{ id: "plain", order_number: "1034", customer_email: "ada@example.com" }],
+      error: null,
+    };
+
+    expect(await getOrderByNumberAndEmail("1034", "%")).toBeNull();
+    expect(await getOrderByNumberAndEmail("01034", "a_a@example.com")).toBeNull();
+    expect(await getOrderByNumberAndEmail("1034", "ada%@example.com")).toBeNull();
+    expect((await getOrderByNumberAndEmail("01034", " ADA@example.com "))?.id).toBe("plain");
+
+    const patterns = state.calls
+      .filter((call) => call.method === "ilike" && call.args[0] === "customer_email")
+      .map((call) => String(call.args[1]));
+    expect(patterns).toContain("\\%");
+    expect(patterns).toContain("a\\_a@example.com");
+    expect(patterns).not.toContain("%");
+    expect(patterns).not.toContain("a_a@example.com");
+  });
+
+  it("matches a customer email exactly and ignores wildcard input", async () => {
+    state.result = {
+      data: [{ id: "c1", email: "Ada@Example.com", phone: "555", notes: "staff only" }],
+      error: null,
+    };
+    expect(await getCustomerByEmail("%")).toBeNull();
+    expect(await getCustomerByEmail("ada_%")).toBeNull();
+    expect((await getCustomerByEmail(" ada@example.com "))?.id).toBe("c1");
+    const patterns = state.calls
+      .filter((call) => call.table === "customers" && call.method === "ilike")
+      .map((call) => String(call.args[1]));
+    expect(patterns).toContain("\\%");
+    expect(patterns).not.toContain("%");
   });
 
   it("treats an existing 1034 as a duplicate of 01034", async () => {

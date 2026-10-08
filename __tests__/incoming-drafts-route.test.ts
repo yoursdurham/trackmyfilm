@@ -37,7 +37,6 @@ vi.mock("@/lib/db", () => ({
   getOrderByNumber: (...args: unknown[]) => mockGetOrderByNumber(...args),
   createOrder: (...args: unknown[]) => mockCreateOrder(...args),
   getCustomers: (...args: unknown[]) => mockGetCustomers(...args),
-  createCustomer: (...args: unknown[]) => mockCreateCustomer(...args),
 }));
 
 vi.mock("@/lib/email-service", () => ({
@@ -411,13 +410,15 @@ describe("Squarespace incoming draft routes", () => {
   });
 
   describe("DELETE /api/incoming-drafts/:id", () => {
-    function removeDraft(token: string | null = null, id = DRAFT_ID) {
+    async function removeDraft(token: string | null = null, id = DRAFT_ID) {
       const headers: Record<string, string> = {};
       if (token) headers.authorization = `Bearer ${token}`;
-      return deleteDraft(new Request(`http://localhost/api/incoming-drafts/${id}`, {
+      const res = await deleteDraft(new Request(`http://localhost/api/incoming-drafts/${id}`, {
         method: "DELETE",
         headers,
       }), { params: Promise.resolve({ id }) });
+      if (!res) throw new Error("expected a response");
+      return res;
     }
 
     it("does not accept the intake secret in place of a staff session", async () => {
