@@ -2,8 +2,11 @@ import {
   isDisplayOnline,
   publicPayloadForDisplay,
   sanitizeCustomMessage,
+  type DisplayResolveInput,
   type DisplayRow,
 } from "@/lib/display";
+import type { StudioCalendarStatus } from "@/lib/studio-calendar-config";
+import { studioCheckoutLinesFromRow, studioInfoLinesFromRow } from "@/lib/studio-info";
 
 export interface AdminDisplay {
   slug: string;
@@ -19,10 +22,22 @@ export interface AdminDisplay {
   online: boolean;
   overrideMessage: string | null;
   refreshSeconds: number;
+  showStudioBookings: boolean;
+  studioInfoLines: string[];
+  studioCheckoutLines: string[];
 }
 
-export function toAdminDisplay(row: DisplayRow, now = Date.now()): AdminDisplay {
-  const payload = publicPayloadForDisplay(row);
+export interface DisplaysAdminResponse {
+  displays: AdminDisplay[];
+  calendar: StudioCalendarStatus;
+}
+
+export function toAdminDisplay(
+  row: DisplayRow,
+  now = Date.now(),
+  extras?: Omit<DisplayResolveInput, "display">,
+): AdminDisplay {
+  const payload = publicPayloadForDisplay(row, extras);
   const overrideMessage = row.override_mode === "custom_message"
     ? sanitizeCustomMessage(
       row.override_payload && typeof row.override_payload === "object"
@@ -45,5 +60,8 @@ export function toAdminDisplay(row: DisplayRow, now = Date.now()): AdminDisplay 
     online: isDisplayOnline(row.last_seen, now),
     overrideMessage,
     refreshSeconds: payload.refreshSeconds,
+    showStudioBookings: row.show_studio_bookings !== false,
+    studioInfoLines: studioInfoLinesFromRow(row.studio_info_lines),
+    studioCheckoutLines: studioCheckoutLinesFromRow(row.studio_checkout_lines),
   };
 }

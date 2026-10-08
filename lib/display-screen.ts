@@ -4,9 +4,11 @@ import {
   publicPayloadForDisplay,
   type DisplayPayload,
   type DisplayResolveInput,
+  type StudioDisplayInput,
 } from "@/lib/display";
 import type { FilmMenu } from "@/lib/film-menu";
 import type { FilmMetrics } from "@/lib/film-metrics";
+import { getCachedStudioAgenda } from "@/lib/studio-calendar-cache";
 
 const FILM_MODES = new Set(["film_stats", "film_status"]);
 
@@ -25,16 +27,25 @@ export function displayNeedsFilmMenu(display: DisplayResolveInput["display"]): b
   return winningMode(display) === "film_menu";
 }
 
-/** Public display payload. Film metrics and the menu are loaded only when that mode can win. */
+/** Bookings can cover the default mode. A manual override already wins, so skip the fetch. */
+export function displayShowsStudioBookings(display: DisplayResolveInput["display"]): boolean {
+  if (display.is_enabled === false) return false;
+  if (display.show_studio_bookings === false) return false;
+  if (display.override_mode?.trim()) return false;
+  return true;
+}
+
+/** Public display payload. Film data and studio bookings are loaded only when they can show. */
 export async function publicPayloadWithFilm(
   display: DisplayResolveInput["display"],
 ): Promise<DisplayPayload> {
   const needsMetrics = displayNeedsFilmMetrics(display);
   const needsMenu = displayNeedsFilmMenu(display);
-  if (!needsMetrics && !needsMenu) return publicPayloadForDisplay(display);
+  const needsStudio = displayShowsStudioBookings(display);
 
   let film: FilmMetrics | null = null;
   let menu: FilmMenu | null = null;
+  let studio: StudioDisplayInput | null = null;
   if (needsMetrics) {
     try {
       film = await getCachedFilmMetrics();
@@ -51,8 +62,17 @@ export async function publicPayloadWithFilm(
       console.error("[film-menu]", message);
     }
   }
+  if (needsStudio) {
+    try {
+      studio = (await getCachedStudioAgenda(new Date())).input;
+    } catch {
+      console.error("[studio-calendar] unavailable");
+    }
+  }
+  if (!needsMetrics && !needsMenu && !needsStudio) return publicPayloadForDisplay(display);
   return publicPayloadForDisplay(display, {
     ...(film ? { film } : {}),
     ...(menu ? { menu } : {}),
+    ...(studio ? { studio } : {}),
   });
 }

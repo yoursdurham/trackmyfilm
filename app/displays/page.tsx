@@ -9,8 +9,10 @@ import InternalHeader from "@/components/InternalHeader";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import FilmMenuEditor from "@/components/displays/FilmMenuEditor";
+import StudioLinesEditor from "@/components/displays/StudioLinesEditor";
 import { SELECTABLE_DEFAULT_MODES } from "@/lib/display";
-import type { AdminDisplay } from "@/lib/display-admin";
+import type { AdminDisplay, DisplaysAdminResponse } from "@/lib/display-admin";
+import type { StudioCalendarStatus } from "@/lib/studio-calendar-config";
 
 const CANVAS = { width: 1080, height: 3840 };
 const PREVIEW_HEIGHT = 640;
@@ -27,6 +29,35 @@ function modeLabel(mode: string) {
   return mode;
 }
 
+function CalendarStatus({ calendar }: { calendar: StudioCalendarStatus }) {
+  const configured = calendar.configured;
+  const connected = configured && calendar.connected;
+  const tone = !configured
+    ? "border-stone-200 bg-stone-50 text-stone-600"
+    : connected
+      ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+      : "border-amber-200 bg-amber-50 text-amber-900";
+  const label = !configured ? "Calendar not configured" : connected ? "Calendar connected" : "Calendar not connected";
+  const left = calendar.bookingsLeftToday;
+  const details = [
+    left === null ? null : left === 1 ? "1 booking left today" : `${left} bookings left today`,
+    calendar.nextBookingStart ? `Next booking ${calendar.nextBookingStart}` : null,
+  ].filter(Boolean);
+
+  return (
+    <div data-testid="studio-calendar-status" className={`mb-4 rounded-xl border px-4 py-3 text-sm ${tone}`}>
+      <p className="font-medium">{label}</p>
+      <p className="mt-1">
+        {details.length > 0
+          ? details.join(" · ")
+          : configured
+            ? "No bookings left today or tomorrow."
+            : "Add STUDIO_CALENDAR_ICS_URL on the server. It stays off the screen."}
+      </p>
+    </div>
+  );
+}
+
 function seenLabel(lastSeen: string | null) {
   if (!lastSeen) return "Never checked in";
   const date = new Date(lastSeen);
@@ -39,7 +70,7 @@ export default function DisplaysPage() {
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [previewSlug, setPreviewSlug] = useState<string | null>(null);
 
-  const { data: displays = [], isLoading, isError } = useQuery<AdminDisplay[]>({
+  const { data, isLoading, isError } = useQuery<DisplaysAdminResponse>({
     queryKey: ["displays"],
     queryFn: async () => {
       const response = await fetch("/api/displays");
@@ -48,6 +79,8 @@ export default function DisplaysPage() {
     },
     refetchInterval: 30_000,
   });
+  const displays = data?.displays ?? [];
+  const calendar = data?.calendar ?? null;
 
   const save = useMutation({
     mutationFn: async ({ slug, body }: { slug: string; body: Record<string, unknown> }) => {
@@ -62,9 +95,8 @@ export default function DisplaysPage() {
       }
       return payload as AdminDisplay;
     },
-    onSuccess: (updated) => {
-      queryClient.setQueryData<AdminDisplay[]>(["displays"], (current = []) =>
-        current.map((row) => row.slug === updated.slug ? updated : row));
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["displays"] });
       toast.success("Screen updated");
     },
     onError: (error: Error) => {
@@ -103,6 +135,7 @@ export default function DisplaysPage() {
           </div>
         ) : (
           <div className="grid gap-4">
+            {calendar ? <CalendarStatus calendar={calendar} /> : null}
             {displays.map((display) => {
               const message = drafts[display.slug] ?? display.overrideMessage ?? "";
               const previewOpen = previewSlug === display.slug;
@@ -142,24 +175,44 @@ export default function DisplaysPage() {
                   </div>
 
                   <div className="mt-5 grid gap-4 lg:grid-cols-[16rem_1fr]">
-                    <label className="block text-sm text-slate-600">
-                      Default mode
-                      <select
-                        aria-label={`Default mode for ${display.name}`}
-                        value={display.defaultMode}
-                        onChange={(event) => {
-                          save.mutate({ slug: display.slug, body: { mode: event.target.value } });
-                        }}
-                        className="mt-1 h-9 w-full rounded-lg border border-stone-200 bg-white px-3 text-sm text-slate-800 outline-none focus-visible:border-amber-500 focus-visible:ring-2 focus-visible:ring-amber-500/20"
-                      >
-                        {modeChoices.map((option) => (
-                          <option key={option.value} value={option.value}>{option.label}</option>
-                        ))}
-                      </select>
-                      <span className="mt-1 block text-xs text-slate-400">
-                        Used when the custom message is cleared.
-                      </span>
-                    </label>
+                    <div>
+                      <label className="block text-sm text-slate-600">
+                        Default mode
+                        <select
+                          aria-label={`Default mode for ${display.name}`}
+                          value={display.defaultMode}
+                          onChange={(event) => {
+                            save.mutate({ slug: display.slug, body: { mode: event.target.value } });
+                          }}
+                          className="mt-1 h-9 w-full rounded-lg border border-stone-200 bg-white px-3 text-sm text-slate-800 outline-none focus-visible:border-amber-500 focus-visible:ring-2 focus-visible:ring-amber-500/20"
+                        >
+                          {modeChoices.map((option) => (
+                            <option key={option.value} value={option.value}>{option.label}</option>
+                          ))}
+                        </select>
+                        <span className="mt-1 block text-xs text-slate-400">
+                          Used when nothing is booked and the custom message is cleared.
+                        </span>
+                      </label>
+
+                      <label className="mt-4 flex items-start gap-2 text-sm text-slate-600">
+                        <input
+                          type="checkbox"
+                          aria-label={`Show studio bookings for ${display.name}`}
+                          className="mt-0.5 h-4 w-4 accent-amber-600"
+                          checked={display.showStudioBookings}
+                          onChange={(event) => {
+                            save.mutate({ slug: display.slug, body: { showStudioBookings: event.target.checked } });
+                          }}
+                        />
+                        <span>
+                          Show studio bookings
+                          <span className="mt-0.5 block text-xs text-slate-400">
+                            Up next, welcome, and the session, from the studio calendar.
+                          </span>
+                        </span>
+                      </label>
+                    </div>
 
                     <div>
                       <label htmlFor={`message-${display.slug}`} className="text-sm text-slate-600">
@@ -196,6 +249,27 @@ export default function DisplaysPage() {
                         </Button>
                       </div>
                     </div>
+                  </div>
+
+                  <div className="mt-5 grid gap-3 border-t border-stone-100 pt-5">
+                    <StudioLinesEditor
+                      title="Studio info"
+                      hint="Shown under the welcome and during the session. Leave door codes and parking directions off this list."
+                      lines={display.studioInfoLines}
+                      saving={save.isPending}
+                      onSave={(studioInfoLines) => {
+                        save.mutate({ slug: display.slug, body: { studioInfoLines } });
+                      }}
+                    />
+                    <StudioLinesEditor
+                      title="Checkout"
+                      hint="Shown when the session is ending."
+                      lines={display.studioCheckoutLines}
+                      saving={save.isPending}
+                      onSave={(studioCheckoutLines) => {
+                        save.mutate({ slug: display.slug, body: { studioCheckoutLines } });
+                      }}
+                    />
                   </div>
 
                   {display.slug === displays[0]?.slug ? <FilmMenuEditor /> : null}

@@ -9,6 +9,7 @@ import {
   toPublicDisplayPayload,
   type DisplayResolveInput,
 } from "../lib/display";
+import { DEFAULT_STUDIO_CHECKOUT_LINES, DEFAULT_STUDIO_INFO_LINES } from "../lib/studio-info";
 
 const display = {
   mode: "idle",
@@ -87,7 +88,9 @@ describe("resolveDisplayState", () => {
       sessionType: "Studio Rental",
       start: "2:00 PM",
       end: "5:00 PM",
+      infoLines: [...DEFAULT_STUDIO_INFO_LINES],
     });
+    expect(result.data).not.toHaveProperty("checkoutLines");
   });
 
   it("prefers the ending-soon window over a plain active session", () => {
@@ -100,12 +103,54 @@ describe("resolveDisplayState", () => {
     });
     expect(result.mode).toBe("studio_ending_soon");
     expect(result.data.firstName).toBe("Jessica");
+    expect(result.data.checkoutLines).toEqual([...DEFAULT_STUDIO_CHECKOUT_LINES]);
+    expect(result.data).not.toHaveProperty("infoLines");
   });
 
   it("prefers welcome over upcoming, and upcoming over the default mode", () => {
-    expect(resolve({ studio: { welcome: session, upcoming: session } }).mode).toBe("studio_welcome");
-    expect(resolve({ studio: { upcoming: session } }).mode).toBe("studio_upcoming");
-    expect(resolve({ studio: { upcoming: session } }).priority).toBe(DISPLAY_PRIORITY.studioUpcoming);
+    const welcome = resolve({ studio: { welcome: session, upcoming: session } });
+    expect(welcome.mode).toBe("studio_welcome");
+    expect(welcome.data.infoLines).toEqual([...DEFAULT_STUDIO_INFO_LINES]);
+    expect(welcome.data).not.toHaveProperty("checkoutLines");
+    const upcoming = resolve({ studio: { upcoming: session } });
+    expect(upcoming.mode).toBe("studio_upcoming");
+    expect(upcoming.priority).toBe(DISPLAY_PRIORITY.studioUpcoming);
+    expect(upcoming.data).not.toHaveProperty("infoLines");
+    expect(upcoming.data).not.toHaveProperty("checkoutLines");
+  });
+
+  it("uses the screen's info and checkout lines and leaves door codes off the payload", () => {
+    const welcome = resolve({
+      display: {
+        ...display,
+        studio_info_lines: ["Wi-Fi: Guest, password hello", "<b>Bathrooms</b> down the hall"],
+        studio_checkout_lines: ["Lock the door"],
+      },
+      studio: { welcome: { ...session, doorCode: "4821", parking: "the gravel lot" } },
+    });
+    expect(welcome.data.infoLines).toEqual([
+      "Wi-Fi: Guest, password hello",
+      "Bathrooms down the hall",
+    ]);
+    expect(JSON.stringify(welcome.data)).not.toMatch(/4821|gravel/);
+
+    const ending = resolve({
+      display: {
+        ...display,
+        studio_info_lines: ["Wi-Fi: Guest, password hello"],
+        studio_checkout_lines: ["Lock the door"],
+      },
+      studio: { endingSoon: session },
+    });
+    expect(ending.data.checkoutLines).toEqual(["Lock the door"]);
+    expect(ending.data).not.toHaveProperty("infoLines");
+
+    const cleared = resolve({
+      display: { ...display, studio_info_lines: [] },
+      studio: { active: session },
+    });
+    expect(cleared.mode).toBe("studio_active");
+    expect(cleared.data).not.toHaveProperty("infoLines");
   });
 
   it("plays an enabled playlist item instead of the stored default mode", () => {
@@ -241,6 +286,47 @@ describe("toPublicDisplayPayload", () => {
     });
     expect(JSON.stringify(payload)).not.toMatch(/a@b.com|555|secret|lab@|jessica@|180/);
     expect(payload.data.message).not.toMatch(/[<>]/);
+  });
+
+  it("sends studio info lines only on welcome and active, and checkout lines only when ending", () => {
+    const welcome = toPublicDisplayPayload({
+      mode: "studio_welcome",
+      theme: "yours-clean",
+      refreshSeconds: 30,
+      data: {
+        firstName: "Faith",
+        sessionType: "1 Hour Session",
+        start: "2:00 PM",
+        end: "3:00 PM",
+        infoLines: ["Wi-Fi: ExampleNet, password example123", { doorCode: "4821" }],
+        checkoutLines: ["Please put furniture back where it was"],
+        doorCode: "4821",
+        parking: "the gravel lot behind the bakery",
+        description: "Phone: 919-555-0148",
+      },
+    });
+    expect(welcome.data.infoLines).toEqual(["Wi-Fi: ExampleNet, password example123"]);
+    expect(welcome.data).not.toHaveProperty("checkoutLines");
+    expect(JSON.stringify(welcome)).not.toMatch(/4821|gravel|919-555-0148/);
+
+    const ending = toPublicDisplayPayload({
+      mode: "studio_ending_soon",
+      theme: "yours-clean",
+      refreshSeconds: 30,
+      data: {
+        firstName: "Faith",
+        end: "3:00 PM",
+        infoLines: ["Wi-Fi: ExampleNet, password example123"],
+        checkoutLines: ["Please put furniture back where it was", "Press the lock on the door on your way out."],
+        doorCode: "4821",
+      },
+    });
+    expect(ending.data.checkoutLines).toEqual([
+      "Please put furniture back where it was",
+      "Press the lock on the door on your way out.",
+    ]);
+    expect(ending.data).not.toHaveProperty("infoLines");
+    expect(JSON.stringify(ending)).not.toMatch(/4821|example123/);
   });
 });
 
