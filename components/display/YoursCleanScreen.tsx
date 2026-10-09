@@ -14,21 +14,21 @@ const STUDIO_MODES = new Set([
 function messageSize(message: string) {
   const lines = message.split("\n");
   const longest = lines.reduce((max, line) => Math.max(max, line.length), 0);
-  if (longest <= 12 && lines.length === 1) return "clamp(3.25rem, 12vw, 11vh)";
-  if (longest <= 42 && lines.length <= 4) return "clamp(2.2rem, 6.4vw, 6.5vh)";
-  if (message.length <= 140) return "clamp(1.7rem, 4.6vw, 4.8vh)";
-  return "clamp(1.25rem, 3.2vw, 3.4vh)";
+  if (longest <= 12 && lines.length === 1) return "clamp(2.6rem, min(9cqw, 9vh), 9vh)";
+  if (longest <= 42 && lines.length <= 4) return "clamp(1.8rem, min(5.2cqw, 5.5vh), 5.5vh)";
+  if (message.length <= 140) return "clamp(1.45rem, min(3.8cqw, 4vh), 4vh)";
+  return "clamp(1.15rem, min(2.8cqw, 3.2vh), 3.2vh)";
 }
 
 function nameSize(name: string, withNotes: boolean) {
   if (withNotes) {
-    if (name.length <= 6) return "clamp(4.5rem, 14vw, 12vh)";
-    if (name.length <= 10) return "clamp(3.6rem, 11vw, 9vh)";
-    return "clamp(2.8rem, 8vw, 7vh)";
+    if (name.length <= 6) return "clamp(3rem, min(12cqw, 10vh), 10vh)";
+    if (name.length <= 10) return "clamp(2.4rem, min(9cqw, 8vh), 8vh)";
+    return "clamp(1.8rem, min(7cqw, 6.5vh), 6.5vh)";
   }
-  if (name.length <= 6) return "clamp(5.5rem, 20vw, 18vh)";
-  if (name.length <= 10) return "clamp(4.5rem, 15vw, 14vh)";
-  return "clamp(3.5rem, 11vw, 12vh)";
+  if (name.length <= 6) return "clamp(4rem, min(14cqw, 14vh), 14vh)";
+  if (name.length <= 10) return "clamp(3.2rem, min(10cqw, 11vh), 11vh)";
+  return "clamp(2.4rem, min(7.5cqw, 9vh), 9vh)";
 }
 
 function studioClock(date: Date) {
@@ -74,7 +74,7 @@ function StudioBoard({ mode, data }: { mode: string; data: Record<string, unknow
   return (
     <div className={`flex w-full flex-col items-center ${withNotes ? "pt-[1vh]" : ""}`}>
       <p className={`font-medium tracking-[0.34em] text-[var(--accent-green)] uppercase ${
-        withNotes ? "text-[clamp(1.05rem,2.6vw,2.4vh)]" : "text-[clamp(1.2rem,3.2vw,3vh)]"
+        withNotes ? "text-[clamp(1.05rem,2.6cqw,2.4vh)]" : "text-[clamp(1.2rem,3.2cqw,3vh)]"
       }`}>
         {kicker}
       </p>
@@ -86,21 +86,21 @@ function StudioBoard({ mode, data }: { mode: string; data: Record<string, unknow
       </h1>
       {sessionType ? (
         <p className={`mt-[1.8vh] max-w-[18ch] leading-snug text-[var(--text-muted)] ${
-          withNotes ? "text-[clamp(1.35rem,3.4vw,3vh)]" : "text-[clamp(1.6rem,4vw,3.6vh)]"
+          withNotes ? "text-[clamp(1.35rem,3.4cqw,3vh)]" : "text-[clamp(1.6rem,4cqw,3.6vh)]"
         }`}>
           {sessionType}
         </p>
       ) : null}
       {time ? (
         <p className={`mt-[1.4vh] leading-none font-medium tabular-nums ${
-          withNotes ? "text-[clamp(2.4rem,7vw,6.5vh)]" : "text-[clamp(3rem,10vw,9vh)]"
+          withNotes ? "text-[clamp(2.4rem,7cqw,6.5vh)]" : "text-[clamp(3rem,10cqw,9vh)]"
         }`}>
           {time}
         </p>
       ) : null}
       {info.length > 0 ? (
         <section aria-label="Studio info" data-studio-info className="mt-[4.5vh] w-full text-left">
-          <h2 className="text-center text-[clamp(1.15rem,2.8vw,2.6vh)] font-medium tracking-[0.28em] text-[var(--accent-purple)] uppercase">
+          <h2 className="text-center text-[clamp(1.15rem,2.8cqw,2.6vh)] font-medium tracking-[0.28em] text-[var(--accent-purple)] uppercase">
             Studio info
           </h2>
           <ul className="mt-[2.2vh] w-full space-y-[2.4vh]">
@@ -108,7 +108,7 @@ function StudioBoard({ mode, data }: { mode: string; data: Record<string, unknow
               <li
                 key={`${index}-${line}`}
                 className="leading-[1.25] font-medium"
-                style={{ fontSize: "clamp(1.85rem, 5.6vw, 5vh)" }}
+                style={{ fontSize: "clamp(1.85rem, 5.6cqw, 5vh)" }}
               >
                 {line}
               </li>
@@ -118,7 +118,7 @@ function StudioBoard({ mode, data }: { mode: string; data: Record<string, unknow
       ) : null}
       {checkout.length > 0 ? (
         <section aria-label="Checkout" data-studio-checkout className="mt-[5vh] w-full text-left">
-          <h2 className="text-center text-[clamp(1.15rem,2.8vw,2.6vh)] font-medium tracking-[0.28em] text-[var(--accent-purple)] uppercase">
+          <h2 className="text-center text-[clamp(1.15rem,2.8cqw,2.6vh)] font-medium tracking-[0.28em] text-[var(--accent-purple)] uppercase">
             Before you go
           </h2>
           <ul className="mt-[2.4vh] w-full space-y-[3vh]">
@@ -126,7 +126,7 @@ function StudioBoard({ mode, data }: { mode: string; data: Record<string, unknow
               <li
                 key={`${index}-${line}`}
                 className="leading-[1.2] font-medium"
-                style={{ fontSize: "clamp(2.15rem, 6.4vw, 5.8vh)" }}
+                style={{ fontSize: "clamp(2.15rem, 6.4cqw, 5.8vh)" }}
               >
                 {line}
               </li>
@@ -173,16 +173,16 @@ export default function YoursCleanScreen({
     >
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-y-0 left-0 w-[4.2vw] min-w-8 bg-[var(--accent-tan)]"
+        className="pointer-events-none absolute inset-y-0 left-0 w-[4.2cqw] min-w-8 bg-[var(--accent-tan)]"
         style={{
           backgroundImage: "radial-gradient(circle at center, #1f2937 0 4px, transparent 5px)",
           backgroundSize: "100% 4.6vh",
           backgroundRepeat: "repeat-y",
         }}
       />
-      <div aria-hidden className="pointer-events-none absolute inset-y-0 right-0 w-[0.4vw] min-w-1 bg-[var(--accent-purple)]" />
+      <div aria-hidden className="pointer-events-none absolute inset-y-0 right-0 w-[0.4cqw] min-w-1 bg-[var(--accent-purple)]" />
 
-      <div className="flex min-h-0 flex-1 flex-col pl-[8vw] pr-[6vw]">
+      <div className="flex min-h-0 flex-1 flex-col pl-[8cqw] pr-[6cqw]">
         <header className={`flex shrink-0 flex-col items-center ${compact ? "pt-[2.2vh]" : "pt-[7vh]"}`}>
           {/* Static file, not the image optimizer: one small request on a Pi 4. */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -198,13 +198,13 @@ export default function YoursCleanScreen({
           <p className={`font-medium tracking-[0.42em] text-[var(--accent-purple)] uppercase ${
             compact
               ? "mt-[0.8vh] text-[clamp(0.7rem,1.2vh,1.2rem)]"
-              : "mt-[2.2vh] text-[clamp(0.8rem,2.1vw,1.7rem)]"
+              : "mt-[2.2vh] text-[clamp(0.8rem,2.1cqw,1.7rem)]"
           }`}>
             Durham
           </p>
         </header>
 
-        <main className={`flex min-h-0 flex-1 flex-col px-[1vw] text-center ${
+        <main className={`flex min-h-0 flex-1 flex-col px-[1cqw] text-center ${
           filmStats
             ? "w-full items-stretch py-[1.2vh]"
             : studioHasNotes
@@ -214,7 +214,7 @@ export default function YoursCleanScreen({
           {filmStats ? (
             <FilmStatsBoard data={payload.data} />
           ) : notice ? (
-            <p className="max-w-[18ch] text-[clamp(2rem,6vw,4.5rem)] leading-tight font-medium">
+            <p className="max-w-[18ch] text-[clamp(2rem,6cqw,4.5rem)] leading-tight font-medium">
               {notice}
             </p>
           ) : message ? (
@@ -228,14 +228,14 @@ export default function YoursCleanScreen({
             <StudioBoard mode={studioMode} data={payload.data} />
           ) : (
             <div className="flex flex-col items-center">
-              <p className="text-[clamp(0.85rem,2.2vw,1.6rem)] tracking-[0.38em] text-[var(--accent-green)] uppercase">
+              <p className="text-[clamp(0.85rem,2.2cqw,1.6rem)] tracking-[0.38em] text-[var(--accent-green)] uppercase">
                 The studio
               </p>
-              <h1 className="mt-[2vh] text-[clamp(4rem,16vw,15vh)] leading-none font-semibold tracking-tight">
+              <h1 className="mt-[2vh] max-w-full text-[clamp(3.5rem,min(12cqw,12vh),12vh)] leading-none font-semibold tracking-tight">
                 Welcome
               </h1>
-              <div className="mt-[3.5vh] h-px w-[22vw] bg-[var(--accent-purple)]" />
-              <p className="mt-[3.5vh] max-w-[16ch] text-[clamp(1.4rem,3.6vw,2.6rem)] leading-snug text-[var(--text-muted)]">
+              <div className="mt-[3.5vh] h-px w-[22cqw] bg-[var(--accent-purple)]" />
+              <p className="mt-[3.5vh] max-w-[16ch] text-[clamp(1.4rem,3.6cqw,2.6rem)] leading-snug text-[var(--text-muted)]">
                 Make yourself at home.
               </p>
             </div>
@@ -244,21 +244,21 @@ export default function YoursCleanScreen({
 
         <footer className={`flex shrink-0 flex-col items-center text-center ${compact ? "pb-[2vh]" : "pb-[6vh]"}`}>
           <p className={`min-h-[1em] leading-none font-medium tabular-nums ${
-            compact ? "text-[clamp(1.4rem,2.4vh,2.6rem)]" : "text-[clamp(2.5rem,9vw,8vh)]"
+            compact ? "text-[clamp(1.4rem,2.4vh,2.6rem)]" : "text-[clamp(2.5rem,9cqw,8vh)]"
           }`}>
             {clock?.time ?? "\u00a0"}
           </p>
           <p className={`min-h-[1.2em] text-[var(--text-muted)] ${
             compact
               ? "mt-[0.6vh] text-[clamp(0.85rem,1.3vh,1.4rem)]"
-              : "mt-[1.4vh] text-[clamp(1rem,2.5vw,1.8rem)]"
+              : "mt-[1.4vh] text-[clamp(1rem,2.5cqw,1.8rem)]"
           }`}>
             {clock?.day ?? "\u00a0"}
           </p>
           <p className={`tracking-[0.28em] text-[var(--accent-purple)] uppercase ${
             compact
               ? "mt-[1.2vh] text-[clamp(0.75rem,1.2vh,1.25rem)]"
-              : "mt-[4vh] text-[clamp(0.85rem,2.2vw,1.5rem)]"
+              : "mt-[4vh] text-[clamp(0.85rem,2.2cqw,1.5rem)]"
           }`}>
             35mm · 120 · 110
           </p>

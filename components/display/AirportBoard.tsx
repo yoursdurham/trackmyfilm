@@ -28,7 +28,7 @@ export default function AirportBoard({
       {board ? (
         <FilmDeparturesBoard board={board} />
       ) : (
-        <div className="flex h-full items-center justify-center px-[8vw] text-center">
+        <div className="flex h-full items-center justify-center px-[6cqw] text-center">
           <p className="text-[2rem] leading-snug tracking-[0.14em] text-[#FFC627]">
             {notice || "The board will be back in a moment."}
           </p>

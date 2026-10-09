@@ -5,6 +5,7 @@ import {
   DISPLAY_RELOAD_STORAGE_KEY,
   clampRefreshSeconds,
   displayNeedsReload,
+  displaySafeArea,
   AIRPORT_THEME,
   displayUsesAirportTheme,
   displayUsesCrtTheme,
@@ -124,14 +125,38 @@ export default function DisplayPlayer({
 
   const screen = payload ?? IDLE;
   const notice = missing && !payload ? "This screen is not set up yet." : null;
+  const inset = displaySafeArea(slug).left;
+
+  let board;
   if (displayUsesAirportTheme(screen.mode) || screen.theme === AIRPORT_THEME) {
-    return <AirportBoard payload={screen} notice={notice} />;
+    board = <AirportBoard payload={screen} notice={notice} />;
+  } else if (screen.mode === "film_stats" || screen.mode === "film_status") {
+    board = <YoursCleanScreen payload={screen} notice={notice} />;
+  } else if (displayUsesCrtTheme(screen.mode) || screen.theme === "crt-green") {
+    board = <CrtGreenScreen payload={screen} notice={notice} />;
+  } else {
+    board = <YoursCleanScreen payload={screen} notice={notice} />;
   }
-  if (screen.mode === "film_stats" || screen.mode === "film_status") {
-    return <YoursCleanScreen payload={screen} notice={notice} />;
-  }
-  if (displayUsesCrtTheme(screen.mode) || screen.theme === "crt-green") {
-    return <CrtGreenScreen payload={screen} notice={notice} />;
-  }
-  return <YoursCleanScreen payload={screen} notice={notice} />;
+
+  return (
+    <div
+      className="flex h-dvh w-full overflow-hidden bg-black"
+      data-display-safe-inset={inset}
+    >
+      {inset > 0 ? (
+        <div
+          aria-hidden
+          data-display-deadzone=""
+          className="h-full shrink-0 bg-black"
+          style={{ width: inset }}
+        />
+      ) : null}
+      <div
+        className="relative h-full min-w-0 flex-1 overflow-hidden"
+        style={{ containerType: "inline-size" }}
+      >
+        {board}
+      </div>
+    </div>
+  );
 }

@@ -15,24 +15,24 @@ function scrollSeconds(menu: FilmMenu) {
 function MenuCopy({ menu, hidden = false }: { menu: FilmMenu; hidden?: boolean }) {
   return (
     <div aria-hidden={hidden || undefined} className="pb-[14vh]">
-      <h1 className="text-[clamp(2.4rem,3.1vh,4.6rem)] leading-none font-bold tracking-[0.14em]">
+      <h1 className="text-[clamp(2.2rem,min(3.1vh,6.8cqw),4.6rem)] leading-none font-bold tracking-[0.12em]">
         {menu.title || "YOUR'S FILM MENU"}
       </h1>
       {menu.subtitle ? (
-        <p className="mt-[1.4vh] text-[clamp(1.15rem,1.7vh,2.2rem)] tracking-[0.18em] opacity-85">
+        <p className="mt-[1.4vh] text-[clamp(1.05rem,min(1.7vh,3.2cqw),2.2rem)] tracking-[0.14em] opacity-85">
           {menu.subtitle}
         </p>
       ) : null}
       <Rule />
       {menu.banner.map((line) => (
-        <p key={line} className="text-[clamp(1.05rem,1.55vh,2rem)] leading-snug opacity-85">
+        <p key={line} className="text-[clamp(1rem,min(1.55vh,3.05cqw),2rem)] leading-snug opacity-85">
           {line}
         </p>
       ))}
       <Rule />
       {menu.sections.map((section) => (
         <section key={section.title} className="mt-[3.2vh]">
-          <h2 className="text-[clamp(1.7rem,2.25vh,3.2rem)] tracking-[0.12em]">
+          <h2 className="text-[clamp(1.45rem,min(2.25vh,4.2cqw),3.2rem)] tracking-[0.1em]">
             {section.title}
           </h2>
           <Rule />
@@ -40,9 +40,9 @@ function MenuCopy({ menu, hidden = false }: { menu: FilmMenu; hidden?: boolean }
             {section.items.map((item, index) => (
               <li
                 key={`${section.title}-${index}-${item.name}`}
-                className="flex items-baseline justify-between gap-[3vw] py-[0.15vh] text-[clamp(1.2rem,1.72vh,2.35rem)] leading-[1.38]"
+                className="flex items-baseline justify-between gap-[2cqw] py-[0.15vh] text-[clamp(1.1rem,min(1.72vh,3.3cqw),2.35rem)] leading-[1.35]"
               >
-                <span className="min-w-0 truncate">{item.name}</span>
+                <span className="min-w-0 break-words">{item.name}</span>
                 <span className="shrink-0 tabular-nums">{item.price}</span>
               </li>
             ))}
@@ -93,13 +93,13 @@ function linesOf(data: Record<string, unknown>, key: string) {
 
 function nameSize(name: string, withNotes: boolean) {
   if (withNotes) {
-    if (name.length <= 6) return "clamp(3.2rem, 6.2vh, 7vh)";
-    if (name.length <= 10) return "clamp(2.4rem, 4.4vh, 5vh)";
-    return "clamp(1.8rem, 3.2vh, 3.6vh)";
+    if (name.length <= 6) return "clamp(2.2rem, min(6.2vh, 12cqw), 7vh)";
+    if (name.length <= 10) return "clamp(1.8rem, min(4.4vh, 9cqw), 5vh)";
+    return "clamp(1.5rem, min(3.2vh, 7cqw), 3.6vh)";
   }
-  if (name.length <= 6) return "clamp(4rem, 9vh, 10vh)";
-  if (name.length <= 10) return "clamp(3rem, 6.5vh, 7vh)";
-  return "clamp(2.2rem, 4.4vh, 5vh)";
+  if (name.length <= 6) return "clamp(2.8rem, min(9vh, 14cqw), 10vh)";
+  if (name.length <= 10) return "clamp(2.2rem, min(6.5vh, 10cqw), 7vh)";
+  return "clamp(1.7rem, min(4.4vh, 7.5cqw), 5vh)";
 }
 
 function studioClock(date: Date) {
@@ -147,7 +147,7 @@ function StudioCopy({ mode, data }: { mode: string; data: Record<string, unknown
   const withNotes = info.length > 0 || checkout.length > 0;
   const kicker = upcoming ? "Up next" : welcome ? "Welcome" : ending ? "Ending soon" : "In session";
   const time = upcoming || welcome ? start : end ? `Until ${end}` : "";
-  const noteSize = withNotes ? "clamp(1.25rem, 2.15vh, 2.5rem)" : "clamp(1.5rem, 2.6vh, 3rem)";
+  const noteSize = withNotes ? "clamp(1.15rem, min(2.15vh, 3.4cqw), 2.5rem)" : "clamp(1.3rem, min(2.6vh, 4cqw), 3rem)";
 
   return (
     <div className="flex w-full flex-col items-center text-center">
@@ -187,7 +187,7 @@ function StudioCopy({ mode, data }: { mode: string; data: Record<string, unknown
           <Rule />
           <ul className="space-y-[2.2vh]">
             {checkout.map((line, index) => (
-              <li key={`${index}-${line}`} className="leading-[1.25] tracking-[0.05em]" style={{ fontSize: "clamp(1.55rem, 2.8vh, 3.2rem)" }}>
+              <li key={`${index}-${line}`} className="leading-[1.25] tracking-[0.04em]" style={{ fontSize: "clamp(1.35rem, min(2.8vh, 4.2cqw), 3.2rem)" }}>
                 {line}
               </li>
             ))}
@@ -214,7 +214,7 @@ function StaticCopy({
     || payload.mode === "studio_ending_soon";
 
   return (
-    <div className="flex h-full flex-col px-[6vw] py-[3vh]">
+    <div className="flex h-full flex-col px-[5cqw] py-[3vh]">
       <div className={`flex min-h-0 flex-1 flex-col items-center overflow-hidden ${
         studio && (payload.data.infoLines || payload.data.checkoutLines) ? "justify-start pt-[2vh]" : "justify-center"
       }`}>
@@ -232,7 +232,7 @@ function StaticCopy({
             <p className="mt-[1vh] tracking-[0.34em] opacity-80 text-[clamp(1rem,1.8vh,1.8rem)]">Durham</p>
             <Rule />
             <p className="tracking-[0.28em] opacity-80 text-[clamp(1.1rem,2vh,2rem)]">The studio</p>
-            <h1 className="mt-[2vh] leading-none font-bold tracking-[0.14em] text-[clamp(4rem,9vh,8rem)]">Welcome</h1>
+            <h1 className="mt-[2vh] max-w-full leading-none font-bold tracking-[0.1em] text-[clamp(3.2rem,min(9vh,12cqw),8rem)]">Welcome</h1>
             <p className="mt-[3vh] tracking-[0.12em] opacity-85 text-[clamp(1.3rem,2.4vh,2.6rem)]">Make yourself at home.</p>
             <p className="mt-[4vh] tracking-[0.22em] text-[clamp(1rem,1.8vh,1.8rem)]">35mm · 120 · 110</p>
           </div>
@@ -264,17 +264,17 @@ export default function CrtGreenScreen({
         backgroundImage: "radial-gradient(circle at center, #1c1c1c 0%, #0a0a0a 62%, #050505 100%)",
       }}
     >
-      <div className="crt-frame relative m-[2.2vh] flex flex-1 flex-col overflow-hidden rounded-[1.6vh] bg-[#020602] shadow-[inset_0_0_80px_rgba(0,0,0,0.92),inset_0_0_28px_rgba(124,255,107,0.08)]">
+      <div className="crt-frame relative mx-[4cqw] my-[2.2vh] flex flex-1 flex-col overflow-hidden rounded-[1.6vh] bg-[#020602] shadow-[inset_0_0_80px_rgba(0,0,0,0.92),inset_0_0_28px_rgba(124,255,107,0.08)]">
         {menu ? (
           <div
-            className="crt-scroll absolute inset-x-[5vw] top-[3.2vh]"
+            className="crt-scroll absolute inset-x-[4cqw] top-[3.2vh]"
             style={{ "--crt-duration": `${seconds}s` } as CSSProperties}
           >
             <MenuCopy menu={menu} />
             <MenuCopy menu={menu} hidden />
           </div>
         ) : payload.mode === "film_menu" ? (
-          <div className="flex h-full items-center justify-center px-[8vw] text-center">
+          <div className="flex h-full items-center justify-center px-[6cqw] text-center">
             <p className="text-[clamp(1.6rem,2.4vh,3rem)] leading-snug tracking-[0.08em]">
               {notice || "The film menu will be back in a moment."}
             </p>
