@@ -40,6 +40,30 @@ export function validateRollDetails(roll_details: unknown): string | null {
     if (roll.film_process && !["Color", "Black & White", "Both"].includes(roll.film_process)) {
       return `roll_details[${i}].film_process is invalid`;
     }
+    const blankError = rollBlankFlagError(roll, i);
+    if (blankError) return blankError;
+  }
+  return null;
+}
+
+/** Reject a non-boolean blank flag. A missing flag is allowed. */
+export function validateRollBlankFlags(roll_details: unknown): string | null {
+  if (roll_details === undefined || roll_details === null) return null;
+  if (!Array.isArray(roll_details)) return "roll_details must be an array";
+  for (let i = 0; i < roll_details.length; i++) {
+    const roll = roll_details[i];
+    if (!roll || typeof roll !== "object") continue;
+    const blankError = rollBlankFlagError(roll as { blank?: unknown }, i);
+    if (blankError) return blankError;
+  }
+  return null;
+}
+
+function rollBlankFlagError(roll: { blank?: unknown }, index: number): string | null {
+  if (!Object.prototype.hasOwnProperty.call(roll, "blank")) return null;
+  if (roll.blank === undefined || roll.blank === null) return null;
+  if (typeof roll.blank !== "boolean") {
+    return `roll_details[${index}].blank must be a boolean`;
   }
   return null;
 }

@@ -9,6 +9,8 @@ export interface RollDetail {
   film_stock?: string;
   prints_4x6?: boolean;
   scan_size?: "Standard" | "High-Res" | "TIFF" | "Process Only";
+  /** Lab returned this individual roll blank. Omitted when the roll is not blank. */
+  blank?: boolean;
 }
 
 export interface StatusHistoryEntry {

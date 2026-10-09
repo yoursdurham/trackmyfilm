@@ -10,22 +10,11 @@ import {
   calculateTurnaroundForPeriod,
   formatTurnaroundDays,
 } from "@/lib/turnaround-time";
+import { buildReportCsv, calculateReportMetrics } from "@/lib/report-metrics";
 import { toast } from "sonner";
 import InternalHeader from "@/components/InternalHeader";
 import FilmProcessBadge from "@/components/FilmProcessBadge";
 import type { FilmOrder } from "@/lib/types";
-
-interface ReportMetrics {
-  totalCustomers: number;
-  totalBWRolls: number;
-  totalColorRolls: number;
-  total35mmRolls: number;
-  total120Rolls: number;
-  total110Rolls: number;
-  total4x6Prints: number;
-  filmStockUsage: { stock: string; count: number }[];
-  scanResolutionUsage: { resolution: string; count: number }[];
-}
 
 type TimeFrameKey = "all" | "7d" | "30d" | "90d" | "365d" | "custom";
 
@@ -114,71 +103,7 @@ export default function Reports() {
     return getDateForOrder(order) >= cutoff;
   });
 
-  const calculateMetrics = (orderList: FilmOrder[] = orders): ReportMetrics => {
-    const uniqueCustomerIds = new Set<string>();
-    const filmStockMap = new Map<string, number>();
-    const scanResolutionMap = new Map<string, number>();
-    let totalBWRolls = 0;
-    let totalColorRolls = 0;
-    let total35mmRolls = 0;
-    let total120Rolls = 0;
-    let total110Rolls = 0;
-    let total4x6Prints = 0;
-
-    orderList.forEach((order) => {
-      uniqueCustomerIds.add(order.customer_id);
-
-      if (order.roll_details && order.roll_details.length > 0) {
-        order.roll_details.forEach((roll) => {
-          if (roll.film_process === "Black & White") totalBWRolls++;
-          if (roll.film_process === "Color") totalColorRolls++;
-          if (roll.film_type === "35mm") total35mmRolls++;
-          if (roll.film_type === "120") total120Rolls++;
-          if (roll.film_type === "110") total110Rolls++;
-          if (roll.prints_4x6) total4x6Prints++;
-          if (roll.film_stock) {
-            filmStockMap.set(roll.film_stock, (filmStockMap.get(roll.film_stock) || 0) + 1);
-          }
-          if (roll.scan_size) {
-            scanResolutionMap.set(roll.scan_size, (scanResolutionMap.get(roll.scan_size) || 0) + 1);
-          }
-        });
-      } else {
-        // Fallback to legacy single film type/process
-        if (order.film_process === "Black & White") totalBWRolls += order.roll_count;
-        if (order.film_process === "Color") totalColorRolls += order.roll_count;
-        if (order.film_type === "35mm") total35mmRolls += order.roll_count;
-        if (order.film_type === "120") total120Rolls += order.roll_count;
-        if (order.film_type === "110") total110Rolls += order.roll_count;
-        if (order.prints_4x6) total4x6Prints += order.roll_count;
-        if (order.film_stock) {
-          filmStockMap.set(order.film_stock, (filmStockMap.get(order.film_stock) || 0) + order.roll_count);
-        }
-      }
-    });
-
-    const filmStockUsage = Array.from(filmStockMap.entries())
-      .map(([stock, count]) => ({ stock, count }))
-      .sort((a, b) => b.count - a.count);
-
-    const scanResolutionUsage = Array.from(scanResolutionMap.entries())
-      .map(([resolution, count]) => ({ resolution, count }))
-      .sort((a, b) => b.count - a.count);
-
-    return {
-      totalCustomers: uniqueCustomerIds.size,
-      totalBWRolls,
-      totalColorRolls,
-      total35mmRolls,
-      total120Rolls,
-      total110Rolls,
-      total4x6Prints,
-      filmStockUsage,
-      scanResolutionUsage,
-    };
-  };
-
-  const metrics = calculateMetrics(filteredOrders);
+  const metrics = calculateReportMetrics(filteredOrders);
   const turnaround =
     selectedTimeFrame === "custom" && hasValidCustomRange && customStart && customEnd
       ? calculateTurnaroundForDateRange(orders, customStart, customEnd)
@@ -189,30 +114,13 @@ export default function Reports() {
   const totalScanRolls = metrics.scanResolutionUsage.reduce((sum, item) => sum + item.count, 0);
 
   const handleExport = () => {
-    const csvContent = [
-      "TrackMyFilm Report",
-      `Generated: ${new Date().toLocaleString()}`,
-      `Time frame: ${selectedTimeFrameLabel}`,
-      "",
-      "METRICS",
-      `Total Individual Customers,${metrics.totalCustomers}`,
-      `Total B/W Rolls,${metrics.totalBWRolls}`,
-      `Total Color Rolls,${metrics.totalColorRolls}`,
-      `Total 35mm Rolls,${metrics.total35mmRolls}`,
-      `Total 120 Rolls,${metrics.total120Rolls}`,
-      `Total 110 Rolls,${metrics.total110Rolls}`,
-      `Total 4x6" Prints Done,${metrics.total4x6Prints}`,
-      `Average Turnaround Time (days),${turnaround.averageDays !== null ? (Math.round(turnaround.averageDays * 10) / 10).toFixed(1) : ""}`,
-      `Completed Orders (turnaround),${turnaround.orderCount}`,
-      "",
-      "FILM STOCK USAGE",
-      "Film Stock,Count",
-      ...metrics.filmStockUsage.map((fs) => `${fs.stock},${fs.count}`),
-      "",
-      "SCAN RESOLUTION USAGE",
-      "Resolution,Count",
-      ...metrics.scanResolutionUsage.map((sr) => `${sr.resolution},${sr.count}`),
-    ].join("\n");
+    const csvContent = buildReportCsv({
+      generatedAt: new Date().toLocaleString(),
+      timeFrameLabel: selectedTimeFrameLabel,
+      metrics,
+      averageTurnaroundDays: turnaround.averageDays,
+      completedOrders: turnaround.orderCount,
+    });
 
     const blob = new Blob([csvContent], { type: "text/csv" });
     const url = window.URL.createObjectURL(blob);
@@ -287,7 +195,7 @@ export default function Reports() {
         </div>
 
         {/* Key Metrics Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-8">
           <Card className="border border-stone-100">
             <CardContent className="p-5">
               <div className="flex items-center justify-between">
@@ -336,6 +244,21 @@ export default function Reports() {
             </CardContent>
           </Card>
 
+          <Card className="border border-stone-100" data-testid="blank-rolls-total">
+            <CardContent className="p-5">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-slate-500 uppercase tracking-wide">Blank Rolls</p>
+                  <p className="text-3xl font-bold text-slate-800">{metrics.totalBlankRolls}</p>
+                  <p className="mt-1 text-xs text-slate-500">Included in the roll totals</p>
+                </div>
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-800 text-xs font-semibold text-white">
+                  B
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
           <Card className="border border-stone-100">
             <CardContent className="p-5">
               <div className="flex items-center justify-between">
@@ -343,6 +266,7 @@ export default function Reports() {
                   <p className="text-xs text-slate-500 uppercase tracking-wide">Avg Turnaround</p>
                   <p className="text-3xl font-bold text-sky-600">{formatTurnaroundDays(turnaround.averageDays)}</p>
                   <p className="mt-1 text-xs text-slate-500">Received at Lab → Scans Sent</p>
+                  <p className="text-xs text-slate-500">Blank-only orders left out</p>
                   <p className="text-xs text-slate-500">
                     {turnaround.orderCount} completed order{turnaround.orderCount === 1 ? "" : "s"}
                   </p>
@@ -354,7 +278,7 @@ export default function Reports() {
         </div>
 
         {/* Distribution Breakdown */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-6 mb-8">
           <Card className="border border-stone-100">
             <CardContent className="p-6">
               <h3 className="text-lg font-semibold text-slate-800 mb-4">Film Type Distribution</h3>
@@ -396,6 +320,59 @@ export default function Reports() {
                 <div className="mt-4 pt-4 border-t border-slate-200 flex items-center justify-between font-semibold">
                   <span className="text-slate-700">Total Rolls</span>
                   <span className="text-2xl text-slate-800">{metrics.totalColorRolls + metrics.totalBWRolls}</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border border-stone-100" data-testid="blank-rolls-breakdown">
+            <CardContent className="p-6">
+              <h3 className="text-lg font-semibold text-slate-800 mb-1">Blank rolls</h3>
+              <p className="mb-4 text-xs text-slate-500">
+                Same process and format split as the CSV export. These rolls stay inside the totals above.
+              </p>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-slate-600">Total blank</span>
+                  <span className="text-2xl font-bold text-slate-800">{metrics.totalBlankRolls}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-slate-600">Blank color</span>
+                  <span className="text-2xl font-bold text-amber-600">{metrics.blankColorRolls}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-slate-600">Blank B/W</span>
+                  <span className="text-2xl font-bold text-gray-600">{metrics.blankBWRolls}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-slate-600">Blank both</span>
+                  <span className="text-2xl font-bold text-slate-800">{metrics.blankBothRolls}</span>
+                </div>
+                {metrics.blankOtherProcessRolls > 0 ? (
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-slate-600">Blank other process</span>
+                    <span className="text-2xl font-bold text-slate-800">{metrics.blankOtherProcessRolls}</span>
+                  </div>
+                ) : null}
+                <div className="mt-4 space-y-3 border-t border-slate-200 pt-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-slate-600">Blank 35mm</span>
+                    <span className="text-2xl font-bold text-slate-800">{metrics.blank35mmRolls}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-slate-600">Blank 120</span>
+                    <span className="text-2xl font-bold text-slate-800">{metrics.blank120Rolls}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-slate-600">Blank 110</span>
+                    <span className="text-2xl font-bold text-slate-800">{metrics.blank110Rolls}</span>
+                  </div>
+                  {metrics.blankOtherFormatRolls > 0 ? (
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-slate-600">Blank other format</span>
+                      <span className="text-2xl font-bold text-slate-800">{metrics.blankOtherFormatRolls}</span>
+                    </div>
+                  ) : null}
                 </div>
               </div>
             </CardContent>

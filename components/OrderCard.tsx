@@ -37,7 +37,9 @@ import {
   type ScanDeliveryBatch,
 } from "@/lib/scan-batch";
 import { formatScanSizeLabel } from "@/lib/scan-size-display";
+import { isBlankRoll } from "@/lib/blank-roll";
 import { isValidWetransferLink, ensureHttps } from "@/lib/validation";
+import { BlankRollBadge, RollBlankButton, useToggleRollBlank } from "@/components/RollBlankControl";
 import type { FilmOrder, FilmProcess, FilmType, OrderStatus, RollDetail } from "@/lib/types";
 
 const FILM_TYPES: FilmType[] = ["35mm", "120", "110"];
@@ -125,6 +127,7 @@ export default function OrderCard({
   const [isSavingNotes, setIsSavingNotes] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
   const [isRetryingEmail, setIsRetryingEmail] = useState(false);
+  const { canToggle: canToggleBlank, pendingIndex: blankPendingIndex, toggle: toggleBlank } = useToggleRollBlank(order);
 
   const handleRetryEmail = async () => {
     setIsRetryingEmail(true);
@@ -823,8 +826,11 @@ export default function OrderCard({
                       key={`${order.id}-edit-roll-${index}`}
                       className="rounded-xl border border-slate-100 bg-slate-50 p-3"
                     >
-                      <div className="mb-2 flex items-center justify-between">
-                        <p className="font-medium text-slate-800">Roll {index + 1}</p>
+                      <div className="mb-2 flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium text-slate-800">Roll {index + 1}</p>
+                          {isBlankRoll(roll) ? <BlankRollBadge /> : null}
+                        </div>
                         {orderDraft.roll_details.length > 1 ? (
                           <Button
                             type="button"
@@ -911,6 +917,17 @@ export default function OrderCard({
                             className="mb-1 h-4 w-4 rounded border-slate-300"
                           />
                           4x6 Prints
+                        </label>
+                        <label className="flex items-end gap-2 pb-1 text-sm text-slate-600">
+                          <input
+                            type="checkbox"
+                            checked={isBlankRoll(roll)}
+                            onChange={(event) =>
+                              updateRollDraft(index, "blank", event.target.checked ? true : undefined)
+                            }
+                            className="mb-1 h-4 w-4 rounded border-slate-300"
+                          />
+                          Mark roll as blank
                         </label>
                       </div>
                     </div>
@@ -1046,7 +1063,19 @@ export default function OrderCard({
                         key={`${order.id}-detail-roll-${index}`}
                         className="rounded-xl border border-slate-100 bg-slate-50 p-3"
                       >
-                        <p className="mb-2 font-medium text-slate-800">Roll {index + 1}</p>
+                        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <p className="font-medium text-slate-800">Roll {index + 1}</p>
+                            {isBlankRoll(roll) ? <BlankRollBadge /> : null}
+                          </div>
+                          {canToggleBlank ? (
+                            <RollBlankButton
+                              blank={isBlankRoll(roll)}
+                              pending={blankPendingIndex === index}
+                              onClick={() => void toggleBlank(index)}
+                            />
+                          ) : null}
+                        </div>
                         <div className="flex flex-wrap gap-2">
                           {roll.film_type ? (
                             <span className="rounded-full bg-[var(--accent-tan)] px-2 py-0.5 text-xs font-medium text-[#A77B43]">

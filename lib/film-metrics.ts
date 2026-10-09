@@ -1,5 +1,6 @@
 import { ORDER_STATUS } from "@/lib/constants";
 import { FILM_METRICS_CONFIG } from "@/lib/film-metrics-config";
+import { isBlankRoll } from "@/lib/blank-roll";
 import { isProcessOnlyOrder, isProcessOnlyRoll } from "@/lib/order-service";
 import type { FilmOrder } from "@/lib/types";
 import { getReceivedAtLabDate, getScansSentDate, isTurnaroundOutlier } from "@/lib/turnaround-time";
@@ -289,7 +290,7 @@ function scannedRollsOnOrder(order: FilmOrder): number {
   if (order.roll_details?.length) {
     let scanned = 0;
     for (const roll of order.roll_details) {
-      if (isProcessOnlyRoll(roll)) continue;
+      if (isProcessOnlyRoll(roll) || isBlankRoll(roll)) continue;
       scanned += 1;
     }
     return scanned;
@@ -297,7 +298,7 @@ function scannedRollsOnOrder(order: FilmOrder): number {
   return positiveRollCount(order);
 }
 
-function sideWeights(order: FilmOrder): SideWeight {
+function sideWeights(order: FilmOrder, includeBlankRolls: boolean): SideWeight {
   const empty = { color: 0, bw: 0, both: 0 };
   if (isProcessOnlyOrder(order)) return empty;
 
@@ -305,6 +306,7 @@ function sideWeights(order: FilmOrder): SideWeight {
     const weight = { ...empty };
     for (const roll of order.roll_details) {
       if (isProcessOnlyRoll(roll)) continue;
+      if (!includeBlankRolls && isBlankRoll(roll)) continue;
       const kind = processKind(roll.film_process);
       if (kind === "color" || kind === "bw" || kind === "both") weight[kind] += 1;
     }
@@ -413,9 +415,13 @@ export function computeFilmMetrics(orders: FilmOrder[], now = new Date()): FilmM
       if (received >= weekStartKey) receivedThisWeek += rolls;
     }
 
-    const weight = sideWeights(order);
+    // Blank rolls were still processed, so they stay in scans-sent totals.
+    // They are already finished, so they stay out of rolls-in-process above,
+    // and they do not move the turnaround average.
+    const processed = sideWeights(order, true);
+    const timed = sideWeights(order, false);
     const scansSent = getScansSentDate(order);
-    const mixed = isMixedOrder(order, weight);
+    const mixed = isMixedOrder(order, processed);
     const colorEnd = mixed
       ? parseTimestamp(order.color_scans_delivered_at) ?? scansSent
       : scansSent;
@@ -427,13 +433,13 @@ export function computeFilmMetrics(orders: FilmOrder[], now = new Date()): FilmM
       parseTimestamp(order.bw_scans_delivered_at),
     ) ?? scansSent;
 
-    countSent(colorEnd, weight.color);
-    countSent(bwEnd, weight.bw);
-    countSent(bothEnd, weight.both);
+    countSent(colorEnd, processed.color);
+    countSent(bwEnd, processed.bw);
+    countSent(bothEnd, processed.both);
 
     const started = getReceivedAtLabDate(order);
-    addTurnaround(color, weight.color + weight.both, started, colorEnd, now);
-    addTurnaround(bw, weight.bw + weight.both, started, bwEnd, now);
+    addTurnaround(color, timed.color + timed.both, started, colorEnd, now);
+    addTurnaround(bw, timed.bw + timed.both, started, bwEnd, now);
   }
 
   return {
