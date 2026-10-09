@@ -467,4 +467,53 @@ describe("computeFilmMetrics", () => {
     expect(onlyOutliers.averageColorTurnaroundDays).toBeNull();
     expect(onlyOutliers.scansSentThisWeek).toBe(3);
   });
+
+  it("keeps blank rolls in processed totals and leaves them out of in-process and turnaround", () => {
+    const sent = new Date(NOW.getTime() - 1 * DAY);
+    const metrics = computeFilmMetrics([
+      makeOrder({
+        id: "open",
+        status: "Received at Lab",
+        film_process: "Color",
+        roll_count: 3,
+        roll_details: [
+          { film_type: "35mm", film_process: "Color", scan_size: "Standard" },
+          { film_type: "35mm", film_process: "Color", scan_size: "Standard", blank: true },
+          { film_type: "120", film_process: "Black & White", scan_size: "High-Res" },
+        ],
+        received_by_yours_at: "2026-10-08T15:00:00.000Z",
+      }),
+      makeOrder({
+        id: "finished-color",
+        status: "Scans Sent",
+        film_process: "Color",
+        roll_count: 3,
+        roll_details: [
+          { film_type: "35mm", film_process: "Color", scan_size: "Standard" },
+          { film_type: "35mm", film_process: "Color", scan_size: "Standard" },
+          { film_type: "35mm", film_process: "Color", scan_size: "Standard" },
+        ],
+        scans_sent_at: sent.toISOString(),
+        at_lab_at: new Date(sent.getTime() - 4 * DAY).toISOString(),
+      }),
+      makeOrder({
+        id: "finished-blank",
+        status: "Scans Sent",
+        film_process: "Color",
+        roll_count: 3,
+        roll_details: [
+          { film_type: "35mm", film_process: "Color", scan_size: "Standard", blank: true },
+          { film_type: "35mm", film_process: "Color", scan_size: "Standard", blank: true },
+          { film_type: "35mm", film_process: "Color", scan_size: "Standard", blank: true },
+        ],
+        scans_sent_at: sent.toISOString(),
+        at_lab_at: new Date(sent.getTime() - 8 * DAY).toISOString(),
+      }),
+    ], NOW);
+
+    expect(metrics.rollsProcessing).toBe(2);
+    expect(metrics.receivedToday).toBe(3);
+    expect(metrics.scansSentThisWeek).toBe(6);
+    expect(metrics.averageColorTurnaroundDays).toBe(4);
+  });
 });

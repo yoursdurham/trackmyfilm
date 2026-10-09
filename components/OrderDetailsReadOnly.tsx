@@ -5,7 +5,9 @@ import { format } from "date-fns";
 import FilmProcessBadge from "@/components/FilmProcessBadge";
 import StatusBadge from "@/components/StatusBadge";
 import { formatScanSizeLabel } from "@/lib/scan-size-display";
+import { isBlankRoll } from "@/lib/blank-roll";
 import { getOrderRollDetails } from "@/lib/order-roll-utils";
+import { BlankRollBadge, RollBlankButton, useToggleRollBlank } from "@/components/RollBlankControl";
 import type { FilmOrder } from "@/lib/types";
 
 type Props = {
@@ -20,6 +22,7 @@ function formatTs(value?: string | null) {
 
 export default function OrderDetailsReadOnly({ order, showDashboardLink = true }: Props) {
   const rolls = getOrderRollDetails(order);
+  const { canToggle, pendingIndex, toggle } = useToggleRollBlank(order);
 
   return (
     <div className="space-y-4 text-sm">
@@ -62,7 +65,19 @@ export default function OrderDetailsReadOnly({ order, showDashboardLink = true }
                   key={`${order.id}-profile-roll-${index}`}
                   className="rounded-lg border border-slate-100 bg-slate-50 p-3"
                 >
-                  <p className="mb-2 font-medium text-slate-800">Roll {index + 1}</p>
+                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <p className="font-medium text-slate-800">Roll {index + 1}</p>
+                      {isBlankRoll(roll) ? <BlankRollBadge /> : null}
+                    </div>
+                    {canToggle ? (
+                      <RollBlankButton
+                        blank={isBlankRoll(roll)}
+                        pending={pendingIndex === index}
+                        onClick={() => void toggle(index)}
+                      />
+                    ) : null}
+                  </div>
                   <div className="flex flex-wrap gap-2">
                     {roll.film_type ? (
                       <span className="rounded-full bg-[var(--accent-tan)] px-2 py-0.5 text-xs font-medium text-[#A77B43]">

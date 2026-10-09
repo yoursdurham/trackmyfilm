@@ -108,6 +108,27 @@ describe("computeCustomerStats", () => {
     expect(stats.common_film_type).toBe("110");
   });
 
+  it("keeps blank rolls in the roll total and leaves an all-blank order out of the average", () => {
+    const stats = computeCustomerStats([
+      baseOrder({ roll_count: 2 }),
+      baseOrder({
+        id: "blank-order",
+        order_number: "JE1009",
+        roll_count: 3,
+        scans_sent_at: "2026-01-09T10:00:00.000Z",
+        roll_details: [
+          { film_type: "35mm", film_process: "Color", blank: true },
+          { film_type: "35mm", film_process: "Color", blank: true },
+          { film_type: "120", film_process: "Black & White", blank: true },
+        ],
+      }),
+    ]);
+
+    expect(stats.total_orders).toBe(2);
+    expect(stats.total_rolls).toBe(5);
+    expect(stats.average_turnaround_days).toBe(4);
+  });
+
   it("uses newest order by dropoff_date, then received_by_yours_at, then created_at", () => {
     expect(
       getLatestOrderDate([

@@ -1,3 +1,4 @@
+import { orderHasOnlyBlankRolls } from "@/lib/blank-roll";
 import { ORDER_STATUS } from "@/lib/constants";
 import { FILM_METRICS_CONFIG } from "@/lib/film-metrics-config";
 import type { FilmOrder, OrderStatus } from "@/lib/types";
@@ -82,6 +83,7 @@ function collectTurnaroundDays(
 ): TurnaroundPeriodStats {
   const completed = orders
     .map((order) => {
+      if (orderHasOnlyBlankRolls(order)) return null;
       const scansSent = getScansSentDate(order);
       const turnaroundDays = getTurnaroundDays(order);
       if (!scansSent || turnaroundDays === null) return null;

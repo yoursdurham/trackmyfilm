@@ -5,6 +5,7 @@
 import type { FilmOrder, FilmProcess, FilmType, RollDetail } from "./types";
 import { computeCalculatedPreferences } from "./customer-preference-calculations";
 import { getOrderRollDetails } from "./order-roll-utils";
+import { orderHasOnlyBlankRolls } from "./blank-roll";
 import { isTurnaroundOutlier } from "./turnaround-time";
 
 export { getOrderRollDetails } from "./order-roll-utils";
@@ -131,6 +132,7 @@ export function computeCustomerStats(orders: FilmOrder[]): CustomerOrderStats {
   const turnaroundDays: number[] = [];
 
   for (const order of orders) {
+    if (orderHasOnlyBlankRolls(order)) continue;
     const turnaround = getTurnaroundDays(order);
     if (turnaround !== null) turnaroundDays.push(turnaround);
   }

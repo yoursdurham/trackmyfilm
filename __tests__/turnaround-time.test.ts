@@ -167,6 +167,39 @@ describe("turnaround-time", () => {
     });
   });
 
+  it("leaves an all-blank order out of the average and keeps a mixed order", () => {
+    const blankOnly = makeOrder({
+      id: "blank-only",
+      at_lab_at: isoDaysAgo(10),
+      scans_sent_at: isoDaysAgo(4),
+      roll_count: 2,
+      roll_details: [
+        { film_type: "35mm", film_process: "Color", blank: true },
+        { film_type: "35mm", film_process: "Black & White", blank: true },
+      ],
+    });
+    const mixed = makeOrder({
+      id: "mixed",
+      at_lab_at: isoDaysAgo(8),
+      scans_sent_at: isoDaysAgo(4),
+      roll_count: 2,
+      roll_details: [
+        { film_type: "35mm", film_process: "Color", blank: true },
+        { film_type: "120", film_process: "Color" },
+      ],
+    });
+    const plain = makeOrder({
+      id: "plain",
+      at_lab_at: isoDaysAgo(9),
+      scans_sent_at: isoDaysAgo(3),
+    });
+
+    expect(calculateTurnaroundForPeriod([blankOnly, mixed, plain], "all")).toEqual({
+      orderCount: 2,
+      averageDays: 5,
+    });
+  });
+
   it("formats turnaround to one decimal place", () => {
     expect(formatTurnaroundDays(5)).toBe("5.0 days");
     expect(formatTurnaroundDays(6.666)).toBe("6.7 days");

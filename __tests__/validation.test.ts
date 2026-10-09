@@ -17,6 +17,7 @@ import {
   normalizeFilmType,
   isValidFilmType,
   validateRollDetails,
+  validateRollBlankFlags,
 } from "../lib/validation";
 
 // ─── Status transitions ───────────────────────────────────────────────────────
@@ -218,6 +219,26 @@ describe("validateRollDetails", () => {
         { film_type: "110", film_process: "Color", scan_size: "Standard" },
       ])
     ).toBeNull();
+  });
+
+  it("accepts a missing blank flag and a boolean blank flag", () => {
+    expect(
+      validateRollDetails([
+        { film_type: "35mm", film_process: "Color" },
+        { film_type: "35mm", film_process: "Color", blank: true },
+        { film_type: "35mm", film_process: "Color", blank: false },
+      ])
+    ).toBeNull();
+    expect(validateRollBlankFlags(undefined)).toBeNull();
+    expect(validateRollBlankFlags(null)).toBeNull();
+  });
+
+  it("rejects a non-boolean blank flag", () => {
+    expect(
+      validateRollBlankFlags([
+        { film_type: "35mm", film_process: "Color", blank: "yes" },
+      ])
+    ).toBe("roll_details[0].blank must be a boolean");
   });
 });
 
