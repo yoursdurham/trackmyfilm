@@ -171,15 +171,6 @@ export default function YoursCleanScreen({
       data-display-mode={screenMode}
       className="relative flex h-dvh w-full flex-col overflow-hidden bg-[var(--bg-main)] text-[var(--text-main)] select-none"
     >
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-y-0 left-0 w-[4.2cqw] min-w-8 bg-[var(--accent-tan)]"
-        style={{
-          backgroundImage: "radial-gradient(circle at center, #1f2937 0 4px, transparent 5px)",
-          backgroundSize: "100% 4.6vh",
-          backgroundRepeat: "repeat-y",
-        }}
-      />
       <div aria-hidden className="pointer-events-none absolute inset-y-0 right-0 w-[0.4cqw] min-w-1 bg-[var(--accent-purple)]" />
 
       <div className="flex min-h-0 flex-1 flex-col pl-[8cqw] pr-[6cqw]">

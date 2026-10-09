@@ -36,11 +36,12 @@ export const DISPLAY_SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 /**
  * Physical panels with a dead strip. Keyed by slug so a screen can avoid
  * that edge without a database column. `studio-vertical` is the Acer
- * 1080×3840 mounted portrait: the dead pixels end near 200px, so the live
- * area starts 210px in and the board uses the rest of the width.
+ * 1080×3840 mounted portrait: the dead strip runs past the old 210px
+ * inset, so the live area starts 240px in and the board uses the rest
+ * of the width.
  */
 export const DISPLAY_SAFE_AREA = {
-  "studio-vertical": { left: 210 },
+  "studio-vertical": { left: 240 },
 } as const;
 
 export function displaySafeArea(slug: string): { left: number } {
