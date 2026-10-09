@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { getOrderByNumberAndEmail, updateOrder } from "@/lib/db";
-import { emailsMatchExact, isWithinDedupWindow, normalizeEmail, normalizeOrderNumber } from "@/lib/validation";
+import { getOrderByNumber, updateOrder } from "@/lib/db";
+import { isWithinDedupWindow, normalizeEmail, normalizeOrderNumber } from "@/lib/validation";
 import { scanNotesForEmail, scanNotesHtml } from "@/lib/scan-notes";
 
 const RATE_LIMIT_WINDOW_MS = 60_000;
@@ -66,18 +66,18 @@ export async function POST(req: Request) {
   }
 
   try {
-    const body = await req.json() as { orderNumber?: string; email?: string };
-    const orderNumber = body.orderNumber ? normalizeOrderNumber(body.orderNumber) : "";
-    const email = body.email ? normalizeEmail(body.email) : "";
+    const body = await req.json() as { orderNumber?: string };
+    const orderNumber = body.orderNumber ? normalizeOrderNumber(String(body.orderNumber)) : "";
 
-    if (!orderNumber || !email) {
+    if (!orderNumber) {
       return genericResponse();
     }
 
-    const order = await getOrderByNumberAndEmail(orderNumber, email);
+    const order = await getOrderByNumber(orderNumber);
+    const recipient = order?.customer_email ? normalizeEmail(order.customer_email) : "";
     if (
       !order
-      || !emailsMatchExact(order.customer_email, email)
+      || !recipient
       || order.status !== "Scans Sent"
       || !order.wetransfer_link
     ) {
@@ -107,7 +107,7 @@ export async function POST(req: Request) {
 
     const payload = {
       from: process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev",
-      to: [normalizeEmail(order.customer_email)],
+      to: [recipient],
       reply_to: process.env.REPLY_TO_EMAIL || "hello@yoursdurham.com",
       template: {
         id: templateId,

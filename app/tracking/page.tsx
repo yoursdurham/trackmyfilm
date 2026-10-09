@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
@@ -36,7 +36,7 @@ type StatusStep = {
 };
 
 type CommittedSearch =
-  | { type: "order"; orderNumber: string; email: string }
+  | { type: "order"; orderNumber: string; email?: string }
   | { type: "email"; email: string };
 
 type TrackingResult = {
@@ -182,12 +182,15 @@ const RESEND_LINK_FALLBACK =
   "If this order is ready, we'll email the download link. If you already requested one, please try again later.";
 
 async function fetchTrackedOrders(search: CommittedSearch): Promise<TrackingResult> {
-  const param =
-    search.type === "order"
-      ? `order_number=${encodeURIComponent(search.orderNumber)}&email=${encodeURIComponent(search.email)}`
-      : `email=${encodeURIComponent(search.email)}`;
+  const params = new URLSearchParams();
+  if (search.type === "order") {
+    params.set("order_number", search.orderNumber);
+    if (search.email) params.set("email", search.email);
+  } else {
+    params.set("email", search.email);
+  }
 
-  const response = await fetch(`/api/orders/track?${param}`);
+  const response = await fetch(`/api/orders/track?${params.toString()}`);
   if (!response.ok) {
     throw new Error("Failed to fetch orders");
   }
@@ -215,8 +218,8 @@ function TrackingContent() {
   const searchParams = useSearchParams();
   const urlOrder = (searchParams.get("order") || searchParams.get("order_number") || "").trim();
   const urlEmail = (searchParams.get("email") || "").trim();
-  const urlSearch: CommittedSearch | null = urlOrder && urlEmail
-    ? { type: "order", orderNumber: urlOrder, email: urlEmail }
+  const urlSearch: CommittedSearch | null = urlOrder
+    ? { type: "order", orderNumber: urlOrder, ...(urlEmail ? { email: urlEmail } : {}) }
     : urlEmail
       ? { type: "email", email: urlEmail }
       : null;
@@ -226,6 +229,7 @@ function TrackingContent() {
   const [resendingOrderId, setResendingOrderId] = useState<string | null>(null);
   const [resendCooldowns, setResendCooldowns] = useState<Record<string, number>>({});
   const [resendMessages, setResendMessages] = useState<Record<string, string>>({});
+  const resendInFlight = useRef(new Set<string>());
   const orderTerm = orderDraft ?? urlOrder;
   const emailTerm = emailDraft ?? urlEmail;
   const committed = manualSearch === "cleared" ? null : (manualSearch ?? urlSearch);
@@ -265,22 +269,26 @@ function TrackingContent() {
   }, [resendCooldowns]);
 
   const handleTrackOrder = () => {
-    if (!normalizedOrderTerm || !normalizedEmailTerm) return;
+    if (!normalizedOrderTerm) return;
     setManualSearch({
       type: "order",
       orderNumber: normalizedOrderTerm,
-      email: normalizedEmailTerm,
+      ...(normalizedEmailTerm ? { email: normalizedEmailTerm } : {}),
     });
   };
 
   const handleTrackEmail = () => {
     if (!normalizedEmailTerm) return;
+    if (normalizedOrderTerm) {
+      handleTrackOrder();
+      return;
+    }
     setManualSearch({ type: "email", email: normalizedEmailTerm });
   };
 
   const handleEnterKey = (event: React.KeyboardEvent<HTMLInputElement>) => {
     if (event.key !== "Enter") return;
-    if (normalizedOrderTerm && normalizedEmailTerm) {
+    if (normalizedOrderTerm) {
       handleTrackOrder();
       return;
     }
@@ -296,11 +304,9 @@ function TrackingContent() {
   };
 
   const handleResendDownloadLink = async (order: PublicTrackingOrder) => {
-    if ((resendCooldowns[order.id] ?? 0) > 0) return;
+    if (resendInFlight.current.has(order.id) || (resendCooldowns[order.id] ?? 0) > 0) return;
 
-    const email = committed?.email ?? "";
-    if (!email) return;
-
+    resendInFlight.current.add(order.id);
     setResendingOrderId(order.id);
     setResendMessages((current) => ({ ...current, [order.id]: "" }));
 
@@ -312,7 +318,6 @@ function TrackingContent() {
         },
         body: JSON.stringify({
           orderNumber: order.order_number,
-          email,
         }),
       });
       const body = await response.json().catch(() => null) as { message?: string } | null;
@@ -330,6 +335,7 @@ function TrackingContent() {
         [order.id]: RESEND_LINK_FALLBACK,
       }));
     } finally {
+      resendInFlight.current.delete(order.id);
       setResendingOrderId(null);
     }
   };
@@ -363,6 +369,10 @@ function TrackingContent() {
       <main className="mx-auto max-w-5xl px-4 pb-10 sm:px-6 lg:px-8">
         <Card className="mb-14 rounded-[24px] border border-[var(--border-soft)] bg-[var(--card-bg)] shadow-sm ring-0">
           <CardContent className="p-6 sm:p-8">
+            <p className="mb-4 text-sm leading-relaxed text-slate-600">
+              Enter an order number or the email on the order. Either one is enough.
+              If you enter both, they have to match.
+            </p>
             <div className="mb-4 flex flex-col gap-3">
               <div className="relative w-full">
                 <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
@@ -393,7 +403,7 @@ function TrackingContent() {
               <button
                 type="button"
                 onClick={handleTrackOrder}
-                disabled={!normalizedOrderTerm || !normalizedEmailTerm || isLoading}
+                disabled={!normalizedOrderTerm || isLoading}
                 className="flex flex-1 items-center justify-start gap-3 rounded-xl bg-[#B19FBF] px-4 py-4 text-left text-white transition-transform active:scale-[0.99] disabled:opacity-50 sm:justify-center sm:text-center"
               >
                 {isLoading ? (
@@ -453,7 +463,9 @@ function TrackingContent() {
               <p className="text-slate-500">
                 {committed?.type === "email"
                   ? "No orders found for this email address"
-                  : "No orders found. Check the order number and email, then try again."}
+                  : committed?.type === "order" && committed.email
+                    ? "No orders found. Check the order number and email, then try again."
+                    : "Order number not found. Please check and try again."}
               </p>
             </motion.div>
           ) : orders.length > 0 ? (
