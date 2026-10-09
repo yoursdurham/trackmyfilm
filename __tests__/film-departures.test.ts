@@ -24,19 +24,19 @@ function order(overrides: DepartureOrder & Record<string, unknown> = {}): Depart
 }
 
 describe("formatDepartureName", () => {
-  it("keeps a first name and last initial, and handles spacing, single names, and multi-word first names", () => {
+  it("keeps a first name and last initial, and handles spacing, single names, and hyphenated names", () => {
     expect(formatDepartureName("Justin Edwards")).toBe("JUSTIN E.");
     expect(formatDepartureName("  justin   edwards  ")).toBe("JUSTIN E.");
     expect(formatDepartureName("Madonna")).toBe("MADONNA");
     expect(formatDepartureName("  Cher  ")).toBe("CHER");
-    // Two words are first + last. Three or more keep the leading words.
+    // Two words are first + last initial. Middle words are not part of the first name.
     expect(formatDepartureName("Mary Ann")).toBe("MARY A.");
-    expect(formatDepartureName("Mary Ann Smith")).toBe("MARY ANN S.");
-    expect(formatDepartureName("  Mary\nAnn   Lee  ")).toBe("MARY ANN L.");
+    expect(formatDepartureName("Mary Ann Smith")).toBe("MARY S.");
+    expect(formatDepartureName("  Mary\nAnn   Lee  ")).toBe("MARY L.");
     expect(formatDepartureName("Jean-Luc Picard")).toBe("JEAN-LUC P.");
     expect(formatDepartureName("Sean O'Brien")).toBe("SEAN O.");
     expect(formatDepartureName("Justin Smith-Jones")).toBe("JUSTIN S.");
-    expect(formatDepartureName("Maria de la Cruz")).toBe("MARIA DE LA C.");
+    expect(formatDepartureName("Maria de la Cruz")).toBe("MARIA C.");
     expect(formatDepartureName("Dr. Justin Edwards Jr.")).toBe("JUSTIN E.");
     expect(formatDepartureName("Justin II")).toBe("JUSTIN");
     expect(formatDepartureName("justin.edwards@example.com")).toBe("JUSTIN E.");
@@ -46,6 +46,13 @@ describe("formatDepartureName", () => {
     expect(formatDepartureName("")).toBe("");
     expect(formatDepartureName(null)).toBe("");
     expect(formatDepartureName(42)).toBe("");
+  });
+
+  it("uses the first name and the initial of the last word only", () => {
+    expect(formatDepartureName("Tyler L Henderson")).toBe("TYLER H.");
+    expect(formatDepartureName("Tyler L. Harris")).toBe("TYLER H.");
+    expect(formatDepartureName("  tyler   l   hughes  ")).toBe("TYLER H.");
+    expect(formatDepartureName("Dr. Tyler L Henderson Jr.")).toBe("TYLER H.");
   });
 });
 
