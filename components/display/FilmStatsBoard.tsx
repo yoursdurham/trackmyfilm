@@ -35,8 +35,8 @@ function Figure({
     <p
       className={`leading-none font-semibold tracking-tight tabular-nums ${
         featured
-          ? "text-[clamp(5.5rem,11vh,16rem)]"
-          : "text-[clamp(4rem,7.4vh,11rem)]"
+          ? "text-[clamp(5.5rem,min(11vh,28cqw),16rem)]"
+          : "text-[clamp(4rem,min(7.4vh,16cqw),11rem)]"
       }`}
     >
       {value}
@@ -60,7 +60,7 @@ export default function FilmStatsBoard({ data }: { data: Record<string, unknown>
 
       <section data-stat="received" className="border-t border-[var(--accent-purple)]/40 pt-[1.6vh]">
         <Kicker>Received</Kicker>
-        <div className="mt-[0.8vh] grid grid-cols-2 gap-[4vw]">
+        <div className="mt-[0.8vh] grid grid-cols-2 gap-[3cqw]">
           <div>
             <Figure value={countLabel(data.receivedToday)} />
             <p className="mt-[0.7vh] text-[clamp(0.95rem,1.45vh,1.7rem)] text-[var(--text-muted)]">Today</p>
@@ -74,7 +74,7 @@ export default function FilmStatsBoard({ data }: { data: Record<string, unknown>
 
       <section data-stat="scans-sent" className="border-t border-[var(--accent-purple)]/40 pt-[1.6vh]">
         <Kicker>Scans sent</Kicker>
-        <div className="mt-[0.8vh] grid grid-cols-2 gap-[4vw]">
+        <div className="mt-[0.8vh] grid grid-cols-2 gap-[3cqw]">
           <div>
             <Figure value={countLabel(data.scansSentToday)} />
             <p className="mt-[0.7vh] text-[clamp(0.95rem,1.45vh,1.7rem)] text-[var(--text-muted)]">Today</p>
@@ -88,7 +88,7 @@ export default function FilmStatsBoard({ data }: { data: Record<string, unknown>
 
       <section data-stat="turnaround" className="border-t border-[var(--accent-purple)]/40 pt-[1.6vh]">
         <Kicker>Turnaround</Kicker>
-        <div className="mt-[0.8vh] grid grid-cols-2 gap-[4vw]">
+        <div className="mt-[0.8vh] grid grid-cols-2 gap-[3cqw]">
           <div>
             <Figure value={daysLabel(data.averageColorTurnaroundDays)} />
             <p className="mt-[0.7vh] text-[clamp(0.95rem,1.45vh,1.7rem)] text-[var(--accent-green)]">
@@ -109,7 +109,7 @@ export default function FilmStatsBoard({ data }: { data: Record<string, unknown>
 
       <section data-stat="next-lab-run" className="border-t border-[var(--accent-purple)]/40 pt-[1.6vh]">
         <Kicker>Next lab run</Kicker>
-        <p className="mt-[0.8vh] text-[clamp(2.6rem,4.6vh,6.5rem)] leading-none font-semibold tracking-tight">
+        <p className="mt-[0.8vh] text-[clamp(2.4rem,min(4.6vh,9cqw),6.5rem)] leading-none font-semibold tracking-tight">
           {labRunLabel(data.nextLabRun)}
         </p>
         {schedule ? (

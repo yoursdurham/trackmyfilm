@@ -33,6 +33,23 @@ export const DISPLAY_ONLINE_WINDOW_MS = 6 * 60 * 1000;
 export const CUSTOM_MESSAGE_MAX_LENGTH = 280;
 export const DISPLAY_SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
+/**
+ * Physical panels with a dead strip. Keyed by slug so a screen can avoid
+ * that edge without a database column. `studio-vertical` is the Acer
+ * 1080×3840 mounted portrait: the left ~22% (~235px) is unreadable, so the
+ * live area starts 270px in.
+ */
+export const DISPLAY_SAFE_AREA = {
+  "studio-vertical": { left: 270 },
+} as const;
+
+export function displaySafeArea(slug: string): { left: number } {
+  if (Object.prototype.hasOwnProperty.call(DISPLAY_SAFE_AREA, slug)) {
+    return DISPLAY_SAFE_AREA[slug as keyof typeof DISPLAY_SAFE_AREA];
+  }
+  return { left: 0 };
+}
+
 export const DISPLAY_PRIORITY = {
   override: 100,
   studioActive: 80,
