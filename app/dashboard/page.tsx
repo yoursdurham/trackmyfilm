@@ -6,13 +6,14 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Search, Film, Clock, CheckCircle, Package, Loader2, Hand } from "lucide-react";
+import { Plus, Search, Film, Clock, CheckCircle, Package, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
 import IncomingSquarespaceQueue from "@/components/IncomingSquarespaceQueue";
 import InternalHeader, { openNewDropoffDialog } from "@/components/InternalHeader";
 import OrderCard from "@/components/OrderCard";
 import BulkStatusActionBar from "@/components/BulkStatusActionBar";
+import { countDashboardStatuses, orderMatchesDashboardFilter } from "@/lib/dashboard-status";
 import { getUrgentAgeDays, isUrgent } from "@/lib/order-urgency";
 import { ORDER_STATUS } from "@/lib/constants";
 import { orderNumberMatchesSearch } from "@/lib/validation";
@@ -22,7 +23,6 @@ const statusFilters = [
   { value: "all",                label: "All",      mobileLabel: "All",    icon: Film },
   { value: "Received by Yours",  label: "Received", mobileLabel: "Recvd",  icon: Clock },
   { value: "Received at Lab",    label: "At Lab",   mobileLabel: "Lab",    icon: Package },
-  { value: "Ready for Pickup",   label: "Ready",    mobileLabel: "Ready",  icon: Hand },
   { value: "Scans Sent",         label: "Sent",     mobileLabel: "Sent",   icon: CheckCircle },
   { value: "urgent",             label: "Urgent",   mobileLabel: "Urg",    icon: Clock },
 ];
@@ -167,8 +167,7 @@ function Dashboard() {
 
   const filteredOrders = dateFilteredOrders
     .filter((order) => {
-      const matchesFilter = activeFilter === "all" ||
-        (activeFilter === "urgent" ? isUrgent(order) : order.status === activeFilter);
+      const matchesFilter = orderMatchesDashboardFilter(order, activeFilter, isUrgent(order));
       const matchesSearch = !searchQuery ||
         order.customer_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         orderNumberMatchesSearch(order.order_number ?? "", searchQuery);
@@ -179,12 +178,7 @@ function Dashboard() {
       return (getUrgentAgeDays(b) ?? 0) - (getUrgentAgeDays(a) ?? 0);
   });
 
-  const statusCounts = {
-    "Received by Yours": dateFilteredOrders.filter((o) => o.status === "Received by Yours").length,
-    "Received at Lab":   dateFilteredOrders.filter((o) => o.status === "Received at Lab").length,
-    "Ready for Pickup":  dateFilteredOrders.filter((o) => o.status === "Ready for Pickup").length,
-    "Scans Sent":        dateFilteredOrders.filter((o) => o.status === "Scans Sent").length,
-  };
+  const statusCounts = countDashboardStatuses(dateFilteredOrders);
 
   const isReceivedTab = activeFilter === ORDER_STATUS.RECEIVED_BY_YOURS;
   const showBulkSelection = isReceivedTab;
@@ -278,11 +272,10 @@ function Dashboard() {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-3 mb-6 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-3 mb-6 sm:grid-cols-3">
           {[
             { label: "Received by Yours", count: statusCounts["Received by Yours"], labelClass: "text-[#A77B43]" },
             { label: "Received at Lab",   count: statusCounts["Received at Lab"],   labelClass: "text-[#806A91]" },
-            { label: "Ready for Pickup",  count: statusCounts["Ready for Pickup"],  labelClass: "text-amber-600" },
             { label: "Scans Sent",        count: statusCounts["Scans Sent"],        labelClass: "text-[#5E8068]" },
           ].map((stat) => (
             <div key={stat.label} className="bg-white rounded-xl p-3 sm:p-4 shadow-sm border border-stone-100">
