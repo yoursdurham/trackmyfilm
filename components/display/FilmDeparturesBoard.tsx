@@ -9,9 +9,10 @@ const PAGE_DWELL_MS = 10_000;
 const AMBER = "#FFC627";
 
 /**
- * Tuned for the ~810px live area on studio-vertical (1080 minus the 270px
+ * Tuned for the ~870px live area on studio-vertical (1080 minus the 210px
  * dead strip). Fixed tracks fit the longest status, gate, and column label
- * in a normal-width bold sans; the name track takes whatever is left.
+ * in a normal-width bold sans; the name track takes whatever is left,
+ * including the width recovered from the narrower dead strip.
  * FROM is omitted: every arrival is LAB, and the heading already says so.
  */
 const COL_GAP = "0.3rem";

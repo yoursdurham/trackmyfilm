@@ -238,10 +238,10 @@ function clipBoardName(value: string): string {
 }
 
 /**
- * First name plus last initial, uppercased.
+ * First name plus the initial of the last word, uppercased.
  * One word stays whole ("CHER"). Two words are first plus last ("JUSTIN E.").
- * Three or more keep every word but the last as the first name ("MARY ANN S."),
- * so a multi-word first name is not collapsed to its first token.
+ * Middle names and initials are dropped, so only the first word is kept
+ * ("TYLER H." from "Tyler L Henderson", not "TYLER L H.").
  * A leading title and a trailing Jr/Sr/II/III/IV are dropped.
  */
 export function formatDepartureName(input: unknown): string {
@@ -256,7 +256,7 @@ export function formatDepartureName(input: unknown): string {
   if (upper.length === 1) return clipBoardName(upper[0]);
   const initial = upper[upper.length - 1].charAt(0);
   if (!/\p{Lu}/u.test(initial)) return "";
-  const first = upper.slice(0, -1).join(" ");
+  const first = upper[0];
   return clipBoardName(`${first} ${initial}.`);
 }
 
