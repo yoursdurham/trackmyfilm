@@ -370,8 +370,7 @@ function TrackingContent() {
         <Card className="mb-14 rounded-[24px] border border-[var(--border-soft)] bg-[var(--card-bg)] shadow-sm ring-0">
           <CardContent className="p-6 sm:p-8">
             <p className="mb-4 text-sm leading-relaxed text-slate-600">
-              Enter an order number or the email on the order. Either one is enough.
-              If you enter both, they have to match.
+              Enter an order number or the email on the order.
             </p>
             <div className="mb-4 flex flex-col gap-3">
               <div className="relative w-full">
