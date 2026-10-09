@@ -8,8 +8,10 @@ const ROWS_PER_PAGE = 8;
 const PAGE_DWELL_MS = 10_000;
 const AMBER = "#FFC627";
 
-const DEPARTURE_COLUMNS = "8.2rem 8.6rem minmax(0,1fr) 5.2rem 8rem 13.4rem";
-const ARRIVAL_COLUMNS = "8.2rem minmax(0,1fr) 5.2rem 8.8rem 12.6rem";
+const COL_GAP = "0.5rem";
+/** STATUS is the widest value (CHECKED IN / FINAL CALL). TIME and DESTINATION stay narrow. */
+const DEPARTURE_COLUMNS = "7.4rem 7.6rem minmax(0,1fr) 5.1rem 9.6rem 16.1rem";
+const ARRIVAL_COLUMNS = "7.4rem minmax(0,1fr) 5.1rem 9.6rem 16.1rem";
 
 function useEtClock() {
   const [now, setNow] = useState<Date | null>(null);
@@ -54,9 +56,9 @@ function Tile({
 }) {
   const justify = align === "right" ? "justify-end" : align === "center" ? "justify-center" : "justify-start";
   return (
-    <div className={`airport-tile relative flex h-full min-w-0 items-center overflow-hidden px-2 ${justify} ${alt ? "airport-tile-alt" : ""}`}>
+    <div className={`airport-tile relative flex h-full min-w-0 items-center overflow-hidden px-3 ${justify} ${alt ? "airport-tile-alt" : ""}`}>
       <span
-        className={`relative z-[1] text-[2.15rem] leading-none ${truncate ? "min-w-0 truncate" : "whitespace-nowrap"}`}
+        className={`relative z-[1] text-[2rem] leading-none ${truncate ? "min-w-0 truncate" : "whitespace-nowrap"}`}
         style={{ color: tone === "amber" ? AMBER : "#f7f8fa" }}
       >
         {children}
@@ -67,11 +69,11 @@ function Tile({
 
 function ColumnLabels({ columns, labels }: { columns: string; labels: { text: string; align?: "left" | "right" | "center" }[] }) {
   return (
-    <div className="grid shrink-0 items-end" style={{ gridTemplateColumns: columns, columnGap: "0.7rem" }}>
+    <div className="grid shrink-0 items-end" style={{ gridTemplateColumns: columns, columnGap: COL_GAP }}>
       {labels.map((label) => (
         <span
           key={label.text}
-          className={`whitespace-nowrap overflow-hidden px-2 pb-2 text-[0.92rem] leading-none tracking-[0.14em] text-white/80 ${label.align === "right" ? "text-right" : label.align === "center" ? "text-center" : "text-left"}`}
+          className={`min-w-0 overflow-hidden whitespace-nowrap px-3 pb-2 text-[0.72rem] leading-none tracking-[0.08em] text-white/80 ${label.align === "right" ? "text-right" : label.align === "center" ? "text-center" : "text-left"}`}
         >
           {label.text}
         </span>
@@ -96,7 +98,7 @@ function usePage(count: number) {
 
 function DepartureFlap({ row, alt }: { row: DepartureRow; alt: boolean }) {
   return (
-    <div className="airport-flap grid h-full min-h-0" style={{ gridTemplateColumns: DEPARTURE_COLUMNS, columnGap: "0.7rem", perspective: "800px" }}>
+    <div className="airport-flap grid h-full min-h-0" style={{ gridTemplateColumns: DEPARTURE_COLUMNS, columnGap: COL_GAP, perspective: "800px" }}>
       <Tile alt={alt} tone="amber">{row.time}</Tile>
       <Tile alt={alt} tone="amber">{row.destination}</Tile>
       <Tile alt={alt} truncate>{row.name}</Tile>
@@ -109,7 +111,7 @@ function DepartureFlap({ row, alt }: { row: DepartureRow; alt: boolean }) {
 
 function ArrivalFlap({ row, alt }: { row: ArrivalRow; alt: boolean }) {
   return (
-    <div className="airport-flap grid h-full min-h-0" style={{ gridTemplateColumns: ARRIVAL_COLUMNS, columnGap: "0.7rem", perspective: "800px" }}>
+    <div className="airport-flap grid h-full min-h-0" style={{ gridTemplateColumns: ARRIVAL_COLUMNS, columnGap: COL_GAP, perspective: "800px" }}>
       <Tile alt={alt} tone="amber">{row.from}</Tile>
       <Tile alt={alt} truncate>{row.name}</Tile>
       <Tile alt={alt} align="right">{String(row.rolls)}</Tile>
@@ -171,11 +173,12 @@ export default function FilmDeparturesBoard({ board }: { board: FilmDepartures }
 
   return (
     <div data-departures-board className="absolute inset-0 flex min-h-0 flex-col overflow-hidden px-[2.4vw] pt-[2vh] pb-[1.6vh]">
-      <header className="flex shrink-0 items-center justify-between gap-8 border-b border-white/15 pb-[1.6vh]">
-        <div className="flex min-w-0 items-center gap-5">
-          <Plane className="h-14 w-14 shrink-0" />
-          <h1 className="truncate text-[2.15rem] leading-none tracking-[0.08em]">
-            Yours, Durham Film Terminal
+      <header className="flex shrink-0 items-center justify-between gap-6 border-b border-white/15 pb-[1.6vh]">
+        <div className="flex shrink-0 items-center gap-4">
+          <Plane className="h-12 w-12 shrink-0" />
+          <h1 className="text-[1.7rem] leading-[1.08] tracking-[0.04em]">
+            <span className="block whitespace-nowrap">Yours, Durham</span>
+            <span className="block whitespace-nowrap">· Film Terminal</span>
           </h1>
         </div>
         <div className="shrink-0 text-right">
