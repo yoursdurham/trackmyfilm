@@ -1,11 +1,18 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { NextResponse } from "next/server";
 
+const clock = vi.hoisted(() => ({ now: new Date("2026-10-08T19:00:00.000Z") }));
+
+vi.mock("@/lib/display-clock", () => ({
+  displayNow: () => clock.now,
+}));
+
 const mockRequireAuth = vi.fn();
 const mockGetDisplayBySlug = vi.fn();
 const mockUpdateDisplay = vi.fn();
 const mockGetCachedFilmMetrics = vi.fn();
 const mockGetCachedFilmMenu = vi.fn();
+const mockGetCachedFilmDepartures = vi.fn();
 const mockGetCachedStudioAgenda = vi.fn();
 
 vi.mock("@/lib/api-auth", () => ({
@@ -24,6 +31,11 @@ vi.mock("@/lib/film-metrics-cache", () => ({
 vi.mock("@/lib/film-menu-cache", () => ({
   getCachedFilmMenu: (...args: unknown[]) => mockGetCachedFilmMenu(...args),
   clearFilmMenuCache: () => {},
+}));
+
+vi.mock("@/lib/film-departures-cache", () => ({
+  getCachedFilmDepartures: (...args: unknown[]) => mockGetCachedFilmDepartures(...args),
+  clearFilmDeparturesCache: () => {},
 }));
 
 vi.mock("@/lib/studio-calendar-cache", () => ({
@@ -59,6 +71,7 @@ const row = {
 describe("GET /api/displays/:slug", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    clock.now = new Date("2026-10-08T19:00:00.000Z");
     mockGetDisplayBySlug.mockResolvedValue(row);
     mockGetCachedStudioAgenda.mockResolvedValue({
       bookings: [],
@@ -94,8 +107,9 @@ describe("GET /api/displays/:slug", () => {
     expect(body).not.toHaveProperty("override_payload");
     expect(body).not.toHaveProperty("customer_email");
     expect(JSON.stringify(body)).not.toMatch(/guest@|919|do not print/);
-    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(response.headers.get("cache-control")).toBe("public, s-maxage=60, stale-while-revalidate=60");
     expect(mockGetCachedFilmMetrics).not.toHaveBeenCalled();
+    expect(mockGetCachedFilmDepartures).not.toHaveBeenCalled();
   });
 
   it("returns whitelisted film stats and never the customer fields on the metrics row", async () => {
@@ -185,7 +199,97 @@ describe("GET /api/displays/:slug", () => {
       },
     });
     expect(mockGetCachedFilmMetrics).not.toHaveBeenCalled();
+    expect(mockGetCachedFilmDepartures).not.toHaveBeenCalled();
     expect(JSON.stringify(body)).not.toMatch(/secret@|guest@/);
+  });
+
+  it("returns a public departures board and never a full name, email, phone, or order number", async () => {
+    mockGetDisplayBySlug.mockResolvedValue({
+      ...row,
+      mode: "film_departures",
+      override_mode: null,
+      override_payload: null,
+      show_studio_bookings: false,
+    });
+    mockGetCachedFilmDepartures.mockResolvedValue({
+      departures: [],
+      arrivals: [{
+        from: "LAB",
+        name: "Justin Edwards",
+        rolls: 3,
+        expected: "OCT 13",
+        status: "IN FLIGHT",
+        email: "justin.edwards@example.com",
+        phone: "919-555-0100",
+        order_number: "TMF1042",
+      }],
+      people: 1,
+      studioRolls: 0,
+      labRolls: 3,
+      landedRolls: 0,
+      nextLabRun: "FRI 12:00 PM",
+      departureTime: "12:00",
+      customer_email: "secret@example.com",
+    });
+
+    const response = await get();
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.theme).toBe("airport");
+    expect(body.mode).toBe("film_departures");
+    expect(body.data).toEqual({
+      departures: {
+        departures: [],
+        arrivals: [{ from: "LAB", name: "JUSTIN E.", rolls: 3, expected: "OCT 13", status: "IN FLIGHT" }],
+        people: 1,
+        studioRolls: 0,
+        labRolls: 3,
+        landedRolls: 0,
+        nextLabRun: "FRI 12:00 PM",
+        departureTime: "12:00",
+      },
+    });
+    expect(mockGetCachedFilmMetrics).not.toHaveBeenCalled();
+    expect(mockGetCachedFilmMenu).not.toHaveBeenCalled();
+    expect(mockGetCachedStudioAgenda).not.toHaveBeenCalled();
+    expect(JSON.stringify(body)).not.toMatch(/Edwards|example\.com|919|TMF|secret@/);
+  });
+
+  it("lets a studio welcome replace film departures without leaking the board", async () => {
+    mockGetDisplayBySlug.mockResolvedValue({
+      ...row,
+      mode: "film_departures",
+      override_mode: null,
+      override_payload: null,
+      show_studio_bookings: true,
+    });
+    mockGetCachedFilmDepartures.mockResolvedValue({
+      rows: [{ name: "JUSTIN E.", rolls: 2, location: "STUDIO", status: "CHECKED IN", since: "OCT 8" }],
+      people: 1,
+      studioRolls: 2,
+      labRolls: 0,
+      nextLabRun: "Friday 12:00 PM",
+    });
+    mockGetCachedStudioAgenda.mockResolvedValue({
+      bookings: [],
+      input: {
+        welcome: {
+          firstName: "Faith",
+          sessionType: "1 Hour Session",
+          start: "2:00 PM",
+          end: "3:00 PM",
+          email: "faith.oates@example.com",
+        },
+      },
+      status: { configured: true, connected: true, bookingsLeftToday: 1, nextBookingStart: "2:00 PM" },
+    });
+
+    const response = await get();
+    const body = await response.json();
+    expect(body.mode).toBe("studio_welcome");
+    expect(body.data.firstName).toBe("Faith");
+    expect(body.data).not.toHaveProperty("departures");
+    expect(JSON.stringify(body)).not.toMatch(/JUSTIN|faith\.oates|Friday/);
   });
 
   it("returns the welcome state with studio info and without calendar secrets", async () => {
@@ -245,6 +349,51 @@ describe("GET /api/displays/:slug", () => {
     expect(mockGetCachedStudioAgenda).not.toHaveBeenCalled();
   });
 
+  it("keeps staff preview and signed-in browsers off the shared cache", async () => {
+    const preview = await GET(new Request("http://localhost/api/displays/studio-vertical?preview=1"), {
+      params: Promise.resolve({ slug: "studio-vertical" }),
+    });
+    expect(preview.headers.get("cache-control")).toBe("private, no-store");
+
+    const signedIn = await GET(new Request("http://localhost/api/displays/studio-vertical", {
+      headers: { cookie: "sb-example-auth-token=abc" },
+    }), {
+      params: Promise.resolve({ slug: "studio-vertical" }),
+    });
+    expect(signedIn.headers.get("cache-control")).toBe("private, no-store");
+  });
+
+  it("slows overnight polls unless a booking is soon", async () => {
+    clock.now = new Date("2026-10-09T02:30:00.000Z");
+    mockGetDisplayBySlug.mockResolvedValue({
+      ...row,
+      mode: "idle",
+      override_mode: null,
+      override_payload: null,
+      refresh_seconds: 30,
+    });
+    mockGetCachedStudioAgenda.mockResolvedValue({
+      bookings: [],
+      input: null,
+      status: { configured: true, connected: true, bookingsLeftToday: 0, nextBookingStart: null },
+    });
+    const quiet = await get();
+    expect((await quiet.json()).refreshSeconds).toBe(300);
+
+    mockGetCachedStudioAgenda.mockResolvedValue({
+      bookings: [{
+        firstName: "Ada",
+        sessionType: "Studio",
+        start: new Date(clock.now.getTime() + 20 * 60 * 1000),
+        end: new Date(clock.now.getTime() + 80 * 60 * 1000),
+      }],
+      input: null,
+      status: { configured: true, connected: true, bookingsLeftToday: 1, nextBookingStart: "10:50 PM" },
+    });
+    const soon = await get();
+    expect((await soon.json()).refreshSeconds).toBe(30);
+  });
+
   it("does not look up a malformed slug", async () => {
     const response = await get("../film_orders");
     expect(response.status).toBe(404);
@@ -292,6 +441,22 @@ describe("PATCH /api/displays/:slug", () => {
     expect(body.resolvedMode).toBe("custom_message");
     expect(body.overrideMessage).toBe("Hello  studio");
     expect(body.email).toBeUndefined();
+  });
+
+  it("accepts film departures as a default mode", async () => {
+    mockUpdateDisplay.mockImplementation(async () => ({
+      ...row,
+      mode: "film_departures",
+      override_mode: null,
+      override_payload: null,
+    }));
+    const response = await patch({ mode: "film_departures" });
+    expect(response.status).toBe(200);
+    expect(mockUpdateDisplay).toHaveBeenCalledWith("studio-vertical", { mode: "film_departures" });
+    const body = await response.json();
+    expect(body.defaultMode).toBe("film_departures");
+    expect(body.resolvedMode).toBe("film_departures");
+    expect(body.theme).toBe("airport");
   });
 
   it("accepts film stats as a default mode", async () => {

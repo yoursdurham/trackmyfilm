@@ -87,3 +87,43 @@ body {
     animation: none;
   }
 }
+
+/* Airport split-flap board. One flip when a row mounts. No looping flicker. */
+@keyframes airport-flap {
+  0% { transform: rotateX(78deg); filter: brightness(1.35); }
+  60% { transform: rotateX(-6deg); filter: brightness(1.05); }
+  100% { transform: rotateX(0deg); filter: brightness(1); }
+}
+
+.airport-flap {
+  animation: airport-flap 420ms ease-out both;
+  transform-origin: center center;
+}
+
+.airport-tile {
+  background: linear-gradient(#1a2436 0%, #141c2c 46%, #0c121c 50%, #101826 54%, #182233 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07);
+}
+
+.airport-tile-alt {
+  background: linear-gradient(#202b40 0%, #182234 46%, #101820 50%, #141c2c 54%, #1c283c 100%);
+}
+
+.airport-tile::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 2px;
+  transform: translateY(-1px);
+  background: rgba(0, 0, 0, 0.72);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.05);
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .airport-flap {
+    animation: none;
+  }
+}

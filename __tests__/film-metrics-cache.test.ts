@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { FilmOrder } from "@/lib/types";
 
-const mockGetOrders = vi.fn();
+const mockGetFilmMetricsOrders = vi.fn();
 
 vi.mock("@/lib/db", () => ({
-  getOrders: (...args: unknown[]) => mockGetOrders(...args),
+  getFilmMetricsOrders: (...args: unknown[]) => mockGetFilmMetricsOrders(...args),
 }));
 
 import { clearFilmMetricsCache, getCachedFilmMetrics } from "@/lib/film-metrics-cache";
@@ -30,8 +30,8 @@ const order = {
 describe("getCachedFilmMetrics", () => {
   beforeEach(() => {
     clearFilmMetricsCache();
-    mockGetOrders.mockReset();
-    mockGetOrders.mockResolvedValue([order]);
+    mockGetFilmMetricsOrders.mockReset();
+    mockGetFilmMetricsOrders.mockResolvedValue([order]);
     vi.spyOn(Date, "now").mockReturnValue(1_000_000);
   });
 
@@ -47,16 +47,16 @@ describe("getCachedFilmMetrics", () => {
 
     expect(second).toEqual(first);
     expect(first.rollsProcessing).toBe(2);
-    expect(mockGetOrders).toHaveBeenCalledTimes(1);
+    expect(mockGetFilmMetricsOrders).toHaveBeenCalledTimes(1);
 
     vi.mocked(Date.now).mockReturnValue(1_000_000 + FILM_METRICS_CONFIG.cacheTtlMs + 1);
     await getCachedFilmMetrics(now);
-    expect(mockGetOrders).toHaveBeenCalledTimes(2);
+    expect(mockGetFilmMetricsOrders).toHaveBeenCalledTimes(2);
   });
 
   it("shares one in-flight read across overlapping polls", async () => {
     let release: (orders: FilmOrder[]) => void = () => {};
-    mockGetOrders.mockReturnValue(new Promise((resolve) => {
+    mockGetFilmMetricsOrders.mockReturnValue(new Promise((resolve) => {
       release = resolve;
     }));
 
@@ -66,6 +66,6 @@ describe("getCachedFilmMetrics", () => {
     const [a, b] = await Promise.all([pendingA, pendingB]);
 
     expect(a).toEqual(b);
-    expect(mockGetOrders).toHaveBeenCalledTimes(1);
+    expect(mockGetFilmMetricsOrders).toHaveBeenCalledTimes(1);
   });
 });

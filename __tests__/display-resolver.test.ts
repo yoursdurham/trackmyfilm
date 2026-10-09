@@ -216,6 +216,69 @@ describe("resolveDisplayState", () => {
     });
   });
 
+  it("shows the airport board and drops private fields", () => {
+    const result = resolve({
+      display: { ...display, mode: "film_departures" },
+      departures: {
+        departures: [{
+          time: "12:00",
+          destination: "LAB",
+          name: "Justin Edwards",
+          rolls: 2,
+          gate: "OCT 6",
+          status: "CHECKED IN",
+          email: "justin.edwards@example.com",
+          order_number: "TMF1042",
+        }],
+        arrivals: [],
+        people: 1,
+        studioRolls: 2,
+        labRolls: 0,
+        landedRolls: 0,
+        nextLabRun: "FRI 12:00 PM",
+        departureTime: "12:00",
+        customer_email: "secret@example.com",
+      },
+    });
+    expect(result.mode).toBe("film_departures");
+    expect(result.theme).toBe("airport");
+    expect(result.priority).toBe(DISPLAY_PRIORITY.playlistOrDefault);
+    expect(result.data).toEqual({
+      departures: {
+        departures: [{ time: "12:00", destination: "LAB", name: "JUSTIN E.", rolls: 2, gate: "OCT 6", status: "CHECKED IN" }],
+        arrivals: [],
+        people: 1,
+        studioRolls: 2,
+        labRolls: 0,
+        landedRolls: 0,
+        nextLabRun: "FRI 12:00 PM",
+        departureTime: "12:00",
+      },
+    });
+    expect(JSON.stringify(result)).not.toMatch(/Edwards|example\.com|TMF/);
+  });
+
+  it("lets a studio welcome replace the departures board the same way it replaces film stats", () => {
+    const result = resolve({
+      display: { ...display, mode: "film_departures" },
+      studio: { welcome: session },
+      departures: {
+        departures: [],
+        arrivals: [{ from: "LAB", name: "JUSTIN E.", rolls: 2, expected: "OCT 8", status: "IN FLIGHT" }],
+        people: 1,
+        studioRolls: 0,
+        labRolls: 2,
+        landedRolls: 0,
+        nextLabRun: "FRI 12:00 PM",
+        departureTime: "12:00",
+      },
+    });
+    expect(result.mode).toBe("studio_welcome");
+    expect(result.priority).toBe(DISPLAY_PRIORITY.studioWelcome);
+    expect(result.data).toMatchObject({ firstName: "Jessica" });
+    expect(JSON.stringify(result.data)).not.toMatch(/JUSTIN|OCT 8|IN FLIGHT/);
+  });
+
   it("strips tags and control characters from a custom message", () => {
     expect(sanitizeCustomMessage("Hello <script>alert(1)</script>\n\n\nthere")).toBe(
       "Hello alert(1)\n\nthere",

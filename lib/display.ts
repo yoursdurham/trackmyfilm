@@ -16,6 +16,7 @@
  * function runs, so the clock and the calendar stay outside the renderer.
  */
 
+import { sanitizeFilmDepartures } from "@/lib/film-departures";
 import { sanitizeFilmMenu } from "@/lib/film-menu";
 import {
   sanitizeStudioLines,
@@ -27,8 +28,8 @@ export const DISPLAY_THEME = "yours-clean";
 export const DEFAULT_REFRESH_SECONDS = 30;
 export const MIN_REFRESH_SECONDS = 10;
 export const MAX_REFRESH_SECONDS = 300;
-/** A screen is online if it checked in within this window (three 30s polls). */
-export const DISPLAY_ONLINE_WINDOW_MS = 90_000;
+/** A screen is online if it checked in within this window (a 5-minute heartbeat plus a minute of grace). */
+export const DISPLAY_ONLINE_WINDOW_MS = 6 * 60 * 1000;
 export const CUSTOM_MESSAGE_MAX_LENGTH = 280;
 export const DISPLAY_SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
@@ -59,12 +60,15 @@ export const FILM_STATUS_DATA_KEYS = [
   "nextLabRun",
 ] as const;
 export const FILM_MENU_DATA_KEYS = ["menu"] as const;
+export const FILM_DEPARTURES_DATA_KEYS = ["departures"] as const;
 export const CRT_GREEN_THEME = "crt-green";
+export const AIRPORT_THEME = "airport";
 
 export const SELECTABLE_DEFAULT_MODES = [
   { value: "idle", label: "Branded idle" },
   { value: "film_stats", label: "Film stats" },
   { value: "film_menu", label: "Film menu" },
+  { value: "film_departures", label: "Airport board" },
 ] as const;
 
 export type DisplayOrientation = "portrait" | "landscape";
@@ -146,6 +150,8 @@ export interface DisplayResolveInput {
   film?: FilmMetricsInput | null;
   /** Sanitized again before it can reach a public payload. */
   menu?: unknown;
+  /** Sanitized again before it can reach a public payload. */
+  departures?: unknown;
   playlist?: PlaylistInput | null;
 }
 
@@ -167,7 +173,7 @@ export interface HeartbeatClient {
   userAgent: string | null;
 }
 
-/** Idle, a custom message, and studio booking states use the CRT screen. Film stats stay yours-clean. */
+/** Idle, a custom message, studio booking states, and the film menu use the CRT screen. Film stats stay yours-clean. The airport board has its own theme. */
 const CRT_DEFAULT_MODES = new Set([
   "idle",
   "custom_message",
@@ -180,6 +186,10 @@ const CRT_DEFAULT_MODES = new Set([
 
 export function displayUsesCrtTheme(mode: string): boolean {
   return CRT_DEFAULT_MODES.has(mode);
+}
+
+export function displayUsesAirportTheme(mode: string): boolean {
+  return mode === "film_departures";
 }
 
 export function isKnownDisplayMode(mode: string): boolean {
@@ -196,6 +206,7 @@ const DATA_KEYS_BY_MODE: Record<string, readonly string[]> = {
   film_stats: FILM_STATS_DATA_KEYS,
   film_status: FILM_STATUS_DATA_KEYS,
   film_menu: FILM_MENU_DATA_KEYS,
+  film_departures: FILM_DEPARTURES_DATA_KEYS,
 };
 
 export function isDisplaySlug(slug: string): boolean {
@@ -286,6 +297,7 @@ function themeOf(theme: string | null | undefined): string {
 }
 
 function themeForMode(mode: string, stored: string | null | undefined): string {
+  if (displayUsesAirportTheme(mode)) return AIRPORT_THEME;
   if (displayUsesCrtTheme(mode)) return CRT_GREEN_THEME;
   return themeOf(stored);
 }
@@ -376,6 +388,10 @@ function dataForMode(
   if (mode === "film_menu") {
     const menu = sanitizeFilmMenu(input.menu);
     return menu ? { menu } : {};
+  }
+  if (mode === "film_departures") {
+    const departures = sanitizeFilmDepartures(input.departures);
+    return departures ? { departures } : {};
   }
   return {};
 }
@@ -508,6 +524,9 @@ export function toPublicDisplayPayload(resolved: {
     } else if (key === "menu") {
       const menu = sanitizeFilmMenu(value);
       if (menu) data.menu = menu;
+    } else if (key === "departures") {
+      const departures = sanitizeFilmDepartures(value);
+      if (departures) data.departures = departures;
     } else if (NUMERIC_FILM_KEYS.has(key)) {
       if (typeof value === "number" && Number.isFinite(value)) data[key] = value;
       else if (value === null && NULLABLE_FILM_KEYS.has(key)) data[key] = null;

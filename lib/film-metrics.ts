@@ -144,27 +144,106 @@ function formatClock(hour: number, minute: number): string {
   return `${hour12}:${String(minute).padStart(2, "0")} ${period}`;
 }
 
+const SHORT_WEEKDAYS = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"] as const;
+
+/**
+ * Next Tuesday or Friday at 12:00 PM America/New_York.
+ * On a run day the instant stays at today's noon until that moment passes.
+ */
+export function nextLabRunAt(now: Date): Date {
+  const { weekdays, hour, minute } = FILM_METRICS_CONFIG.labRuns;
+  const today = calendarInShopZone(now);
+  const runDays = new Set<number>(weekdays);
+
+  for (let offset = 0; offset < 8; offset += 1) {
+    const date = addCalendarDays(today.year, today.month, today.day, offset);
+    if (!runDays.has(date.weekdayIndex)) continue;
+    const instant = shopWallTimeToUtc(date.year, date.month, date.day, hour, minute);
+    if (instant.getTime() < now.getTime()) continue;
+    return instant;
+  }
+
+  const fallback = addCalendarDays(today.year, today.month, today.day, 7);
+  return shopWallTimeToUtc(fallback.year, fallback.month, fallback.day, hour, minute);
+}
+
 /**
  * Next Tuesday or Friday at 12:00 PM America/New_York.
  * On a run day the label stays "Today 12:00 PM" through noon, then rolls forward.
  */
 export function nextLabRunLabel(now: Date): string {
+  const { hour, minute } = FILM_METRICS_CONFIG.labRuns;
+  const clock = formatClock(hour, minute);
+  const today = calendarInShopZone(now);
+  const next = calendarInShopZone(nextLabRunAt(now));
+  if (next.key === today.key) return `Today ${clock}`;
+  return `${WEEKDAY_NAMES[next.weekdayIndex]} ${clock}`;
+}
+
+/** Short banner for the airport board, e.g. "FRI 12:00 PM". */
+export function nextLabRunBoardLabel(now: Date): string {
+  const { hour, minute } = FILM_METRICS_CONFIG.labRuns;
+  const next = calendarInShopZone(nextLabRunAt(now));
+  return `${SHORT_WEEKDAYS[next.weekdayIndex]} ${formatClock(hour, minute)}`;
+}
+
+export interface ShopCalendarDate {
+  year: number;
+  month: number;
+  day: number;
+}
+
+/** Calendar date in America/New_York. */
+export function shopCalendarDate(date: Date): ShopCalendarDate {
+  const parts = calendarInShopZone(date);
+  return { year: parts.year, month: parts.month, day: parts.day };
+}
+
+export interface ShopClock extends ShopCalendarDate {
+  hour: number;
+  minute: number;
+  weekdayIndex: number;
+  /** YYYY-MM-DD in America/New_York. */
+  key: string;
+}
+
+/** Wall clock in America/New_York. */
+export function shopClock(date: Date): ShopClock {
+  const parts = calendarInShopZone(date);
+  return {
+    year: parts.year,
+    month: parts.month,
+    day: parts.day,
+    hour: parts.hour,
+    minute: parts.minute,
+    weekdayIndex: parts.weekdayIndex,
+    key: parts.key,
+  };
+}
+
+/** Noon in America/New_York. Noon is never a DST gap. */
+export function shopNoonUtc(year: number, month: number, day: number): Date {
+  return shopWallTimeToUtc(year, month, day, 12, 0);
+}
+
+/**
+ * Most recent Tuesday or Friday at 12:00 PM America/New_York that is not after `now`.
+ * Before noon on a run day, this is the previous run.
+ */
+export function lastLabRunAt(now: Date): Date {
   const { weekdays, hour, minute } = FILM_METRICS_CONFIG.labRuns;
   const today = calendarInShopZone(now);
-  const clock = formatClock(hour, minute);
   const runDays = new Set<number>(weekdays);
 
-  for (let offset = 0; offset < 7; offset += 1) {
-    const date = addCalendarDays(today.year, today.month, today.day, offset);
+  for (let offset = 0; offset < 8; offset += 1) {
+    const date = addCalendarDays(today.year, today.month, today.day, -offset);
     if (!runDays.has(date.weekdayIndex)) continue;
     const instant = shopWallTimeToUtc(date.year, date.month, date.day, hour, minute);
-    if (instant.getTime() < now.getTime()) continue;
-    if (offset === 0) return `Today ${clock}`;
-    return `${WEEKDAY_NAMES[date.weekdayIndex]} ${clock}`;
+    if (instant.getTime() <= now.getTime()) return instant;
   }
 
-  const fallback = weekdays[0] ?? 2;
-  return `${WEEKDAY_NAMES[fallback]} ${clock}`;
+  const fallback = addCalendarDays(today.year, today.month, today.day, -7);
+  return shopWallTimeToUtc(fallback.year, fallback.month, fallback.day, hour, minute);
 }
 
 function processKind(process?: string | null): "color" | "bw" | "both" | "other" {
@@ -182,7 +261,12 @@ function processKind(process?: string | null): "color" | "bw" | "both" | "other"
   return "other";
 }
 
-function positiveRollCount(order: FilmOrder): number {
+export interface RollCountSource {
+  roll_count?: number | null;
+  roll_details?: readonly unknown[] | null;
+}
+
+function positiveRollCount(order: RollCountSource): number {
   if (typeof order.roll_count === "number" && Number.isFinite(order.roll_count) && order.roll_count > 0) {
     return Math.floor(order.roll_count);
   }
@@ -190,8 +274,8 @@ function positiveRollCount(order: FilmOrder): number {
 }
 
 /** Every physical roll on the order, including develop-only rolls. */
-function rollsOnOrder(order: FilmOrder): number {
-  if (order.roll_details?.length) return order.roll_details.length;
+export function rollsOnOrder(order: RollCountSource): number {
+  if (Array.isArray(order.roll_details) && order.roll_details.length > 0) return order.roll_details.length;
   return positiveRollCount(order);
 }
 
@@ -362,4 +446,105 @@ export function computeFilmMetrics(orders: FilmOrder[], now = new Date()): FilmM
     averageBwTurnaroundDays: averageDays(bw),
     nextLabRun: nextLabRunLabel(now),
   };
+}
+
+/**
+ * Columns computeFilmMetrics actually reads. Names, emails, notes, order
+ * numbers, and transfer links stay in the database.
+ * Legacy received_at_lab_at and order-level scan columns are read in memory
+ * when present, but they are not selected: a missing column fails the query.
+ */
+export const FILM_METRICS_ORDER_SELECT = [
+  "status",
+  "roll_count",
+  "roll_details",
+  "film_process",
+  "received_by_yours_at",
+  "dropoff_date",
+  "created_at",
+  "at_lab_at",
+  "scans_sent_at",
+  "color_scans_delivered_at",
+  "bw_scans_delivered_at",
+  "status_history",
+  "status_updated_at",
+].join(", ");
+
+/**
+ * In-process rows, plus anything received or finished inside this window.
+ * Thirty days of turnaround, a Sunday-start week, and a little slack.
+ */
+export const FILM_METRICS_LOOKBACK_DAYS = 45;
+
+export interface FilmMetricsOrderSource {
+  status?: string | null;
+  received_by_yours_at?: string | null;
+  dropoff_date?: string | null;
+  created_at?: string | null;
+  at_lab_at?: string | null;
+  scans_sent_at?: string | null;
+  color_scans_delivered_at?: string | null;
+  bw_scans_delivered_at?: string | null;
+  status_updated_at?: string | null;
+  status_history?: readonly { changed_at?: string | null }[] | null;
+}
+
+export function filmMetricsLookbackStart(now: Date): Date {
+  return new Date(now.getTime() - FILM_METRICS_LOOKBACK_DAYS * MS_PER_DAY);
+}
+
+function onOrAfter(value: string | null | undefined, cutoffMs: number): boolean {
+  const date = parseTimestamp(value);
+  return Boolean(date && date.getTime() >= cutoffMs);
+}
+
+/**
+ * True when an order can change a film-stats number.
+ * In-process orders always count, even when they were received long ago.
+ * A recent status_history entry counts too, so a scans-sent row that only
+ * has a history date is kept in an in-memory comparison. The SQL filter uses
+ * status_updated_at for that case, because status updates write both together.
+ */
+export function orderAffectsFilmMetrics(order: FilmMetricsOrderSource, now: Date): boolean {
+  if (order.status === ORDER_STATUS.RECEIVED_BY_YOURS || order.status === ORDER_STATUS.RECEIVED_AT_LAB) {
+    return true;
+  }
+  const cutoff = filmMetricsLookbackStart(now);
+  const cutoffMs = cutoff.getTime();
+  const stamps = [
+    order.received_by_yours_at,
+    order.created_at,
+    order.scans_sent_at,
+    order.color_scans_delivered_at,
+    order.bw_scans_delivered_at,
+    order.at_lab_at,
+    order.status_updated_at,
+  ];
+  if (stamps.some((value) => onOrAfter(value, cutoffMs))) return true;
+  if (order.status_history?.some((entry) => onOrAfter(entry?.changed_at, cutoffMs))) return true;
+  if (typeof order.dropoff_date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(order.dropoff_date)) {
+    const parts = shopCalendarDate(cutoff);
+    const key = calendarKey(parts.year, parts.month, parts.day);
+    if (order.dropoff_date >= key) return true;
+  }
+  return false;
+}
+
+/** PostgREST `or` filter matching the column half of orderAffectsFilmMetrics. */
+export function filmMetricsOrderOrFilter(now: Date): string {
+  const since = filmMetricsLookbackStart(now).toISOString();
+  const parts = shopCalendarDate(filmMetricsLookbackStart(now));
+  const dropoff = calendarKey(parts.year, parts.month, parts.day);
+  return [
+    `status.eq."${ORDER_STATUS.RECEIVED_BY_YOURS}"`,
+    `status.eq."${ORDER_STATUS.RECEIVED_AT_LAB}"`,
+    `received_by_yours_at.gte.${since}`,
+    `created_at.gte.${since}`,
+    `scans_sent_at.gte.${since}`,
+    `color_scans_delivered_at.gte.${since}`,
+    `bw_scans_delivered_at.gte.${since}`,
+    `at_lab_at.gte.${since}`,
+    `status_updated_at.gte.${since}`,
+    `dropoff_date.gte.${dropoff}`,
+  ].join(",");
 }
