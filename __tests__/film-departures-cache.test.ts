@@ -1,10 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DepartureOrder } from "@/lib/film-departures";
 
-const mockGetInProcessDepartureOrders = vi.fn();
+const mockGetDepartureBoardOrders = vi.fn();
+const mockGetCachedFilmMetrics = vi.fn();
 
 vi.mock("@/lib/db", () => ({
-  getInProcessDepartureOrders: (...args: unknown[]) => mockGetInProcessDepartureOrders(...args),
+  getDepartureBoardOrders: (...args: unknown[]) => mockGetDepartureBoardOrders(...args),
+}));
+
+vi.mock("@/lib/film-metrics-cache", () => ({
+  getCachedFilmMetrics: (...args: unknown[]) => mockGetCachedFilmMetrics(...args),
 }));
 
 import { clearFilmDeparturesCache, getCachedFilmDepartures } from "@/lib/film-departures-cache";
@@ -22,8 +27,13 @@ const order: DepartureOrder = {
 describe("getCachedFilmDepartures", () => {
   beforeEach(() => {
     clearFilmDeparturesCache();
-    mockGetInProcessDepartureOrders.mockReset();
-    mockGetInProcessDepartureOrders.mockResolvedValue([order]);
+    mockGetDepartureBoardOrders.mockReset();
+    mockGetDepartureBoardOrders.mockResolvedValue([order]);
+    mockGetCachedFilmMetrics.mockReset();
+    mockGetCachedFilmMetrics.mockResolvedValue({
+      averageColorTurnaroundDays: 4,
+      averageBwTurnaroundDays: null,
+    });
     vi.spyOn(Date, "now").mockReturnValue(1_000_000);
   });
 
@@ -38,19 +48,19 @@ describe("getCachedFilmDepartures", () => {
     const second = await getCachedFilmDepartures(now);
 
     expect(second).toEqual(first);
-    expect(first.rows[0]?.name).toBe("SECRET C.");
+    expect(first.departures[0]?.name).toBe("SECRET C.");
     expect(first.studioRolls).toBe(2);
-    expect(mockGetInProcessDepartureOrders).toHaveBeenCalledTimes(1);
+    expect(mockGetDepartureBoardOrders).toHaveBeenCalledTimes(1);
     expect(JSON.stringify(first)).not.toMatch(/Secret Customer/);
 
     vi.mocked(Date.now).mockReturnValue(1_000_000 + FILM_METRICS_CONFIG.cacheTtlMs + 1);
     await getCachedFilmDepartures(now);
-    expect(mockGetInProcessDepartureOrders).toHaveBeenCalledTimes(2);
+    expect(mockGetDepartureBoardOrders).toHaveBeenCalledTimes(2);
   });
 
   it("shares one in-flight read across overlapping polls", async () => {
     let release: (orders: DepartureOrder[]) => void = () => {};
-    mockGetInProcessDepartureOrders.mockReturnValue(new Promise((resolve) => {
+    mockGetDepartureBoardOrders.mockReturnValue(new Promise((resolve) => {
       release = resolve;
     }));
 
@@ -60,6 +70,6 @@ describe("getCachedFilmDepartures", () => {
     const [a, b] = await Promise.all([pendingA, pendingB]);
 
     expect(a).toEqual(b);
-    expect(mockGetInProcessDepartureOrders).toHaveBeenCalledTimes(1);
+    expect(mockGetDepartureBoardOrders).toHaveBeenCalledTimes(1);
   });
 });

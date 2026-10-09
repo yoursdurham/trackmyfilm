@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { touchDisplayHeartbeat } from "@/lib/db";
 import { isDisplaySlug, parseHeartbeatClient } from "@/lib/display";
+import { heartbeatWriteDue, rememberHeartbeatWrite } from "@/lib/display-heartbeat";
 
 const WINDOW_MS = 60_000;
 const MAX_PER_WINDOW = 20;
@@ -60,9 +61,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
 
   const client = parseHeartbeatClient(body, req.headers.get("user-agent"));
 
+  if (!heartbeatWriteDue(slug)) return json({ ok: true });
+
   try {
     const updated = await touchDisplayHeartbeat(slug, client);
     if (!updated) return json({ error: "Unknown screen" }, 404);
+    rememberHeartbeatWrite(slug);
     return json({ ok: true });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Unknown error";

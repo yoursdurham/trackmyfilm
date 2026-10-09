@@ -1,4 +1,4 @@
-import { getOrders } from "@/lib/db";
+import { getFilmMetricsOrders } from "@/lib/db";
 import { computeFilmMetrics, type FilmMetrics } from "@/lib/film-metrics";
 import { FILM_METRICS_CONFIG } from "@/lib/film-metrics-config";
 
@@ -18,7 +18,7 @@ export async function getCachedFilmMetrics(now = new Date()): Promise<FilmMetric
   if (cached && cached.expiresAt > Date.now()) return cached.value;
   if (!pending) {
     const capturedNow = now;
-    pending = getOrders("desc")
+    pending = getFilmMetricsOrders(capturedNow)
       .then((orders) => {
         const value = computeFilmMetrics(orders, capturedNow);
         cached = { value, expiresAt: Date.now() + FILM_METRICS_CONFIG.cacheTtlMs };

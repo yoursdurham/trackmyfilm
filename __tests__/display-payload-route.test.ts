@@ -1,6 +1,12 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { NextResponse } from "next/server";
 
+const clock = vi.hoisted(() => ({ now: new Date("2026-10-08T19:00:00.000Z") }));
+
+vi.mock("@/lib/display-clock", () => ({
+  displayNow: () => clock.now,
+}));
+
 const mockRequireAuth = vi.fn();
 const mockGetDisplayBySlug = vi.fn();
 const mockUpdateDisplay = vi.fn();
@@ -65,6 +71,7 @@ const row = {
 describe("GET /api/displays/:slug", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    clock.now = new Date("2026-10-08T19:00:00.000Z");
     mockGetDisplayBySlug.mockResolvedValue(row);
     mockGetCachedStudioAgenda.mockResolvedValue({
       bookings: [],
@@ -100,7 +107,7 @@ describe("GET /api/displays/:slug", () => {
     expect(body).not.toHaveProperty("override_payload");
     expect(body).not.toHaveProperty("customer_email");
     expect(JSON.stringify(body)).not.toMatch(/guest@|919|do not print/);
-    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(response.headers.get("cache-control")).toBe("public, s-maxage=60, stale-while-revalidate=60");
     expect(mockGetCachedFilmMetrics).not.toHaveBeenCalled();
     expect(mockGetCachedFilmDepartures).not.toHaveBeenCalled();
   });
@@ -205,12 +212,13 @@ describe("GET /api/displays/:slug", () => {
       show_studio_bookings: false,
     });
     mockGetCachedFilmDepartures.mockResolvedValue({
-      rows: [{
+      departures: [],
+      arrivals: [{
+        from: "LAB",
         name: "Justin Edwards",
         rolls: 3,
-        location: "LAB",
+        expected: "OCT 13",
         status: "IN FLIGHT",
-        since: "OCT 8",
         email: "justin.edwards@example.com",
         phone: "919-555-0100",
         order_number: "TMF1042",
@@ -218,22 +226,27 @@ describe("GET /api/displays/:slug", () => {
       people: 1,
       studioRolls: 0,
       labRolls: 3,
-      nextLabRun: "Friday 12:00 PM",
+      landedRolls: 0,
+      nextLabRun: "FRI 12:00 PM",
+      departureTime: "12:00",
       customer_email: "secret@example.com",
     });
 
     const response = await get();
     expect(response.status).toBe(200);
     const body = await response.json();
-    expect(body.theme).toBe("crt-green");
+    expect(body.theme).toBe("airport");
     expect(body.mode).toBe("film_departures");
     expect(body.data).toEqual({
       departures: {
-        rows: [{ name: "JUSTIN E.", rolls: 3, location: "LAB", status: "IN FLIGHT", since: "OCT 8" }],
+        departures: [],
+        arrivals: [{ from: "LAB", name: "JUSTIN E.", rolls: 3, expected: "OCT 13", status: "IN FLIGHT" }],
         people: 1,
         studioRolls: 0,
         labRolls: 3,
-        nextLabRun: "Friday 12:00 PM",
+        landedRolls: 0,
+        nextLabRun: "FRI 12:00 PM",
+        departureTime: "12:00",
       },
     });
     expect(mockGetCachedFilmMetrics).not.toHaveBeenCalled();
@@ -336,6 +349,51 @@ describe("GET /api/displays/:slug", () => {
     expect(mockGetCachedStudioAgenda).not.toHaveBeenCalled();
   });
 
+  it("keeps staff preview and signed-in browsers off the shared cache", async () => {
+    const preview = await GET(new Request("http://localhost/api/displays/studio-vertical?preview=1"), {
+      params: Promise.resolve({ slug: "studio-vertical" }),
+    });
+    expect(preview.headers.get("cache-control")).toBe("private, no-store");
+
+    const signedIn = await GET(new Request("http://localhost/api/displays/studio-vertical", {
+      headers: { cookie: "sb-example-auth-token=abc" },
+    }), {
+      params: Promise.resolve({ slug: "studio-vertical" }),
+    });
+    expect(signedIn.headers.get("cache-control")).toBe("private, no-store");
+  });
+
+  it("slows overnight polls unless a booking is soon", async () => {
+    clock.now = new Date("2026-10-09T02:30:00.000Z");
+    mockGetDisplayBySlug.mockResolvedValue({
+      ...row,
+      mode: "idle",
+      override_mode: null,
+      override_payload: null,
+      refresh_seconds: 30,
+    });
+    mockGetCachedStudioAgenda.mockResolvedValue({
+      bookings: [],
+      input: null,
+      status: { configured: true, connected: true, bookingsLeftToday: 0, nextBookingStart: null },
+    });
+    const quiet = await get();
+    expect((await quiet.json()).refreshSeconds).toBe(300);
+
+    mockGetCachedStudioAgenda.mockResolvedValue({
+      bookings: [{
+        firstName: "Ada",
+        sessionType: "Studio",
+        start: new Date(clock.now.getTime() + 20 * 60 * 1000),
+        end: new Date(clock.now.getTime() + 80 * 60 * 1000),
+      }],
+      input: null,
+      status: { configured: true, connected: true, bookingsLeftToday: 1, nextBookingStart: "10:50 PM" },
+    });
+    const soon = await get();
+    expect((await soon.json()).refreshSeconds).toBe(30);
+  });
+
   it("does not look up a malformed slug", async () => {
     const response = await get("../film_orders");
     expect(response.status).toBe(404);
@@ -398,7 +456,7 @@ describe("PATCH /api/displays/:slug", () => {
     const body = await response.json();
     expect(body.defaultMode).toBe("film_departures");
     expect(body.resolvedMode).toBe("film_departures");
-    expect(body.theme).toBe("crt-green");
+    expect(body.theme).toBe("airport");
   });
 
   it("accepts film stats as a default mode", async () => {

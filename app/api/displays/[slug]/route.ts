@@ -10,11 +10,20 @@ import {
 import { toAdminDisplay } from "@/lib/display-admin";
 import { sanitizeStudioLines } from "@/lib/studio-info";
 
-function json(body: unknown, status = 200) {
+function json(body: unknown, status = 200, cacheControl = "no-store") {
   return NextResponse.json(body, {
     status,
-    headers: { "Cache-Control": "no-store" },
+    headers: { "Cache-Control": cacheControl },
   });
+}
+
+/** Public kiosk polls can sit on the CDN. Staff preview and signed-in browsers do not. */
+function publicCacheControl(req: Request): string {
+  const url = new URL(req.url);
+  if (url.searchParams.get("preview") === "1") return "private, no-store";
+  const cookie = req.headers.get("cookie") ?? "";
+  if (/(?:^|;\s*)sb-/.test(cookie)) return "private, no-store";
+  return "public, s-maxage=60, stale-while-revalidate=60";
 }
 
 async function readSlug(params: Promise<{ slug: string }>) {
@@ -22,14 +31,14 @@ async function readSlug(params: Promise<{ slug: string }>) {
   return slug;
 }
 
-export async function GET(_req: Request, { params }: { params: Promise<{ slug: string }> }) {
+export async function GET(req: Request, { params }: { params: Promise<{ slug: string }> }) {
   const slug = await readSlug(params);
   if (!isDisplaySlug(slug)) return json({ error: "Unknown screen" }, 404);
 
   try {
     const row = await getDisplayBySlug(slug);
     if (!row) return json({ error: "Unknown screen" }, 404);
-    return json(await publicPayloadWithFilm(row));
+    return json(await publicPayloadWithFilm(row), 200, publicCacheControl(req));
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Unknown error";
     console.error("[GET /api/displays/:slug]", message);

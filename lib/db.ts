@@ -7,7 +7,10 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Customer, CustomerSummary, FilmOrder, IncomingSquarespaceDraft } from "./types";
 import type { DisplayRow, HeartbeatClient } from "./display";
+import { HEARTBEAT_WRITE_INTERVAL_MS } from "./display-heartbeat";
 import { DEPARTURE_ORDER_SELECT, type DepartureOrder } from "./film-departures";
+import { FILM_METRICS_ORDER_SELECT, filmMetricsOrderOrFilter } from "./film-metrics";
+import { ORDER_STATUS } from "./constants";
 import { FILM_MENU_SLUG, type FilmMenu } from "./film-menu";
 import {
   buildIncomingDraftInsert,
@@ -53,14 +56,44 @@ export async function getOrders(sort: "desc" | "asc" = "desc"): Promise<FilmOrde
   return data as FilmOrder[];
 }
 
-/** In-process orders for the public departures board. Not a select * of every order. */
-export async function getInProcessDepartureOrders(): Promise<DepartureOrder[]> {
+/**
+ * Orders that can change the studio film-stats numbers.
+ * In-process rows of any age, plus orders received or finished inside the
+ * lookback window. Not a select * of the whole table.
+ */
+export async function getFilmMetricsOrders(now = new Date()): Promise<FilmOrder[]> {
   const { data, error } = await getSupabase()
     .from("film_orders")
-    .select(DEPARTURE_ORDER_SELECT)
-    .in("status", ["Received by Yours", "Received at Lab"]);
+    .select(FILM_METRICS_ORDER_SELECT)
+    .or(filmMetricsOrderOrFilter(now))
+    .limit(5000);
   if (error) throw new Error(error.message);
-  return (data ?? []) as DepartureOrder[];
+  return (data ?? []) as unknown as FilmOrder[];
+}
+
+/**
+ * In-process orders, plus scans sent in the last 36 hours so today's LANDED
+ * rows survive a timezone boundary. Older scans-sent orders are left out.
+ */
+export async function getDepartureBoardOrders(now = new Date()): Promise<DepartureOrder[]> {
+  const since = new Date(now.getTime() - 36 * 60 * 60 * 1000).toISOString();
+  const supabase = getSupabase();
+  const [inProcess, landed] = await Promise.all([
+    supabase
+      .from("film_orders")
+      .select(DEPARTURE_ORDER_SELECT)
+      .in("status", [ORDER_STATUS.RECEIVED_BY_YOURS, ORDER_STATUS.RECEIVED_AT_LAB])
+      .limit(5000),
+    supabase
+      .from("film_orders")
+      .select(DEPARTURE_ORDER_SELECT)
+      .eq("status", ORDER_STATUS.SCANS_SENT)
+      .or(`scans_sent_at.gte.${since},status_updated_at.gte.${since},color_scans_delivered_at.gte.${since},bw_scans_delivered_at.gte.${since}`)
+      .limit(500),
+  ]);
+  if (inProcess.error) throw new Error(inProcess.error.message);
+  if (landed.error) throw new Error(landed.error.message);
+  return [...(inProcess.data ?? []), ...(landed.data ?? [])] as DepartureOrder[];
 }
 
 export async function getOrderById(id: string): Promise<FilmOrder | null> {
@@ -547,17 +580,29 @@ export async function saveFilmMenu(content: FilmMenu): Promise<FilmMenu> {
   return data.content as FilmMenu;
 }
 
+/**
+ * Writes a heartbeat only when the screen has not checked in during the
+ * last five minutes. A recent row is confirmed with an id read and no update.
+ */
 export async function touchDisplayHeartbeat(slug: string, client: HeartbeatClient): Promise<boolean> {
-  const { data, error } = await getSupabase()
+  const now = new Date();
+  const cutoff = new Date(now.getTime() - HEARTBEAT_WRITE_INTERVAL_MS).toISOString();
+  const supabase = getSupabase();
+  const { data, error } = await supabase
     .from("displays")
     .update({
-      last_seen: new Date().toISOString(),
+      last_seen: now.toISOString(),
       last_client: client,
-      updated_at: new Date().toISOString(),
+      updated_at: now.toISOString(),
     })
     .eq("slug", slug)
+    .or(`last_seen.is.null,last_seen.lt.${cutoff}`)
     .select("id")
     .maybeSingle();
   if (error) throw new Error(error.message);
-  return Boolean(data);
+  if (data) return true;
+
+  const existing = await supabase.from("displays").select("id").eq("slug", slug).maybeSingle();
+  if (existing.error) throw new Error(existing.error.message);
+  return Boolean(existing.data);
 }

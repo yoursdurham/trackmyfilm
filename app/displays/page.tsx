@@ -26,7 +26,7 @@ function modeLabel(mode: string) {
   if (mode === "studio_ending_soon") return "Session ending";
   if (mode === "film_stats") return "Film stats";
   if (mode === "film_menu") return "Film menu";
-  if (mode === "film_departures") return "Film departures";
+  if (mode === "film_departures") return "Airport board";
   return mode;
 }
 
@@ -112,7 +112,7 @@ export default function DisplaysPage() {
       <InternalHeader title="Displays" subtitle="Studio screens" />
       <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
         <p className="mb-6 max-w-2xl text-sm text-slate-500">
-          Each screen opens one address and shows whatever you set here. A screen is online if it checked in during the last minute and a half.
+          Each screen opens one address and shows whatever you set here. A screen is online if it checked in during the last six minutes.
         </p>
 
         {isLoading ? (

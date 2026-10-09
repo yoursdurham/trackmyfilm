@@ -216,36 +216,43 @@ describe("resolveDisplayState", () => {
     });
   });
 
-  it("shows the departures board on the crt theme and drops private fields", () => {
+  it("shows the airport board and drops private fields", () => {
     const result = resolve({
       display: { ...display, mode: "film_departures" },
       departures: {
-        rows: [{
+        departures: [{
+          time: "12:00",
+          destination: "LAB",
           name: "Justin Edwards",
           rolls: 2,
-          location: "STUDIO",
+          gate: "OCT 6",
           status: "CHECKED IN",
-          since: "OCT 6",
           email: "justin.edwards@example.com",
           order_number: "TMF1042",
         }],
+        arrivals: [],
         people: 1,
         studioRolls: 2,
         labRolls: 0,
-        nextLabRun: "Friday 12:00 PM",
+        landedRolls: 0,
+        nextLabRun: "FRI 12:00 PM",
+        departureTime: "12:00",
         customer_email: "secret@example.com",
       },
     });
     expect(result.mode).toBe("film_departures");
-    expect(result.theme).toBe("crt-green");
+    expect(result.theme).toBe("airport");
     expect(result.priority).toBe(DISPLAY_PRIORITY.playlistOrDefault);
     expect(result.data).toEqual({
       departures: {
-        rows: [{ name: "JUSTIN E.", rolls: 2, location: "STUDIO", status: "CHECKED IN", since: "OCT 6" }],
+        departures: [{ time: "12:00", destination: "LAB", name: "JUSTIN E.", rolls: 2, gate: "OCT 6", status: "CHECKED IN" }],
+        arrivals: [],
         people: 1,
         studioRolls: 2,
         labRolls: 0,
-        nextLabRun: "Friday 12:00 PM",
+        landedRolls: 0,
+        nextLabRun: "FRI 12:00 PM",
+        departureTime: "12:00",
       },
     });
     expect(JSON.stringify(result)).not.toMatch(/Edwards|example\.com|TMF/);
@@ -256,11 +263,14 @@ describe("resolveDisplayState", () => {
       display: { ...display, mode: "film_departures" },
       studio: { welcome: session },
       departures: {
-        rows: [{ name: "JUSTIN E.", rolls: 2, location: "LAB", status: "IN FLIGHT", since: "OCT 8" }],
+        departures: [],
+        arrivals: [{ from: "LAB", name: "JUSTIN E.", rolls: 2, expected: "OCT 8", status: "IN FLIGHT" }],
         people: 1,
         studioRolls: 0,
         labRolls: 2,
-        nextLabRun: "Friday 12:00 PM",
+        landedRolls: 0,
+        nextLabRun: "FRI 12:00 PM",
+        departureTime: "12:00",
       },
     });
     expect(result.mode).toBe("studio_welcome");

@@ -44,8 +44,12 @@ export const FILM_METRICS_CONFIG = {
    * has a delivery time.
    */
   mixedRollSplit: "half-round-color" as const,
-  /** Reuse one database read across the kiosk's 30-second polls. */
-  cacheTtlMs: 20_000,
+  /**
+   * Reuse one database read across kiosk polls. Sixty seconds is long enough
+   * that a 30-second poll hits memory, and short enough that a booking or a
+   * new deploy shows up within a minute or two.
+   */
+  cacheTtlMs: 60_000,
   /**
    * Film leaves for the lab on these weekdays at this America/New_York time.
    * 0 is Sunday, 2 is Tuesday, 5 is Friday.

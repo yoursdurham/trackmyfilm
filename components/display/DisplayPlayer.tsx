@@ -5,11 +5,14 @@ import {
   DISPLAY_RELOAD_STORAGE_KEY,
   clampRefreshSeconds,
   displayNeedsReload,
+  AIRPORT_THEME,
+  displayUsesAirportTheme,
   displayUsesCrtTheme,
   isDisplayPayload,
   toPublicDisplayPayload,
   type DisplayPayload,
 } from "@/lib/display";
+import AirportBoard from "@/components/display/AirportBoard";
 import CrtGreenScreen from "@/components/display/CrtGreenScreen";
 import YoursCleanScreen from "@/components/display/YoursCleanScreen";
 
@@ -67,7 +70,8 @@ export default function DisplayPlayer({
 
     async function tick() {
       try {
-        const response = await fetch(`/api/displays/${encodeURIComponent(slug)}`, {
+        const previewQuery = preview ? "?preview=1" : "";
+        const response = await fetch(`/api/displays/${encodeURIComponent(slug)}${previewQuery}`, {
           cache: "no-store",
           signal: controller.signal,
         });
@@ -120,6 +124,9 @@ export default function DisplayPlayer({
 
   const screen = payload ?? IDLE;
   const notice = missing && !payload ? "This screen is not set up yet." : null;
+  if (displayUsesAirportTheme(screen.mode) || screen.theme === AIRPORT_THEME) {
+    return <AirportBoard payload={screen} notice={notice} />;
+  }
   if (screen.mode === "film_stats" || screen.mode === "film_status") {
     return <YoursCleanScreen payload={screen} notice={notice} />;
   }

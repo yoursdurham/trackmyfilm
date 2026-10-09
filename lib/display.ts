@@ -28,8 +28,8 @@ export const DISPLAY_THEME = "yours-clean";
 export const DEFAULT_REFRESH_SECONDS = 30;
 export const MIN_REFRESH_SECONDS = 10;
 export const MAX_REFRESH_SECONDS = 300;
-/** A screen is online if it checked in within this window (three 30s polls). */
-export const DISPLAY_ONLINE_WINDOW_MS = 90_000;
+/** A screen is online if it checked in within this window (a 5-minute heartbeat plus a minute of grace). */
+export const DISPLAY_ONLINE_WINDOW_MS = 6 * 60 * 1000;
 export const CUSTOM_MESSAGE_MAX_LENGTH = 280;
 export const DISPLAY_SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
@@ -62,12 +62,13 @@ export const FILM_STATUS_DATA_KEYS = [
 export const FILM_MENU_DATA_KEYS = ["menu"] as const;
 export const FILM_DEPARTURES_DATA_KEYS = ["departures"] as const;
 export const CRT_GREEN_THEME = "crt-green";
+export const AIRPORT_THEME = "airport";
 
 export const SELECTABLE_DEFAULT_MODES = [
   { value: "idle", label: "Branded idle" },
   { value: "film_stats", label: "Film stats" },
   { value: "film_menu", label: "Film menu" },
-  { value: "film_departures", label: "Film departures" },
+  { value: "film_departures", label: "Airport board" },
 ] as const;
 
 export type DisplayOrientation = "portrait" | "landscape";
@@ -172,7 +173,7 @@ export interface HeartbeatClient {
   userAgent: string | null;
 }
 
-/** Idle, a custom message, studio booking states, the film menu, and departures use the CRT screen. Film stats stay yours-clean. */
+/** Idle, a custom message, studio booking states, and the film menu use the CRT screen. Film stats stay yours-clean. The airport board has its own theme. */
 const CRT_DEFAULT_MODES = new Set([
   "idle",
   "custom_message",
@@ -181,11 +182,14 @@ const CRT_DEFAULT_MODES = new Set([
   "studio_upcoming",
   "studio_ending_soon",
   "film_menu",
-  "film_departures",
 ]);
 
 export function displayUsesCrtTheme(mode: string): boolean {
   return CRT_DEFAULT_MODES.has(mode);
+}
+
+export function displayUsesAirportTheme(mode: string): boolean {
+  return mode === "film_departures";
 }
 
 export function isKnownDisplayMode(mode: string): boolean {
@@ -293,6 +297,7 @@ function themeOf(theme: string | null | undefined): string {
 }
 
 function themeForMode(mode: string, stored: string | null | undefined): string {
+  if (displayUsesAirportTheme(mode)) return AIRPORT_THEME;
   if (displayUsesCrtTheme(mode)) return CRT_GREEN_THEME;
   return themeOf(stored);
 }
