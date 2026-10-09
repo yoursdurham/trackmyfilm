@@ -78,7 +78,7 @@ export default function FilmDeparturesBoard({ board }: { board: FilmDepartures }
   }, [pageCount]);
 
   return (
-    <div data-departures-board className="flex h-full min-h-0 flex-col px-[3.2vw] pt-[2.4vh] pb-[2vh]">
+    <div data-departures-board className="absolute inset-0 flex min-h-0 flex-col overflow-hidden px-[3.2vw] pt-[2.4vh] pb-[2vh]">
       <header className="shrink-0">
         <div className="flex items-end justify-between gap-[3vw]">
           <div className="min-w-0">
