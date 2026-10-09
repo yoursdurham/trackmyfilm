@@ -103,7 +103,7 @@ Open [http://localhost:3000](http://localhost:3000) → redirects to the public 
 |---|---|---|
 | `/login` | Public | Sign in |
 | `/login/update-password` | Public | Password reset (via email link) |
-| `/tracking` | Public | Order status lookup. An order number also needs the email on the order. Email-only lookup still lists that customer's orders. |
+| `/tracking` | Public | Order status lookup. An order number or the email on the order is enough. If both are entered, they have to match. Email-only lookup lists that customer's orders. |
 | `/display/studio-vertical` | Public | Studio screen. The Pi opens this URL. |
 | `/displays` | Staff | Manage screens |
 | `/dashboard` | Staff | Manage film orders |

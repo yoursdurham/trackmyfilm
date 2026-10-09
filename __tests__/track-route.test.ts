@@ -1,11 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { FilmOrder } from "@/lib/types";
 
+const mockGetOrderByNumber = vi.fn();
 const mockGetOrderByNumberAndEmail = vi.fn();
 const mockGetCustomerByEmail = vi.fn();
 const mockGetOrdersByCustomerId = vi.fn();
 
 vi.mock("@/lib/db", () => ({
+  getOrderByNumber: (...args: unknown[]) => mockGetOrderByNumber(...args),
   getOrderByNumberAndEmail: (...args: unknown[]) => mockGetOrderByNumberAndEmail(...args),
   getCustomerByEmail: (...args: unknown[]) => mockGetCustomerByEmail(...args),
   getOrdersByCustomerId: (...args: unknown[]) => mockGetOrdersByCustomerId(...args),
@@ -60,15 +62,33 @@ const customer = {
 describe("GET /api/orders/track", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockGetOrderByNumber.mockImplementation(async (orderNumber: string) => (
+      orderNumber === "1034" || orderNumber === "01034" ? fullOrder : null
+    ));
     mockGetOrderByNumberAndEmail.mockResolvedValue(fullOrder);
     mockGetCustomerByEmail.mockResolvedValue(customer);
     mockGetOrdersByCustomerId.mockResolvedValue([fullOrder]);
   });
 
-  it("requires an email before an order-number lookup", async () => {
-    const res = await trackOrder(new Request("http://localhost/api/orders/track?order_number=1034"));
-    expect(res.status).toBe(400);
+  it("returns an order for an order number alone, treating leading zeros as the same number", async () => {
+    const plain = await trackOrder(new Request("http://localhost/api/orders/track?order_number=1034"));
+    const padded = await trackOrder(new Request("http://localhost/api/orders/track?order_number=01034"));
+
+    expect(plain.status).toBe(200);
+    expect(padded.status).toBe(200);
+    const plainBody = await plain.json();
+    const paddedBody = await padded.json();
+    expect(plainBody).toHaveLength(1);
+    expect(paddedBody).toHaveLength(1);
+    expect(plainBody[0].order_number).toBe("1034");
+    expect(paddedBody[0].order_number).toBe("1034");
+    expect(JSON.stringify(plainBody)).not.toContain("ada@example.com");
+    expect(JSON.stringify(plainBody)).not.toContain("919-555");
+    expect(plainBody[0]).not.toHaveProperty("customer_email");
+    expect(mockGetOrderByNumber).toHaveBeenCalledWith("1034");
+    expect(mockGetOrderByNumber).toHaveBeenCalledWith("01034");
     expect(mockGetOrderByNumberAndEmail).not.toHaveBeenCalled();
+    expect(mockGetCustomerByEmail).not.toHaveBeenCalled();
   });
 
   it("returns the same empty list for a wrong email and a missing order", async () => {
@@ -87,6 +107,7 @@ describe("GET /api/orders/track", () => {
     expect(missing.status).toBe(200);
     expect(await wrong.json()).toEqual([]);
     expect(await missing.json()).toEqual([]);
+    expect(mockGetOrderByNumber).not.toHaveBeenCalled();
   });
 
   it("returns only allowlisted fields and ignores wildcard emails", async () => {

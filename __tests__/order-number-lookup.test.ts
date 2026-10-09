@@ -83,6 +83,21 @@ describe("order number lookups", () => {
     expect(mockGetOrderByNumber).not.toHaveBeenCalled();
   });
 
+  it("tracks an order number alone, including a leading zero", async () => {
+    const padded = await trackOrder(new Request("http://localhost/api/orders/track?order_number=01034"));
+    const plain = await trackOrder(new Request("http://localhost/api/orders/track?order_number=1034"));
+    const missing = await trackOrder(new Request("http://localhost/api/orders/track?order_number=9999"));
+
+    expect(padded.status).toBe(200);
+    expect(plain.status).toBe(200);
+    expect(await padded.json()).toMatchObject([{ order_number: "1034", first_name: "Ada" }]);
+    expect(await plain.json()).toMatchObject([{ order_number: "1034" }]);
+    expect(await missing.json()).toEqual([]);
+    expect(mockGetOrderByNumber).toHaveBeenCalledWith("01034");
+    expect(mockGetOrderByNumber).toHaveBeenCalledWith("1034");
+    expect(mockGetOrderByNumberAndEmail).not.toHaveBeenCalled();
+  });
+
   it("resends a link for either leading-zero form", async () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     delete process.env.RESEND_API_KEY;
@@ -90,50 +105,69 @@ describe("order number lookups", () => {
     const padded = await resendLink(new Request("http://localhost/api/resend-link", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ orderNumber: "01034", email: "ada@example.com" }),
+      body: JSON.stringify({ orderNumber: "01034" }),
     }));
     const plain = await resendLink(new Request("http://localhost/api/resend-link", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ orderNumber: "1034", email: "ada@example.com" }),
+      body: JSON.stringify({ orderNumber: "1034" }),
     }));
 
     expect(padded.status).toBe(200);
     expect(plain.status).toBe(200);
-    expect(mockGetOrderByNumberAndEmail).toHaveBeenCalledWith("01034", "ada@example.com");
-    expect(mockGetOrderByNumberAndEmail).toHaveBeenCalledWith("1034", "ada@example.com");
+    expect(mockGetOrderByNumber).toHaveBeenCalledWith("01034");
+    expect(mockGetOrderByNumber).toHaveBeenCalledWith("1034");
+    expect(mockGetOrderByNumberAndEmail).not.toHaveBeenCalled();
     expect(errorSpy).toHaveBeenCalledTimes(2);
     errorSpy.mockRestore();
   });
 
-  it("does not email a download link when the address is not an exact match", async () => {
+  it("emails the address stored on the order and ignores an address in the request", async () => {
     process.env.RESEND_API_KEY = "test-key";
     process.env.RESEND_TEMPLATE_SCANS_SENT = "tmpl";
+    mockGetOrderByNumber.mockResolvedValue({
+      ...STORED,
+      customer_email: "Ada@Example.com",
+      last_emailed_at: null,
+    });
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({ id: "email-1" }), { status: 200 })
     );
 
-    const wildcard = await resendLink(new Request("http://localhost/api/resend-link", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ orderNumber: "1034", email: "%" }),
-    }));
-    const other = await resendLink(new Request("http://localhost/api/resend-link", {
+    const typed = await resendLink(new Request("http://localhost/api/resend-link", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ orderNumber: "1034", email: "someone@example.com" }),
     }));
 
-    expect(await wildcard.json()).toEqual({ success: true, message: RESEND_LINK_MESSAGE });
-    expect(await other.json()).toEqual({ success: true, message: RESEND_LINK_MESSAGE });
-    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(await typed.json()).toEqual({ success: true, message: RESEND_LINK_MESSAGE });
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const payload = JSON.parse(String((fetchSpy.mock.calls[0][1] as RequestInit).body));
+    expect(payload.to).toEqual(["ada@example.com"]);
+    expect(payload.template.id).toBe("tmpl");
+    expect(JSON.stringify(payload)).not.toContain("someone@example.com");
+
+    resetResendLinkStateForTests();
+    mockGetOrderByNumber.mockResolvedValue({ ...STORED, last_emailed_at: null });
+    const alone = await resendLink(new Request("http://localhost/api/resend-link", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ orderNumber: "01034" }),
+    }));
+
+    expect(await alone.json()).toEqual({ success: true, message: RESEND_LINK_MESSAGE });
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    const second = JSON.parse(String((fetchSpy.mock.calls[1][1] as RequestInit).body));
+    expect(second.to).toEqual(["ada@example.com"]);
+    expect(mockGetOrderByNumber).toHaveBeenCalledWith("01034");
+    expect(mockGetOrderByNumberAndEmail).not.toHaveBeenCalled();
     fetchSpy.mockRestore();
   });
 
   it("waits an hour between download-link emails and uses the same message when the order is missing", async () => {
     process.env.RESEND_API_KEY = "test-key";
     process.env.RESEND_TEMPLATE_SCANS_SENT = "tmpl";
-    mockGetOrderByNumberAndEmail.mockResolvedValue({
+    mockGetOrderByNumber.mockResolvedValue({
       ...STORED,
       last_emailed_at: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
     });
@@ -147,7 +181,7 @@ describe("order number lookups", () => {
       body: JSON.stringify({ orderNumber: "1034", email: "ada@example.com" }),
     }));
 
-    mockGetOrderByNumberAndEmail.mockResolvedValue(null);
+    mockGetOrderByNumber.mockResolvedValue(null);
     const missing = await resendLink(new Request("http://localhost/api/resend-link", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -163,7 +197,7 @@ describe("order number lookups", () => {
   it("sends again once last_emailed_at is older than an hour", async () => {
     process.env.RESEND_API_KEY = "test-key";
     process.env.RESEND_TEMPLATE_SCANS_SENT = "tmpl";
-    mockGetOrderByNumberAndEmail.mockResolvedValue({
+    mockGetOrderByNumber.mockResolvedValue({
       ...STORED,
       customer_email: "Ada@Example.com",
       last_emailed_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
@@ -181,6 +215,9 @@ describe("order number lookups", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ success: true, message: RESEND_LINK_MESSAGE });
     expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const payload = JSON.parse(String((fetchSpy.mock.calls[0][1] as RequestInit).body));
+    expect(payload.to).toEqual(["ada@example.com"]);
+    expect(payload.template.id).toBe("tmpl");
     expect(mockUpdateOrder).toHaveBeenCalledWith("order-1034", expect.objectContaining({
       last_emailed_at: expect.any(String),
       email_status: "sent",

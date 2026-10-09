@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCustomerByEmail, getOrderByNumberAndEmail, getOrdersByCustomerId } from "@/lib/db";
+import { getCustomerByEmail, getOrderByNumber, getOrderByNumberAndEmail, getOrdersByCustomerId } from "@/lib/db";
 import { emailsMatchExact, normalizeEmail, normalizeOrderNumber } from "@/lib/validation";
 import { customerFirstName, serializeOrderForPublicTracking } from "@/lib/tracking-public";
 
@@ -19,17 +19,17 @@ export async function GET(req: Request) {
     const orderNumber = orderNumberRaw ? normalizeOrderNumber(orderNumberRaw) : "";
     const email = emailRaw ? normalizeEmail(emailRaw) : "";
 
-    if (orderNumber) {
-      if (!email) {
-        return NextResponse.json(
-          { error: "order_number and email are required" },
-          { status: 400 }
-        );
-      }
+    if (orderNumber && email) {
       const order = await getOrderByNumberAndEmail(orderNumber, email);
       if (!order || !emailsMatchExact(order.customer_email, email)) {
         return notFoundOrder();
       }
+      return NextResponse.json([serializeOrderForPublicTracking(order)]);
+    }
+
+    if (orderNumber) {
+      const order = await getOrderByNumber(orderNumber);
+      if (!order) return notFoundOrder();
       return NextResponse.json([serializeOrderForPublicTracking(order)]);
     }
 
