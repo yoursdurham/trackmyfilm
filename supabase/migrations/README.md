@@ -17,6 +17,7 @@ Run these in order in: **Supabase Dashboard → SQL Editor → New Query**
 | `017_displays.sql` | Creates `displays` (RLS on, no policies) and seeds `studio-vertical` | Yes — before using Displays or `/display/studio-vertical`. Safe to run again. |
 | `018_film_menu.sql` | Creates `film_menus` (RLS on, no policies) and seeds the studio film menu | Yes — before using the Film menu screen. Safe to run again; it will not overwrite later edits. |
 | `019_display_studio_bookings.sql` | Adds the studio-bookings switch and the guest info / checkout lines on `displays` (RLS stays on, no policies) | Yes — before using studio bookings on the screen. Safe to run again; it will not reset a switch or lines you have edited. |
+| `020_add_order_hold_reason.sql` | Adds optional staff-only `hold_reason` on `film_orders` for the On Hold status | Yes — before relying on the On Hold reason. The status itself can be saved before this runs; the reason is skipped until the column exists. Safe to run again. |
 
 ## Notes
 

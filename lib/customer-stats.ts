@@ -132,6 +132,7 @@ export function computeCustomerStats(orders: FilmOrder[]): CustomerOrderStats {
   const turnaroundDays: number[] = [];
 
   for (const order of orders) {
+    if (order.status === "On Hold") continue;
     if (orderHasOnlyBlankRolls(order)) continue;
     const turnaround = getTurnaroundDays(order);
     if (turnaround !== null) turnaroundDays.push(turnaround);

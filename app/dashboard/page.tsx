@@ -6,7 +6,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Search, Film, Clock, CheckCircle, Package, Loader2 } from "lucide-react";
+import { Plus, Search, Film, Clock, CheckCircle, Package, Pause, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
 import IncomingSquarespaceQueue from "@/components/IncomingSquarespaceQueue";
@@ -24,6 +24,7 @@ const statusFilters = [
   { value: "Received by Yours",  label: "Received", mobileLabel: "Recvd",  icon: Clock },
   { value: "Received at Lab",    label: "At Lab",   mobileLabel: "Lab",    icon: Package },
   { value: "Scans Sent",         label: "Sent",     mobileLabel: "Sent",   icon: CheckCircle },
+  { value: "On Hold",            label: "On Hold",  mobileLabel: "Hold",   icon: Pause },
   { value: "urgent",             label: "Urgent",   mobileLabel: "Urg",    icon: Clock },
 ];
 
@@ -100,6 +101,7 @@ function Dashboard() {
     force?: boolean,
     sendEmail?: boolean,
     scanNotes?: string | null,
+    holdReason?: string | null,
   ) => {
     try {
       const res = await fetch("/api/status", {
@@ -110,6 +112,7 @@ function Dashboard() {
           new_status: status,
           wetransfer_link: wetransferLink,
           scan_notes: scanNotes,
+          hold_reason: holdReason,
           force,
           send_email: sendEmail,
         }),
@@ -117,6 +120,7 @@ function Dashboard() {
       const data = await res.json();
       if (data.success) {
         toast.success(`Order updated to ${status}`);
+        if (data.warning) toast.warning(data.warning);
         queryClient.invalidateQueries({ queryKey: ["filmOrders"] });
       } else {
         toast.error(data.error || "Failed to update order");
@@ -309,12 +313,17 @@ function Dashboard() {
 
         <div className="flex flex-col sm:flex-row gap-4 mb-6">
           <Tabs value={activeFilter} onValueChange={setActiveFilter} className="w-full sm:w-auto">
-            <TabsList className="border border-slate-200 bg-white h-9">
+            <TabsList className="h-9 max-w-full overflow-x-auto border border-slate-200 bg-white">
               {statusFilters.map((f) => (
                 <TabsTrigger key={f.value} value={f.value} className="flex items-center gap-1 text-xs px-2 sm:px-3">
                   <f.icon className="w-3.5 h-3.5 shrink-0" />
                   <span className="hidden sm:inline">{f.label}</span>
                   <span className="sm:hidden">{f.mobileLabel}</span>
+                  {f.value === ORDER_STATUS.ON_HOLD ? (
+                    <span className="rounded-full bg-stone-100 px-1.5 text-[10px] font-semibold text-slate-600">
+                      {statusCounts["On Hold"]}
+                    </span>
+                  ) : null}
                 </TabsTrigger>
               ))}
             </TabsList>

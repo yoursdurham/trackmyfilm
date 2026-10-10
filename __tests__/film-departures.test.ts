@@ -164,6 +164,14 @@ describe("computeFilmDepartures", () => {
         scans_sent_at: "2026-10-07T15:00:00.000Z",
       }),
       order({ id: "other", customer_id: "c5", customer_name: "Other Person", status: "Archived", roll_count: 6 }),
+      order({
+        id: "hold",
+        customer_id: "c6",
+        customer_name: "Parked Person",
+        status: "On Hold",
+        roll_count: 7,
+        at_lab_at: TUESDAY_NOON,
+      }),
     ], NOW);
 
     expect(board.departures).toEqual([
@@ -176,7 +184,7 @@ describe("computeFilmDepartures", () => {
     expect(board.studioRolls).toBe(2);
     expect(board.labRolls).toBe(3);
     expect(board.landedRolls).toBe(0);
-    expect(JSON.stringify(board)).not.toMatch(/Ready Person|Sent Person|Other Person/);
+    expect(JSON.stringify(board)).not.toMatch(/Ready Person|Sent Person|Other Person|Parked Person/);
   });
 
   it("counts every roll on the order, including develop-only rolls", () => {

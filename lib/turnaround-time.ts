@@ -83,6 +83,7 @@ function collectTurnaroundDays(
 ): TurnaroundPeriodStats {
   const completed = orders
     .map((order) => {
+      if (order.status === ORDER_STATUS.ON_HOLD) return null;
       if (orderHasOnlyBlankRolls(order)) return null;
       const scansSent = getScansSentDate(order);
       const turnaroundDays = getTurnaroundDays(order);

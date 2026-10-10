@@ -15,6 +15,7 @@ function statusClass(status: string) {
   if (status === ORDER_STATUS.RECEIVED_BY_YOURS) return "bg-[var(--accent-tan)] text-[#A77B43]";
   if (status === ORDER_STATUS.RECEIVED_AT_LAB) return "bg-[var(--accent-green)] text-white";
   if (status === ORDER_STATUS.READY_FOR_PICKUP) return "bg-amber-500 text-white";
+  if (status === ORDER_STATUS.ON_HOLD) return "bg-stone-200 text-stone-700";
   return "bg-[var(--accent-purple)] text-white";
 }
 

@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  PUBLIC_ON_HOLD_MESSAGE,
   orderNoteForCustomerDisplay,
+  publicTimelineStatus,
   serializeOrderForPublicTracking,
 } from "../lib/tracking-public";
 import type { FilmOrder } from "../lib/types";
@@ -94,6 +96,26 @@ describe("serializeOrderForPublicTracking", () => {
     expect(publicOrder).not.toHaveProperty("scan_notes");
     expect(publicOrder).not.toHaveProperty("email_status");
     expect(publicOrder).not.toHaveProperty("wetransfer_link");
+  });
+
+  it("tells the customer we are checking and never sends the hold reason", () => {
+    const parked = serializeOrderForPublicTracking({
+      ...order,
+      status: "On Hold",
+      hold_reason: "lost at lab",
+      status_history: [
+        { status: "Received by Yours", changed_at: "2026-01-01T12:00:00.000Z" },
+        { status: "Received at Lab", changed_at: "2026-01-02T12:00:00.000Z" },
+        { status: "On Hold", changed_at: "2026-02-01T12:00:00.000Z" },
+      ],
+    });
+
+    expect(parked.status).toBe("On Hold");
+    expect(parked).not.toHaveProperty("hold_reason");
+    expect(JSON.stringify(parked)).not.toContain("lost at lab");
+    expect(PUBLIC_ON_HOLD_MESSAGE).toBe("We're checking on this order");
+    expect(publicTimelineStatus(parked)).toBe("Received at Lab");
+    expect(publicTimelineStatus({ ...parked, status_history: [] })).toBeNull();
   });
 
   it("keeps a customer-facing note and drops blank ones", () => {

@@ -108,6 +108,24 @@ describe("computeCustomerStats", () => {
     expect(stats.common_film_type).toBe("110");
   });
 
+  it("keeps an On Hold order in the customer's totals and out of the average", () => {
+    const stats = computeCustomerStats([
+      baseOrder({ roll_count: 2 }),
+      baseOrder({
+        id: "parked",
+        order_number: "JE1008",
+        status: "On Hold",
+        roll_count: 3,
+        scans_sent_at: "2026-01-20T10:00:00.000Z",
+        hold_reason: "waiting on customer",
+      }),
+    ]);
+
+    expect(stats.total_orders).toBe(2);
+    expect(stats.total_rolls).toBe(5);
+    expect(stats.average_turnaround_days).toBe(4);
+  });
+
   it("keeps blank rolls in the roll total and leaves an all-blank order out of the average", () => {
     const stats = computeCustomerStats([
       baseOrder({ roll_count: 2 }),

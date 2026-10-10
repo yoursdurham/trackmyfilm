@@ -1,4 +1,5 @@
-import type { FilmOrder, RollDetail } from "./types";
+import { ORDER_STATUS } from "./constants";
+import type { FilmOrder, OrderStatus, RollDetail } from "./types";
 
 function normalizeScanSize(scanSize?: string | null) {
   return scanSize?.toLowerCase().replace(/[^a-z]/g, "") ?? "";
@@ -32,8 +33,9 @@ export function isProcessOnlyOrder(order: FilmOrder) {
   );
 }
 
-export function getStatusOptionsForOrder(order: FilmOrder) {
-  return isProcessOnlyOrder(order)
-    ? (["Received by Yours", "Received at Lab", "Ready for Pickup"] as const)
-    : (["Received by Yours", "Received at Lab", "Scans Sent"] as const);
+export function getStatusOptionsForOrder(order: FilmOrder): OrderStatus[] {
+  const pipeline: OrderStatus[] = isProcessOnlyOrder(order)
+    ? [ORDER_STATUS.RECEIVED_BY_YOURS, ORDER_STATUS.RECEIVED_AT_LAB, ORDER_STATUS.READY_FOR_PICKUP]
+    : [ORDER_STATUS.RECEIVED_BY_YOURS, ORDER_STATUS.RECEIVED_AT_LAB, ORDER_STATUS.SCANS_SENT];
+  return [...pipeline, ORDER_STATUS.ON_HOLD];
 }

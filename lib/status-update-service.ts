@@ -1,11 +1,15 @@
 import { getOrderById, updateOrder } from "@/lib/db";
 import { ORDER_STATUS, STATUS_TEMPLATE_MAP } from "@/lib/constants";
+import { normalizeHoldReason } from "@/lib/hold-reason";
 import { isProcessOnlyOrder } from "@/lib/order-service";
 import { isMixedScanOrder, isPartialScanDeliveryComplete, scansSentBlockedReason } from "@/lib/scan-batch";
 import { isValidTransition, isKnownStatus, isValidUrl, ensureHttps } from "@/lib/validation";
 import { scanNotesForStorage } from "@/lib/scan-notes";
 import { EmailSendError, sendOrderEmail } from "@/lib/email-service";
 import type { FilmOrder, OrderStatus, StatusHistoryEntry } from "@/lib/types";
+
+const HOLD_REASON_MIGRATION_WARNING =
+  "Order is On Hold. The reason was not saved because the hold_reason column is missing. Run migration 020_add_order_hold_reason.sql in Supabase.";
 
 export type StatusUpdateResult = {
   success: boolean;
@@ -17,13 +21,62 @@ export type StatusUpdateResult = {
   requiresForce?: boolean;
   email_sent?: boolean;
   emailError?: string;
+  warning?: string;
 };
+
+function missingColumn(message: string, column: string): boolean {
+  return message.includes(column) && message.includes("schema cache");
+}
+
+/**
+ * Saves the status patch. If scan_notes or hold_reason is not in the database
+ * yet, the status change still lands and that field is left untouched.
+ */
+async function saveOrderUpdate(
+  orderId: string,
+  updateData: Partial<FilmOrder>,
+): Promise<{ holdReasonDropped: boolean }> {
+  const payload: Partial<FilmOrder> = { ...updateData };
+  let holdReasonDropped = false;
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      await updateOrder(orderId, payload);
+      return { holdReasonDropped };
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "";
+      let stripped = false;
+
+      if (payload.scan_notes !== undefined && missingColumn(message, "scan_notes")) {
+        console.error(
+          "[status] scan_notes column missing — run migration 014_add_scan_notes.sql. Saving status without scan note."
+        );
+        delete payload.scan_notes;
+        stripped = true;
+      }
+
+      if (payload.hold_reason !== undefined && missingColumn(message, "hold_reason")) {
+        console.error(
+          "[status] hold_reason column missing — run migration 020_add_order_hold_reason.sql. Saving status without the hold reason."
+        );
+        delete payload.hold_reason;
+        holdReasonDropped = true;
+        stripped = true;
+      }
+
+      if (!stripped) throw err;
+    }
+  }
+
+  throw new Error("Could not save order status");
+}
 
 export async function updateOrderStatus({
   order_id,
   new_status,
   wetransfer_link,
   scan_notes,
+  hold_reason,
   force = false,
   send_email = true,
 }: {
@@ -31,6 +84,7 @@ export async function updateOrderStatus({
   new_status: OrderStatus;
   wetransfer_link?: string;
   scan_notes?: string | null;
+  hold_reason?: string | null;
   force?: boolean;
   send_email?: boolean;
 }): Promise<StatusUpdateResult> {
@@ -66,6 +120,32 @@ export async function updateOrderStatus({
   }
 
   if (order.status === new_status) {
+    if (new_status === ORDER_STATUS.ON_HOLD && hold_reason !== undefined) {
+      const normalized = normalizeHoldReason(hold_reason);
+      if (normalized.error) {
+        return { success: false, order_id, error: normalized.error };
+      }
+      const currentReason = order.hold_reason?.trim() || null;
+      if (normalized.reason === currentReason) {
+        return {
+          success: true,
+          order_id,
+          new_status,
+          skipped: true,
+          reason: "Already at this status",
+        };
+      }
+      const saved = await saveOrderUpdate(order_id, { hold_reason: normalized.reason });
+      return {
+        success: true,
+        order_id,
+        new_status,
+        email_sent: false,
+        warning: saved.holdReasonDropped && normalized.reason
+          ? HOLD_REASON_MIGRATION_WARNING
+          : undefined,
+      };
+    }
     return {
       success: true,
       order_id,
@@ -110,6 +190,16 @@ export async function updateOrderStatus({
 
   if (new_status === ORDER_STATUS.RECEIVED_BY_YOURS) updateData.received_by_yours_at = now;
   if (new_status === ORDER_STATUS.RECEIVED_AT_LAB) updateData.at_lab_at = now;
+  if (new_status === ORDER_STATUS.ON_HOLD) {
+    const normalized = normalizeHoldReason(hold_reason);
+    if (normalized.error) {
+      return { success: false, order_id, error: normalized.error };
+    }
+    updateData.hold_reason = normalized.reason;
+  } else {
+    updateData.hold_reason = null;
+  }
+
   if (new_status === ORDER_STATUS.SCANS_SENT) {
     updateData.scans_sent_at = now;
     if (scan_notes !== undefined) {
@@ -128,25 +218,15 @@ export async function updateOrderStatus({
     }
   }
 
-  try {
-    await updateOrder(order_id, updateData);
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "";
-    const scanNotesMissing =
-      updateData.scan_notes !== undefined &&
-      message.includes("scan_notes") &&
-      message.includes("schema cache");
-    if (!scanNotesMissing) throw err;
-    console.error(
-      "[status] scan_notes column missing — run migration 014_add_scan_notes.sql. Saving status without scan note."
-    );
-    const { scan_notes: _omit, ...withoutScanNotes } = updateData;
-    await updateOrder(order_id, withoutScanNotes);
-  }
+  const saved = await saveOrderUpdate(order_id, updateData);
+  const holdWarning =
+    saved.holdReasonDropped && updateData.hold_reason
+      ? HOLD_REASON_MIGRATION_WARNING
+      : undefined;
 
   const template = STATUS_TEMPLATE_MAP[new_status];
   if (!template || !send_email) {
-    return { success: true, order_id, new_status, email_sent: false };
+    return { success: true, order_id, new_status, email_sent: false, warning: holdWarning };
   }
 
   const scanNotesForSendEmail =

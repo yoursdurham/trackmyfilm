@@ -516,4 +516,51 @@ describe("computeFilmMetrics", () => {
     expect(metrics.scansSentThisWeek).toBe(6);
     expect(metrics.averageColorTurnaroundDays).toBe(4);
   });
+
+  it("keeps a parked order out of rolls in process, scans sent, and turnaround", () => {
+    const sent = new Date(NOW.getTime() - 1 * DAY);
+    const metrics = computeFilmMetrics([
+      makeOrder({
+        id: "open",
+        status: "Received at Lab",
+        film_process: "Color",
+        roll_count: 3,
+        roll_details: rolls("Color", 3),
+        received_by_yours_at: "2026-10-08T15:00:00.000Z",
+      }),
+      makeOrder({
+        id: "parked-lab",
+        status: "On Hold",
+        film_process: "Color",
+        roll_count: 4,
+        roll_details: rolls("Color", 4),
+        received_by_yours_at: "2026-10-08T15:00:00.000Z",
+        at_lab_at: new Date(sent.getTime() - 30 * DAY).toISOString(),
+        hold_reason: "lost at lab",
+      }),
+      makeOrder({
+        id: "parked-finished",
+        status: "On Hold",
+        film_process: "Color",
+        roll_count: 3,
+        roll_details: rolls("Color", 3),
+        scans_sent_at: sent.toISOString(),
+        at_lab_at: new Date(sent.getTime() - 4 * DAY).toISOString(),
+      }),
+      makeOrder({
+        id: "finished-color",
+        status: "Scans Sent",
+        film_process: "Color",
+        roll_count: 3,
+        roll_details: rolls("Color", 3),
+        scans_sent_at: sent.toISOString(),
+        at_lab_at: new Date(sent.getTime() - 4 * DAY).toISOString(),
+      }),
+    ], NOW);
+
+    expect(metrics.rollsProcessing).toBe(3);
+    expect(metrics.receivedToday).toBe(7);
+    expect(metrics.scansSentThisWeek).toBe(3);
+    expect(metrics.averageColorTurnaroundDays).toBe(4);
+  });
 });

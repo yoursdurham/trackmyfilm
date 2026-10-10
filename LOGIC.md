@@ -23,7 +23,7 @@ The main page. Every film order appears as a card.
 - Search by customer name or order number
 - Click **New Drop-off** to log a new order
 - **Pending Intake** lists Squarespace orders that have been imported but not received yet. No confirmation email goes out at import. **Check Squarespace** pulls store orders placed in the last 7 days and adds film-processing ones that are not already in the system. An order only counts if it was placed in those 7 days, not merely edited or fulfilled then. In-person Point of Sale orders are skipped. `01050` and `1050` count as the same order number. When the film is in hand, click **Approve & Receive** (leave “Send confirmation email” checked unless you want to skip it). That marks the order Received by Yours and sends the usual email. **Dismiss** deletes that intake row. A later check can import that Squarespace order again when it was placed in the last 7 days. Deleting a film order also deletes a matching intake row. Edit first if a detail needs correcting. Dismiss and delete do not remove other drafts or film orders.
-- Click **Update Status** on any card to advance the order
+- Click **Update Status** on any card to advance the order, or choose **On Hold** to park it
 
 ### 2. Customers (`/customers`)
 A full table of all 529+ customers.
@@ -83,13 +83,14 @@ A box will appear asking you to paste the WeTransfer download link. Once confirm
 
 ## Emails — What Gets Sent and When
 
-There are exactly 3 emails, one per status:
+There are exactly 3 customer emails, one per pipeline status. **On Hold does not send an email.**
 
 | Status | Email | When it sends |
 |--------|-------|--------------|
 | Received by Yours | Confirmation | Automatically when drop-off is logged |
 | Received at Lab | Lab update | When you click "Update Status → Received at Lab" |
 | Scans Sent | Download link | When you click "Update Status → Scans Sent" and paste WeTransfer link |
+| On Hold | None | Parking an order never emails the customer |
 
 **No email is sent if:**
 - The customer has no email address on file
@@ -177,6 +178,7 @@ Feel free to change the wording completely. Just keep `{{wetransfer_link}}` in t
 | Email content, subject, design | Resend dashboard → Templates |
 | Customer details (name, email, notes, rolls) | Customers page → click any row |
 | Order status | Dashboard → card → Update Status |
+| Park an order, with an optional reason | Dashboard → card → Update Status → On Hold |
 | WeTransfer link on an order | Dashboard → card → Update Status → Scans Sent |
 | Password | Login page → Forgot password |
 
@@ -184,9 +186,8 @@ Feel free to change the wording completely. Just keep `{{wetransfer_link}}` in t
 
 ## What You Cannot Change (Without a Developer)
 
-- The 3 status names — they are fixed in the system
-- The order of statuses — always Received by Yours → Lab → Scans Sent
-- Adding new status types
+- The pipeline order — Received by Yours → Lab → Ready for Pickup or Scans Sent. On Hold is a parking status outside that line
+- Showing the On Hold reason to customers — the tracking page only says we're checking on the order
 - The WeTransfer link validation (only accepts wetransfer.com links)
 - The login email — only `hello@yoursdurham.com` has access
 - The tracking page design

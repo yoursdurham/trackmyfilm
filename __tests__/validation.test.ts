@@ -62,6 +62,18 @@ describe("isValidTransition", () => {
   it("rejects same status: Scans Sent → Scans Sent", () => {
     expect(isValidTransition("Scans Sent", "Scans Sent")).toBe(false);
   });
+
+  it("allows parking any pipeline status, and leaving On Hold for any pipeline status", () => {
+    expect(isValidTransition("Received by Yours", "On Hold")).toBe(true);
+    expect(isValidTransition("Received at Lab", "On Hold")).toBe(true);
+    expect(isValidTransition("Ready for Pickup", "On Hold")).toBe(true);
+    expect(isValidTransition("Scans Sent", "On Hold")).toBe(true);
+    expect(isValidTransition("On Hold", "Received by Yours")).toBe(true);
+    expect(isValidTransition("On Hold", "Received at Lab")).toBe(true);
+    expect(isValidTransition("On Hold", "Ready for Pickup")).toBe(true);
+    expect(isValidTransition("On Hold", "Scans Sent")).toBe(true);
+    expect(isValidTransition("On Hold", "On Hold")).toBe(false);
+  });
 });
 
 // ─── Known status guard ───────────────────────────────────────────────────────
@@ -72,6 +84,7 @@ describe("isKnownStatus", () => {
     expect(isKnownStatus("Received at Lab")).toBe(true);
     expect(isKnownStatus("Ready for Pickup")).toBe(true);
     expect(isKnownStatus("Scans Sent")).toBe(true);
+    expect(isKnownStatus("On Hold")).toBe(true);
   });
 
   it("rejects unknown strings", () => {

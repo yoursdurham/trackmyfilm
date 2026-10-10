@@ -29,7 +29,13 @@ export function getUrgentAgeDays(order: FilmOrder) {
 }
 
 export function isUrgent(order: FilmOrder) {
-  if (order.status === "Scans Sent" || order.status === "Ready for Pickup") return false;
+  if (
+    order.status === "Scans Sent" ||
+    order.status === "Ready for Pickup" ||
+    order.status === "On Hold"
+  ) {
+    return false;
+  }
   const ageDays = getUrgentAgeDays(order);
   return ageDays !== null && ageDays >= URGENT_DAYS;
 }

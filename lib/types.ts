@@ -1,4 +1,9 @@
-export type OrderStatus = "Received by Yours" | "Received at Lab" | "Ready for Pickup" | "Scans Sent";
+export type OrderStatus =
+  | "Received by Yours"
+  | "Received at Lab"
+  | "Ready for Pickup"
+  | "Scans Sent"
+  | "On Hold";
 
 export type FilmType = "35mm" | "120" | "110" | "Disposable Camera";
 export type FilmProcess = "Color" | "Black & White" | "Both";
@@ -97,6 +102,8 @@ export interface FilmOrder {
   bw_scans_delivered_at?: string;
   bw_partial_email_sent_at?: string;
   notes?: string;
+  /** Staff-only note while status is On Hold. Never sent to public tracking. */
+  hold_reason?: string | null;
   customer_notes?: string;
   /** Customer-facing note included in the final scans_sent email only */
   scan_notes?: string | null;
