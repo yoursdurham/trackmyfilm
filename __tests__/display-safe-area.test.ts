@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 import { DISPLAY_SAFE_AREA, displaySafeArea, toPublicDisplayPayload } from "../lib/display";
 
 describe("displaySafeArea", () => {
-  it("insets studio-vertical by 240px on the left", () => {
-    expect(DISPLAY_SAFE_AREA["studio-vertical"]).toEqual({ left: 240 });
-    expect(displaySafeArea("studio-vertical")).toEqual({ left: 240 });
+  it("insets studio-vertical by 222px on the left", () => {
+    expect(DISPLAY_SAFE_AREA["studio-vertical"]).toEqual({ left: 222 });
+    expect(displaySafeArea("studio-vertical")).toEqual({ left: 222 });
   });
 
   it("leaves every other slug full bleed", () => {
