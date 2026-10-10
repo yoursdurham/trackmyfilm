@@ -200,6 +200,26 @@ describe("turnaround-time", () => {
     });
   });
 
+  it("leaves an On Hold order out of the average even when it already has scan dates", () => {
+    const parked = makeOrder({
+      id: "parked",
+      status: "On Hold",
+      at_lab_at: isoDaysAgo(8),
+      scans_sent_at: isoDaysAgo(4),
+      hold_reason: "lost at lab",
+    });
+    const finished = makeOrder({
+      id: "finished",
+      at_lab_at: isoDaysAgo(9),
+      scans_sent_at: isoDaysAgo(4),
+    });
+
+    expect(calculateTurnaroundForPeriod([parked, finished], "all")).toEqual({
+      orderCount: 1,
+      averageDays: 5,
+    });
+  });
+
   it("formats turnaround to one decimal place", () => {
     expect(formatTurnaroundDays(5)).toBe("5.0 days");
     expect(formatTurnaroundDays(6.666)).toBe("6.7 days");

@@ -392,6 +392,7 @@ export function computeFilmDepartures(
   const arrivals = new Map<string, ArrivalBucket>();
 
   orders.forEach((order, index) => {
+    if (order.status === ORDER_STATUS.ON_HOLD) return;
     const key = personKey(order, index);
     const name = boardName(order.customer_name);
     const rolls = rollsOnOrder(order);

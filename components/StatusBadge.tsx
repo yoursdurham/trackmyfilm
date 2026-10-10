@@ -24,6 +24,11 @@ const statusConfig: Record<OrderStatus, { bg: string; text: string; dot: string 
     text: "text-white",
     dot: "bg-white",
   },
+  "On Hold": {
+    bg: "bg-stone-200",
+    text: "text-stone-700",
+    dot: "bg-stone-500",
+  },
 };
 
 export default function StatusBadge({ status }: { status: string }) {

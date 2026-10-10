@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
   Collapsible, CollapsibleContent, CollapsibleTrigger,
@@ -28,6 +28,7 @@ import StatusBadge from "./StatusBadge";
 import FilmProcessBadge from "./FilmProcessBadge";
 import CopyField from "./CopyField";
 import { ORDER_STATUS, STATUS_FLOW, STATUS_TEMPLATE_MAP } from "@/lib/constants";
+import { HOLD_REASON_MAX_LENGTH } from "@/lib/hold-reason";
 import { getUrgentAgeDays, isUrgent } from "@/lib/order-urgency";
 import { getStatusOptionsForOrder, isProcessOnlyOrder } from "@/lib/order-service";
 import {
@@ -50,6 +51,7 @@ function getStatusDotClass(status: OrderStatus) {
   if (status === ORDER_STATUS.RECEIVED_BY_YOURS) return "bg-[var(--accent-tan)]";
   if (status === ORDER_STATUS.RECEIVED_AT_LAB) return "bg-[var(--accent-purple)]";
   if (status === ORDER_STATUS.READY_FOR_PICKUP) return "bg-amber-500";
+  if (status === ORDER_STATUS.ON_HOLD) return "bg-stone-400";
   return "bg-[var(--accent-green)]";
 }
 
@@ -80,6 +82,7 @@ interface Props {
     force?: boolean,
     sendEmail?: boolean,
     scanNotes?: string | null,
+    holdReason?: string | null,
   ) => Promise<void>;
   onDelete: (id: string) => void;
   onOrderUpdated?: () => void;
@@ -105,6 +108,8 @@ export default function OrderCard({
   const [wetransferLink, setWetransferLink] = useState("");
   const [scanNotes, setScanNotes] = useState("");
   const [sendScanEmail, setSendScanEmail] = useState(true);
+  const [statusMenuOpen, setStatusMenuOpen] = useState(false);
+  const [holdReason, setHoldReason] = useState(order.hold_reason ?? "");
   const [showPartialDialog, setShowPartialDialog] = useState(false);
   const [partialBatch, setPartialBatch] = useState<ScanDeliveryBatch>("Color");
   const [partialLink, setPartialLink] = useState("");
@@ -187,9 +192,12 @@ export default function OrderCard({
   const draftProcessOnly = orderDraft?.roll_details.length
     ? orderDraft.roll_details.every((roll) => roll.scan_size === "Process Only")
     : processOnlyOrder;
-  const draftStatusOptions: OrderStatus[] = draftProcessOnly
-    ? [ORDER_STATUS.RECEIVED_BY_YOURS, ORDER_STATUS.RECEIVED_AT_LAB, ORDER_STATUS.READY_FOR_PICKUP]
-    : [ORDER_STATUS.RECEIVED_BY_YOURS, ORDER_STATUS.RECEIVED_AT_LAB, ORDER_STATUS.SCANS_SENT];
+  const draftStatusOptions: OrderStatus[] = [
+    ...(draftProcessOnly
+      ? [ORDER_STATUS.RECEIVED_BY_YOURS, ORDER_STATUS.RECEIVED_AT_LAB, ORDER_STATUS.READY_FOR_PICKUP]
+      : [ORDER_STATUS.RECEIVED_BY_YOURS, ORDER_STATUS.RECEIVED_AT_LAB, ORDER_STATUS.SCANS_SENT]),
+    ORDER_STATUS.ON_HOLD,
+  ];
 
   const buildOrderDraft = (): OrderDraft => ({
     order_number: order.order_number,
@@ -265,8 +273,25 @@ export default function OrderCard({
     }
   };
 
+  const applyOnHold = () => {
+    setStatusMenuOpen(false);
+    void doStatusChange(
+      ORDER_STATUS.ON_HOLD,
+      undefined,
+      undefined,
+      false,
+      undefined,
+      holdReason,
+    );
+  };
+
   const handleStatusChangeClick = (status: string) => {
     const targetIdx = STATUS_FLOW.indexOf(status as typeof STATUS_FLOW[number]);
+
+    if (status === ORDER_STATUS.ON_HOLD) {
+      applyOnHold();
+      return;
+    }
 
     // Same status — no-op
     if (order.status === status) return;
@@ -309,10 +334,11 @@ export default function OrderCard({
     force?: boolean,
     sendEmail?: boolean,
     customerScanNotes?: string | null,
+    nextHoldReason?: string | null,
   ) => {
     setIsUpdating(true);
     try {
-      await onStatusChange(order.id, status, link, force, sendEmail, customerScanNotes);
+      await onStatusChange(order.id, status, link, force, sendEmail, customerScanNotes, nextHoldReason);
     } finally {
       setIsUpdating(false);
     }
@@ -433,6 +459,11 @@ export default function OrderCard({
               {urgent ? (
                 <span className="rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-red-700">
                   Urgent{urgentAgeDays !== null ? ` • ${urgentAgeDays} days` : ""}
+                </span>
+              ) : null}
+              {order.status === ORDER_STATUS.ON_HOLD && order.hold_reason ? (
+                <span className="max-w-[160px] truncate rounded-full border border-stone-200 bg-stone-50 px-2 py-0.5 text-[10px] font-medium text-stone-600">
+                  {order.hold_reason}
                 </span>
               ) : null}
             </div>
@@ -651,7 +682,13 @@ export default function OrderCard({
         )}
 
         <div className="pt-3 border-t border-slate-100 flex gap-2">
-          <DropdownMenu>
+          <DropdownMenu
+            open={statusMenuOpen}
+            onOpenChange={(open) => {
+              setStatusMenuOpen(open);
+              if (open) setHoldReason(order.hold_reason ?? "");
+            }}
+          >
             <DropdownMenuTrigger
               render={<Button variant="outline" size="sm" disabled={isUpdating} className="flex-1 min-w-0 justify-between text-slate-600 hover:border-[var(--accent-purple)]/40 hover:bg-[var(--accent-purple)]/10 hover:text-[#806A91]" />}
             >
@@ -660,8 +697,8 @@ export default function OrderCard({
                 : <><span>Update Status</span><ChevronDown className="w-4 h-4 ml-2" /></>
               }
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
-              {statusOptions.map((status) => {
+            <DropdownMenuContent align="end" className="w-72">
+              {statusOptions.filter((status) => status !== ORDER_STATUS.ON_HOLD).map((status) => {
                 const targetIdx = STATUS_FLOW.indexOf(status);
                 const isBackward = targetIdx < currentIdx;
                 const scansSentBlocked =
@@ -686,6 +723,40 @@ export default function OrderCard({
                   </DropdownMenuItem>
                 );
               })}
+              <DropdownMenuSeparator />
+              <div className="px-1.5 py-1.5">
+                <p className="flex items-center px-1.5 py-1 text-sm text-slate-800">
+                  <span className="mr-2 h-2 w-2 rounded-full bg-stone-400" />
+                  On Hold
+                </p>
+                <label
+                  htmlFor={`hold-reason-${order.id}`}
+                  className="mt-1 block px-1.5 text-[11px] font-medium text-slate-500"
+                >
+                  Reason (optional)
+                </label>
+                <Input
+                  id={`hold-reason-${order.id}`}
+                  value={holdReason}
+                  maxLength={HOLD_REASON_MAX_LENGTH}
+                  placeholder="lost at lab, waiting on customer"
+                  onChange={(event) => setHoldReason(event.target.value)}
+                  onPointerDown={(event) => event.stopPropagation()}
+                  onKeyDown={(event) => event.stopPropagation()}
+                  onClick={(event) => event.stopPropagation()}
+                  className="mt-1 h-8 border-stone-200 text-xs"
+                />
+                <button
+                  type="button"
+                  onClick={applyOnHold}
+                  className={`mt-2 flex w-full items-center justify-center rounded-md px-1.5 py-1.5 text-sm font-medium hover:bg-accent ${order.status === ORDER_STATUS.ON_HOLD ? "bg-stone-100 text-slate-800" : "text-slate-700"}`}
+                >
+                  {order.status === ORDER_STATUS.ON_HOLD ? "Update reason" : "Put on hold"}
+                </button>
+                <p className="mt-1 px-1.5 text-[11px] leading-snug text-slate-400">
+                  No customer email. They&apos;ll see that we&apos;re checking on the order.
+                </p>
+              </div>
             </DropdownMenuContent>
           </DropdownMenu>
 

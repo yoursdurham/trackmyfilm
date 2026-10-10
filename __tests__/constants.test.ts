@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { ORDER_STATUS, STATUS_FLOW, STATUS_TEMPLATE_MAP } from "../lib/constants";
+import { KNOWN_ORDER_STATUSES, ORDER_STATUS, STATUS_FLOW, STATUS_TEMPLATE_MAP } from "../lib/constants";
 
 describe("STATUS_FLOW ordering", () => {
   it("has exactly 4 statuses", () => {
@@ -42,5 +42,11 @@ describe("STATUS_TEMPLATE_MAP", () => {
     expect(STATUS_TEMPLATE_MAP["Received at Lab"]).toBe("film_at_lab");
     expect(STATUS_TEMPLATE_MAP["Ready for Pickup"]).toBe("process_only_finished");
     expect(STATUS_TEMPLATE_MAP["Scans Sent"]).toBe("scans_sent");
+  });
+
+  it("does not email On Hold", () => {
+    expect(STATUS_FLOW).not.toContain("On Hold");
+    expect(STATUS_TEMPLATE_MAP["On Hold"]).toBeUndefined();
+    expect(KNOWN_ORDER_STATUSES).toContain(ORDER_STATUS.ON_HOLD);
   });
 });

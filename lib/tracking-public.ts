@@ -21,6 +21,21 @@ export type PublicRollDetail = {
   scan_size?: RollDetail["scan_size"];
 };
 
+/** Shown on public tracking while an order is parked. The staff reason stays off this payload. */
+export const PUBLIC_ON_HOLD_MESSAGE = "We're checking on this order";
+
+/**
+ * Timeline highlight for the tracking page. On Hold is not a pipeline step,
+ * so the page keeps the last normal status and shows PUBLIC_ON_HOLD_MESSAGE.
+ */
+export function publicTimelineStatus(
+  order: Pick<PublicTrackingOrder, "status" | "status_history">,
+): OrderStatus | null {
+  if (order.status !== "On Hold") return order.status;
+  const prior = [...order.status_history].reverse().find((entry) => entry.status !== "On Hold");
+  return prior?.status ?? null;
+}
+
 /** Fields the public tracking page renders. Nothing else leaves the server. */
 export type PublicTrackingOrder = {
   id: string;

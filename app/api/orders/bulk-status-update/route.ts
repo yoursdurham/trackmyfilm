@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { STATUS_FLOW } from "@/lib/constants";
+import { KNOWN_ORDER_STATUSES } from "@/lib/constants";
 import { requireAuth } from "@/lib/api-auth";
 import { isKnownStatus } from "@/lib/validation";
 import { updateOrderStatus } from "@/lib/status-update-service";
@@ -24,7 +24,7 @@ export async function POST(req: Request) {
 
     if (!status || !isKnownStatus(status)) {
       return NextResponse.json(
-        { error: `Invalid status. Must be one of: ${STATUS_FLOW.join(", ")}` },
+        { error: `Invalid status. Must be one of: ${KNOWN_ORDER_STATUSES.join(", ")}` },
         { status: 400 }
       );
     }

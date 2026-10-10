@@ -22,7 +22,12 @@ import Image from "next/image";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import FilmProcessBadge from "@/components/FilmProcessBadge";
-import { orderNoteForCustomerDisplay, type PublicTrackingOrder } from "@/lib/tracking-public";
+import {
+  PUBLIC_ON_HOLD_MESSAGE,
+  orderNoteForCustomerDisplay,
+  publicTimelineStatus,
+  type PublicTrackingOrder,
+} from "@/lib/tracking-public";
 import type { OrderStatus, StatusHistoryEntry } from "@/lib/types";
 import RecoverySessionRedirect from "@/components/RecoverySessionRedirect";
 
@@ -107,6 +112,8 @@ function getStatusBadgeClass(status: OrderStatus) {
       return "bg-amber-500 text-white";
     case "Scans Sent":
       return "bg-[var(--accent-green)] text-white";
+    case "On Hold":
+      return "bg-stone-200 text-stone-700";
     default:
       return "bg-slate-100 text-slate-700";
   }
@@ -117,7 +124,7 @@ function OrderTimeline({
   statusHistory,
   processOnly,
 }: {
-  currentStatus: OrderStatus;
+  currentStatus: OrderStatus | null;
   statusHistory?: StatusHistoryEntry[];
   processOnly?: boolean;
 }) {
@@ -509,8 +516,14 @@ function TrackingContent() {
                       </div>
                     </div>
 
+                    {order.status === "On Hold" ? (
+                      <div className="mb-6 rounded-lg border border-stone-200 bg-stone-50 px-4 py-3 text-center text-sm font-medium text-slate-700">
+                        {PUBLIC_ON_HOLD_MESSAGE}
+                      </div>
+                    ) : null}
+
                     <OrderTimeline
-                      currentStatus={order.status}
+                      currentStatus={publicTimelineStatus(order)}
                       statusHistory={order.status_history}
                       processOnly={processOnlyOrder}
                     />

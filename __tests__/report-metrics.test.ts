@@ -109,6 +109,52 @@ describe("calculateReportMetrics", () => {
       "High-Res",
       "TIFF",
     ]);
+    expect(metrics.onHoldOrders).toBe(0);
+    expect(metrics.onHoldRolls).toBe(0);
+  });
+
+  it("keeps On Hold rolls in the volume totals and labels them as not completed", () => {
+    const metrics = calculateReportMetrics([
+      order({
+        id: "parked",
+        status: "On Hold",
+        customer_id: "cust-hold",
+        roll_count: 2,
+        hold_reason: "lost at lab",
+        roll_details: [
+          { film_type: "35mm", film_process: "Color", scan_size: "Standard", film_stock: "Portra 400", blank: true },
+          { film_type: "120", film_process: "Black & White", scan_size: "High-Res" },
+        ],
+      }),
+      order({
+        id: "finished",
+        customer_id: "cust-done",
+        roll_count: 1,
+        roll_details: [
+          { film_type: "35mm", film_process: "Color", scan_size: "Standard" },
+        ],
+      }),
+    ]);
+
+    expect(metrics.totalCustomers).toBe(2);
+    expect(metrics.totalColorRolls).toBe(2);
+    expect(metrics.totalBWRolls).toBe(1);
+    expect(metrics.totalBlankRolls).toBe(1);
+    expect(metrics.filmStockUsage).toEqual([{ stock: "Portra 400", count: 1 }]);
+    expect(metrics.onHoldOrders).toBe(1);
+    expect(metrics.onHoldRolls).toBe(2);
+
+    const csv = buildReportCsv({
+      generatedAt: "Oct 10, 2026",
+      timeFrameLabel: "Last 30 days",
+      metrics,
+      averageTurnaroundDays: 4,
+      completedOrders: 1,
+    });
+    expect(csv).toContain("Completed Orders (turnaround),1");
+    expect(csv).toContain("On Hold Orders (parked; not completed),1");
+    expect(csv).toContain("On Hold Rolls (included in the roll totals above; not completed),2");
+    expect(csv).not.toContain("lost at lab");
   });
 
   it("writes blank columns into the monthly CSV", () => {

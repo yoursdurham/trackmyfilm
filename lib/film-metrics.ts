@@ -407,13 +407,17 @@ export function computeFilmMetrics(orders: FilmOrder[], now = new Date()): FilmM
 
   for (const order of orders) {
     const rolls = rollsOnOrder(order);
-    if (IN_PROCESS.has(order.status)) rollsProcessing += scannedRollsOnOrder(order);
+    const onHold = order.status === ORDER_STATUS.ON_HOLD;
+    // Parked orders are not in process. Film that arrived still counts as received.
+    if (!onHold && IN_PROCESS.has(order.status)) rollsProcessing += scannedRollsOnOrder(order);
 
     const received = receivedKey(order, now);
     if (received && received <= todayKey) {
       if (received === todayKey) receivedToday += rolls;
       if (received >= weekStartKey) receivedThisWeek += rolls;
     }
+
+    if (onHold) continue;
 
     // Blank rolls were still processed, so they stay in scans-sent totals.
     // They are already finished, so they stay out of rolls-in-process above,

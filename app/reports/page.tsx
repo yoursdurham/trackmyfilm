@@ -267,6 +267,12 @@ export default function Reports() {
                   <p className="text-3xl font-bold text-sky-600">{formatTurnaroundDays(turnaround.averageDays)}</p>
                   <p className="mt-1 text-xs text-slate-500">Received at Lab → Scans Sent</p>
                   <p className="text-xs text-slate-500">Blank-only orders left out</p>
+                  <p className="text-xs text-slate-500">On hold orders left out</p>
+                  {metrics.onHoldOrders > 0 ? (
+                    <p className="text-xs text-slate-500">
+                      {metrics.onHoldOrders} on hold, not counted as completed
+                    </p>
+                  ) : null}
                   <p className="text-xs text-slate-500">
                     {turnaround.orderCount} completed order{turnaround.orderCount === 1 ? "" : "s"}
                   </p>

@@ -12,6 +12,7 @@ export type DashboardStatusCounts = {
   "Received by Yours": number;
   "Received at Lab": number;
   "Scans Sent": number;
+  "On Hold": number;
 };
 
 export function countDashboardStatuses(orders: { status: string }[]): DashboardStatusCounts {
@@ -19,11 +20,13 @@ export function countDashboardStatuses(orders: { status: string }[]): DashboardS
     "Received by Yours": 0,
     "Received at Lab": 0,
     "Scans Sent": 0,
+    "On Hold": 0,
   };
 
   for (const order of orders) {
     if (order.status === ORDER_STATUS.RECEIVED_BY_YOURS) counts["Received by Yours"] += 1;
     else if (order.status === ORDER_STATUS.RECEIVED_AT_LAB) counts["Received at Lab"] += 1;
+    else if (order.status === ORDER_STATUS.ON_HOLD) counts["On Hold"] += 1;
     else if (isDashboardSentStatus(order.status)) counts["Scans Sent"] += 1;
   }
 
@@ -37,7 +40,7 @@ export function orderMatchesDashboardFilter(
   urgent: boolean,
 ): boolean {
   if (activeFilter === "all") return true;
-  if (activeFilter === "urgent") return urgent;
+  if (activeFilter === "urgent") return urgent && order.status !== ORDER_STATUS.ON_HOLD;
   if (activeFilter === ORDER_STATUS.SCANS_SENT) return isDashboardSentStatus(order.status);
   return order.status === activeFilter;
 }

@@ -3,7 +3,7 @@
  * These are the source of truth for validation rules — API routes and tests both import from here.
  */
 
-import { STATUS_FLOW } from "./constants";
+import { KNOWN_ORDER_STATUSES, ORDER_STATUS, STATUS_FLOW } from "./constants";
 import type { FilmType, OrderStatus, RollDetail } from "./types";
 
 /** Staff-selectable film formats for new drop-offs (excludes legacy-only types). */
@@ -73,16 +73,21 @@ const ONE_HOUR_MS = 60 * 60 * 1000;
 /**
  * Returns true only for valid forward transitions.
  * Backward transitions require `force: true` on the API call.
+ * On Hold can be entered from any other status. Leaving On Hold for any
+ * pipeline status is allowed; process-only rules still apply separately.
  */
 export function isValidTransition(current: OrderStatus, next: OrderStatus): boolean {
+  if (current === next) return false;
+  if (next === ORDER_STATUS.ON_HOLD) return true;
+  if (current === ORDER_STATUS.ON_HOLD) return (STATUS_FLOW as readonly string[]).includes(next);
   return STATUS_FLOW.indexOf(next) > STATUS_FLOW.indexOf(current);
 }
 
 /**
- * Returns true if a status is a known value in STATUS_FLOW.
+ * Returns true if a status is one staff can store, including On Hold.
  */
 export function isKnownStatus(status: string): status is OrderStatus {
-  return (STATUS_FLOW as string[]).includes(status);
+  return (KNOWN_ORDER_STATUSES as readonly string[]).includes(status);
 }
 
 /**

@@ -1,4 +1,5 @@
 import { isBlankRoll } from "./blank-roll";
+import { ORDER_STATUS } from "./constants";
 import type { FilmOrder, RollDetail } from "./types";
 
 export interface ReportMetrics {
@@ -20,9 +21,15 @@ export interface ReportMetrics {
   blankOtherFormatRolls: number;
   filmStockUsage: { stock: string; count: number }[];
   scanResolutionUsage: { resolution: string; count: number }[];
+  /** Parked orders. Their rolls stay in the volume totals; they are not completed. */
+  onHoldOrders: number;
+  onHoldRolls: number;
 }
 
-function emptyMetrics(): Omit<ReportMetrics, "totalCustomers" | "filmStockUsage" | "scanResolutionUsage"> {
+function emptyMetrics(): Omit<
+  ReportMetrics,
+  "totalCustomers" | "filmStockUsage" | "scanResolutionUsage" | "onHoldOrders" | "onHoldRolls"
+> {
   return {
     totalBWRolls: 0,
     totalColorRolls: 0,
@@ -92,14 +99,25 @@ function tallyLegacyOrder(
   }
 }
 
+function rollsRepresented(order: FilmOrder): number {
+  if (order.roll_details && order.roll_details.length > 0) return order.roll_details.length;
+  return order.roll_count || 0;
+}
+
 export function calculateReportMetrics(orderList: FilmOrder[]): ReportMetrics {
   const uniqueCustomerIds = new Set<string>();
   const filmStockMap = new Map<string, number>();
   const scanResolutionMap = new Map<string, number>();
   const totals = emptyMetrics();
+  let onHoldOrders = 0;
+  let onHoldRolls = 0;
 
   orderList.forEach((order) => {
     uniqueCustomerIds.add(order.customer_id);
+    if (order.status === ORDER_STATUS.ON_HOLD) {
+      onHoldOrders += 1;
+      onHoldRolls += rollsRepresented(order);
+    }
 
     if (order.roll_details && order.roll_details.length > 0) {
       order.roll_details.forEach((roll) => {
@@ -123,6 +141,8 @@ export function calculateReportMetrics(orderList: FilmOrder[]): ReportMetrics {
     ...totals,
     filmStockUsage,
     scanResolutionUsage,
+    onHoldOrders,
+    onHoldRolls,
   };
 }
 
@@ -163,6 +183,8 @@ export function buildReportCsv(args: {
     `Blank Other Format Rolls,${metrics.blankOtherFormatRolls}`,
     `Average Turnaround Time (days),${turnaround}`,
     `Completed Orders (turnaround),${args.completedOrders}`,
+    `On Hold Orders (parked; not completed),${args.metrics.onHoldOrders}`,
+    `On Hold Rolls (included in the roll totals above; not completed),${args.metrics.onHoldRolls}`,
     "",
     "FILM STOCK USAGE",
     "Film Stock,Count",

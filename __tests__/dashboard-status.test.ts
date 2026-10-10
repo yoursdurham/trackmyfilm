@@ -12,6 +12,7 @@ const orders = [
   { id: "pickup-a", status: ORDER_STATUS.READY_FOR_PICKUP },
   { id: "pickup-b", status: ORDER_STATUS.READY_FOR_PICKUP },
   { id: "sent", status: ORDER_STATUS.SCANS_SENT },
+  { id: "hold", status: ORDER_STATUS.ON_HOLD },
 ];
 
 describe("dashboard sent grouping", () => {
@@ -27,6 +28,7 @@ describe("dashboard sent grouping", () => {
       "Received by Yours": 1,
       "Received at Lab": 1,
       "Scans Sent": 3,
+      "On Hold": 1,
     });
   });
 
@@ -46,5 +48,16 @@ describe("dashboard sent grouping", () => {
   it("leaves urgency to the caller, including finished pickup orders", () => {
     expect(orderMatchesDashboardFilter(orders[2], "urgent", false)).toBe(false);
     expect(orderMatchesDashboardFilter(orders[0], "urgent", true)).toBe(true);
+  });
+
+  it("parks On Hold on its own tab and keeps it out of the working lists", () => {
+    const hold = orders.find((order) => order.id === "hold");
+    expect(hold).toBeDefined();
+    expect(orderMatchesDashboardFilter(hold!, ORDER_STATUS.ON_HOLD, false)).toBe(true);
+    expect(orderMatchesDashboardFilter(hold!, "all", false)).toBe(true);
+    expect(orderMatchesDashboardFilter(hold!, ORDER_STATUS.RECEIVED_BY_YOURS, false)).toBe(false);
+    expect(orderMatchesDashboardFilter(hold!, ORDER_STATUS.RECEIVED_AT_LAB, true)).toBe(false);
+    expect(orderMatchesDashboardFilter(hold!, ORDER_STATUS.SCANS_SENT, false)).toBe(false);
+    expect(orderMatchesDashboardFilter(hold!, "urgent", true)).toBe(false);
   });
 });

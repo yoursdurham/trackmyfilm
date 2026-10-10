@@ -6,7 +6,7 @@
 
 import { NextResponse } from "next/server";
 import { getOrderById } from "@/lib/db";
-import { STATUS_FLOW } from "@/lib/constants";
+import { KNOWN_ORDER_STATUSES } from "@/lib/constants";
 import { isProcessOnlyOrder } from "@/lib/order-service";
 import { isKnownStatus } from "@/lib/validation";
 import { requireAuth } from "@/lib/api-auth";
@@ -18,11 +18,12 @@ export async function POST(req: Request) {
   if (auth instanceof NextResponse) return auth;
 
   try {
-    const { order_id, new_status, wetransfer_link, scan_notes, force = false, send_email = true } = await req.json() as {
+    const { order_id, new_status, wetransfer_link, scan_notes, hold_reason, force = false, send_email = true } = await req.json() as {
       order_id: string;
       new_status: OrderStatus;
       wetransfer_link?: string;
       scan_notes?: string | null;
+      hold_reason?: string | null;
       force?: boolean;
       send_email?: boolean;
     };
@@ -33,7 +34,7 @@ export async function POST(req: Request) {
 
     if (!isKnownStatus(new_status)) {
       return NextResponse.json(
-        { error: `Invalid status. Must be one of: ${STATUS_FLOW.join(", ")}` },
+        { error: `Invalid status. Must be one of: ${KNOWN_ORDER_STATUSES.join(", ")}` },
         { status: 400 }
       );
     }
@@ -69,6 +70,7 @@ export async function POST(req: Request) {
       new_status,
       wetransfer_link,
       scan_notes,
+      hold_reason,
       force,
       send_email,
     });
@@ -93,6 +95,7 @@ export async function POST(req: Request) {
       reason: result.reason,
       email_sent: result.email_sent,
       emailError: result.emailError,
+      warning: result.warning,
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Unknown error";

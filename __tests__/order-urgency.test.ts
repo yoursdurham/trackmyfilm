@@ -54,6 +54,17 @@ describe("isLabDelayUrgent", () => {
     expect(isLabDelayUrgent(order)).toBe(false);
   });
 
+  it("returns false for On Hold even when the film has sat at the lab for weeks", () => {
+    const order = makeOrder({
+      status: "On Hold",
+      at_lab_at: daysAgo(34),
+      hold_reason: "lost at lab",
+    });
+    expect(isUrgent(order)).toBe(false);
+    expect(isLabDelayUrgent(order)).toBe(false);
+    expect(getUrgentAgeDays(order)).toBeNull();
+  });
+
   it("returns false for terminal statuses", () => {
     expect(isLabDelayUrgent(makeOrder({
       status: "Scans Sent",
