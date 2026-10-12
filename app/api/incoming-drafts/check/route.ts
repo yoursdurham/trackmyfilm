@@ -5,7 +5,8 @@
  * window that are not already in the system. The Orders API filters by
  * modified date; import also requires createdOn within the same 7 days.
  * Does not send email, does not create film orders, and does not change
- * drafts or film orders that are already stored.
+ * drafts or film orders that are already stored. Dismissed orders stay
+ * dismissed and are skipped by Squarespace order id and normalized order number.
  */
 
 import { NextResponse } from "next/server";

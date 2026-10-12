@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { orderNumberMatchPattern } from "../lib/validation";
 
-type QueryResult = { data: unknown; error: { message: string } | null };
+type QueryResult = { data: unknown; error: { message: string; code?: string } | null };
 
 const state: {
   calls: { table: string; method: string; args: unknown[] }[];
@@ -15,10 +15,13 @@ interface QueryBuilder {
   select: (...args: unknown[]) => QueryBuilder;
   regexIMatch: (...args: unknown[]) => QueryBuilder;
   eq: (...args: unknown[]) => QueryBuilder;
+  neq: (...args: unknown[]) => QueryBuilder;
   ilike: (...args: unknown[]) => QueryBuilder;
   order: (...args: unknown[]) => QueryBuilder;
   limit: (...args: unknown[]) => QueryBuilder;
   delete: (...args: unknown[]) => QueryBuilder;
+  update: (...args: unknown[]) => QueryBuilder;
+  single: () => Promise<QueryResult>;
   then: (
     onFulfilled: (value: QueryResult) => unknown,
     onRejected?: (reason: unknown) => unknown,
@@ -39,6 +42,10 @@ function builder(table: string): QueryBuilder {
       state.calls.push({ table, method: "eq", args });
       return self;
     },
+    neq(...args) {
+      state.calls.push({ table, method: "neq", args });
+      return self;
+    },
     ilike(...args) {
       state.calls.push({ table, method: "ilike", args });
       return self;
@@ -54,6 +61,14 @@ function builder(table: string): QueryBuilder {
     delete(...args) {
       state.calls.push({ table, method: "delete", args });
       return self;
+    },
+    update(...args) {
+      state.calls.push({ table, method: "update", args });
+      return self;
+    },
+    single() {
+      state.calls.push({ table, method: "single", args: [] });
+      return Promise.resolve(state.result);
     },
     then(onFulfilled, onRejected) {
       return Promise.resolve(state.result).then(onFulfilled, onRejected);
@@ -77,8 +92,11 @@ import {
   getIncomingDraftByOrderNumber,
   getOrderByNumber,
   getOrderByNumberAndEmail,
+  getPendingIncomingDrafts,
   orderNumberExists,
+  updateIncomingDraftStatus,
 } from "../lib/db";
+import { DISMISSED_STATUS_NOT_READY } from "../lib/incoming-drafts";
 
 function patternMatches(pattern: string, stored: string): boolean {
   const source = pattern.replace(/\[\[:space:\]\]/g, "\\s");
@@ -227,6 +245,55 @@ describe("order number database lookups", () => {
     expect(state.calls.some((call) => (
       call.method === "eq" && call.args[0] === "squarespace_order_number"
     ))).toBe(false);
+  });
+
+  it("leaves dismissed intake rows in place when a film order is deleted", async () => {
+    await deleteIncomingDraftsForOrder({ id: "order-1", order_number: "01034", external_order_id: "sq-1034" });
+    const kept = state.calls.filter((call) => call.method === "neq");
+    expect(kept.length).toBeGreaterThan(0);
+    expect(kept.every((call) => call.args[0] === "status" && call.args[1] === "dismissed")).toBe(true);
+  });
+
+  it("lists only Pending Intake rows for the queue and its count", async () => {
+    state.result = {
+      data: [{ id: "draft-1", status: "Pending Intake", squarespace_order_number: "01034" }],
+      error: null,
+    };
+    const drafts = await getPendingIncomingDrafts();
+    expect(drafts).toHaveLength(1);
+    expect(drafts[0]?.status).toBe("Pending Intake");
+    expect(state.calls.some((call) => (
+      call.table === "incoming_squarespace_drafts"
+      && call.method === "eq"
+      && call.args[0] === "status"
+      && call.args[1] === "Pending Intake"
+    ))).toBe(true);
+  });
+
+  it("saves dismiss on the draft row and does not delete it", async () => {
+    state.result = {
+      data: { id: "draft-1", status: "dismissed", squarespace_order_number: "01034" },
+      error: null,
+    };
+    const updated = await updateIncomingDraftStatus("draft-1", "dismissed");
+    expect(updated.status).toBe("dismissed");
+    const write = state.calls.find((call) => call.method === "update");
+    expect(write?.args[0]).toMatchObject({ status: "dismissed" });
+    expect(state.calls.some((call) => call.method === "delete")).toBe(false);
+  });
+
+  it("reports that dismiss cannot be saved when the status check still rejects it", async () => {
+    state.result = {
+      data: null,
+      error: {
+        code: "23514",
+        message: 'new row violates check constraint "incoming_squarespace_drafts_status_check"',
+      },
+    };
+    await expect(updateIncomingDraftStatus("draft-1", "dismissed")).rejects.toMatchObject({
+      code: DISMISSED_STATUS_NOT_READY,
+    });
+    expect(state.calls.some((call) => call.method === "delete")).toBe(false);
   });
 
   it("surfaces database errors", async () => {

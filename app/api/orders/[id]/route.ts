@@ -100,8 +100,8 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
     const order = await getOrderById(id);
     if (!order) return NextResponse.json({ error: "Order not found" }, { status: 404 });
 
-    // Remove the intake row first. A leftover squarespace_order_number or
-    // external_order_id unique key would block importing that order again.
+    // Remove pending and accepted intake rows first. Dismissed rows stay so
+    // that Squarespace order is not imported again.
     await deleteIncomingDraftsForOrder({
       id: order.id,
       order_number: order.order_number,

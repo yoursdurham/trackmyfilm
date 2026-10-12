@@ -47,6 +47,7 @@ import { GET, POST } from "@/app/api/incoming-drafts/route";
 import { DELETE as deleteDraft, PATCH } from "@/app/api/incoming-drafts/[id]/route";
 import { POST as receiveDraft } from "@/app/api/incoming-drafts/[id]/receive/route";
 import { SQUARESPACE_INTAKE_SECRET_ENV } from "@/lib/intake-auth";
+import { DISMISSED_STATUS_MIGRATION_ERROR, DISMISSED_STATUS_NOT_READY } from "@/lib/incoming-drafts";
 
 const SECRET = "test-intake-secret";
 const DRAFT_ID = "4f1c2d30-7b1a-4e2e-9c1a-6b0e1d2a3c4b";
@@ -231,6 +232,23 @@ describe("Squarespace incoming draft routes", () => {
       expect(mockCreateIncomingDraft).not.toHaveBeenCalled();
     });
 
+    it("rejects 1034 when a dismissed 01034 draft is already stored", async () => {
+      mockGetIncomingDraftByOrderNumber.mockResolvedValue({
+        id: DRAFT_ID,
+        status: "dismissed",
+        squarespace_order_number: "01034",
+        external_order_id: "sq-old",
+      });
+      const res = await postDraft({
+        ...payload,
+        squarespace_order_number: "1034",
+        external_order_id: "sq-new",
+      });
+      expect(res.status).toBe(409);
+      expect(mockGetIncomingDraftByOrderNumber).toHaveBeenCalledWith("1034");
+      expect(mockCreateIncomingDraft).not.toHaveBeenCalled();
+    });
+
     it("returns 409 when the database unique constraint rejects a race", async () => {
       const err = new Error('duplicate key value violates unique constraint "incoming_squarespace_drafts_order_number_idx"') as Error & { code?: string };
       err.code = "23505";
@@ -310,17 +328,17 @@ describe("Squarespace incoming draft routes", () => {
       expect(mockGetCustomers).not.toHaveBeenCalled();
     });
 
-    it("hard-deletes a pending draft instead of marking it dismissed", async () => {
+    it("keeps a pending draft and marks it dismissed", async () => {
       const res = await patchDraft("dismissed");
       expect(res.status).toBe(200);
-      expect(await res.json()).toEqual({ success: true, deleted: true });
-      expect(mockDeleteIncomingDraft).toHaveBeenCalledWith(DRAFT_ID);
-      expect(mockUpdateIncomingDraftStatus).not.toHaveBeenCalled();
+      expect(await res.json()).toMatchObject({ id: DRAFT_ID, status: "dismissed" });
+      expect(mockUpdateIncomingDraftStatus).toHaveBeenCalledWith(DRAFT_ID, "dismissed");
+      expect(mockDeleteIncomingDraft).not.toHaveBeenCalled();
       expect(mockCreateOrder).not.toHaveBeenCalled();
       expect(mockSendOrderEmail).not.toHaveBeenCalled();
     });
 
-    it("hard-deletes an accepted draft so the order number can be imported again", async () => {
+    it("does not delete an accepted draft when dismiss is requested", async () => {
       mockGetIncomingDraftById.mockResolvedValue({
         id: DRAFT_ID,
         status: "accepted",
@@ -328,9 +346,29 @@ describe("Squarespace incoming draft routes", () => {
         external_order_id: "squarespace-01050",
       });
       const res = await patchDraft("dismissed");
-      expect(res.status).toBe(200);
-      expect(mockDeleteIncomingDraft).toHaveBeenCalledWith(DRAFT_ID);
+      expect(res.status).toBe(409);
+      expect(mockDeleteIncomingDraft).not.toHaveBeenCalled();
       expect(mockUpdateIncomingDraftStatus).not.toHaveBeenCalled();
+    });
+
+    it("returns the current draft when dismiss is repeated", async () => {
+      const current = { id: DRAFT_ID, status: "dismissed", squarespace_order_number: "01050" };
+      mockGetIncomingDraftById.mockResolvedValue(current);
+      const res = await patchDraft("dismissed");
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual(current);
+      expect(mockUpdateIncomingDraftStatus).not.toHaveBeenCalled();
+      expect(mockDeleteIncomingDraft).not.toHaveBeenCalled();
+    });
+
+    it("tells staff to run the migration when dismissed is not allowed yet", async () => {
+      const err = new Error(DISMISSED_STATUS_MIGRATION_ERROR) as Error & { code: string };
+      err.code = DISMISSED_STATUS_NOT_READY;
+      mockUpdateIncomingDraftStatus.mockRejectedValue(err);
+      const res = await patchDraft("dismissed");
+      expect(res.status).toBe(503);
+      expect(await res.json()).toEqual({ error: DISMISSED_STATUS_MIGRATION_ERROR });
+      expect(mockDeleteIncomingDraft).not.toHaveBeenCalled();
     });
 
     it("returns the current draft when accepted is repeated", async () => {

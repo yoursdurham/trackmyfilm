@@ -14,7 +14,10 @@ import { ORDER_STATUS } from "./constants";
 import { FILM_MENU_SLUG, type FilmMenu } from "./film-menu";
 import {
   buildIncomingDraftInsert,
+  DISMISSED_STATUS_MIGRATION_ERROR,
+  DISMISSED_STATUS_NOT_READY,
   incomingDraftDeleteMatch,
+  isDismissedStatusCheckViolation,
   type IncomingDraftInput,
   PENDING_INTAKE_STATUS,
 } from "./incoming-drafts";
@@ -303,12 +306,13 @@ function isMissingFilmOrderLinkColumn(error: { message?: string; code?: string }
 
 export async function updateIncomingDraftStatus(
   id: string,
-  status: "accepted",
+  status: "accepted" | "dismissed",
   filmOrderId?: string
 ): Promise<IncomingSquarespaceDraft> {
   const updatedAt = new Date().toISOString();
+  const linkFilmOrder = status === "accepted" && Boolean(filmOrderId);
   const write = (includeLink: boolean) => {
-    const patch: { status: "accepted"; updated_at: string; film_order_id?: string } = {
+    const patch: { status: "accepted" | "dismissed"; updated_at: string; film_order_id?: string } = {
       status,
       updated_at: updatedAt,
     };
@@ -321,9 +325,14 @@ export async function updateIncomingDraftStatus(
       .single();
   };
 
-  let { data: updated, error } = await write(Boolean(filmOrderId));
-  if (error && filmOrderId && isMissingFilmOrderLinkColumn(error)) {
+  let { data: updated, error } = await write(linkFilmOrder);
+  if (error && linkFilmOrder && isMissingFilmOrderLinkColumn(error)) {
     ({ data: updated, error } = await write(false));
+  }
+  if (error && status === "dismissed" && isDismissedStatusCheckViolation(error)) {
+    const err = new Error(DISMISSED_STATUS_MIGRATION_ERROR) as Error & { code: string };
+    err.code = DISMISSED_STATUS_NOT_READY;
+    throw err;
   }
   if (error) throw new Error(error.message);
   return updated as IncomingSquarespaceDraft;
@@ -341,6 +350,7 @@ export async function deleteIncomingDraft(id: string): Promise<void> {
 /**
  * Removes intake rows that share this film order's number or Squarespace external id.
  * Also removes a row linked by film_order_id when that column exists.
+ * Dismissed rows stay, so a later import still skips that Squarespace order.
  */
 export async function deleteIncomingDraftsForOrder(order: {
   id?: string;
@@ -351,7 +361,8 @@ export async function deleteIncomingDraftsForOrder(order: {
     const { error } = await getSupabase()
       .from("incoming_squarespace_drafts")
       .delete()
-      .eq("film_order_id", order.id);
+      .eq("film_order_id", order.id)
+      .neq("status", "dismissed");
     if (error && !isMissingFilmOrderLinkColumn(error)) throw new Error(error.message);
   }
 
@@ -360,14 +371,16 @@ export async function deleteIncomingDraftsForOrder(order: {
     const { error } = await getSupabase()
       .from("incoming_squarespace_drafts")
       .delete()
-      .regexIMatch("squarespace_order_number", orderNumberMatchPattern(orderNumber));
+      .regexIMatch("squarespace_order_number", orderNumberMatchPattern(orderNumber))
+      .neq("status", "dismissed");
     if (error) throw new Error(error.message);
   }
   for (const externalOrderId of match.externalOrderIds) {
     const { error } = await getSupabase()
       .from("incoming_squarespace_drafts")
       .delete()
-      .regexIMatch("external_order_id", orderNumberMatchPattern(externalOrderId));
+      .regexIMatch("external_order_id", orderNumberMatchPattern(externalOrderId))
+      .neq("status", "dismissed");
     if (error) throw new Error(error.message);
   }
 }
