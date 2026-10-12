@@ -120,7 +120,11 @@ export default function IncomingSquarespaceQueue() {
 
   const dismissMutation = useMutation({
     mutationFn: async (id: string) => {
-      const response = await fetch(`/api/incoming-drafts/${id}`, { method: "DELETE" });
+      const response = await fetch(`/api/incoming-drafts/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "dismissed" }),
+      });
       const data = await response.json().catch(() => null) as { error?: string } | null;
       if (!response.ok) throw new Error(data?.error ?? "Failed to dismiss draft");
       return data;
@@ -256,8 +260,8 @@ export default function IncomingSquarespaceQueue() {
             <AlertDialogTitle>Dismiss this Squarespace order?</AlertDialogTitle>
             <AlertDialogDescription>
               {dismissTarget
-                ? `${dismissTarget.squarespace_order_number} for ${dismissTarget.customer_name} will be deleted. It will not become a drop-off. Check Squarespace can import it again if the order was placed in the last 7 days.`
-                : "It will be deleted and will not become a drop-off. Check Squarespace can import it again if the order was placed in the last 7 days."}
+                ? `${dismissTarget.squarespace_order_number} for ${dismissTarget.customer_name} will stay dismissed. It will not become a drop-off, and later imports will skip it.`
+                : "It will stay dismissed and will not become a drop-off. Later imports will skip it."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

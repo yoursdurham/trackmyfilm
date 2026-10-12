@@ -2,10 +2,12 @@
  * Writes classified Squarespace orders into incoming_squarespace_drafts.
  * Creates Pending Intake rows only, and only for orders placed within the
  * lookback. Does not create film orders, send email, or change drafts and
- * film orders that are already stored.
+ * film orders that are already stored. A dismissed draft is one of those
+ * stored rows: the same Squarespace order id, or the same order number
+ * after leading-zero normalization, is skipped.
  */
 
-import type { IncomingDraftInput } from "./incoming-drafts";
+import { squarespaceDraftBlocksImport, type IncomingDraftInput } from "./incoming-drafts";
 import {
   classifySquarespaceOrder,
   emptySquarespaceCheckSummary,
@@ -61,7 +63,9 @@ export async function importSquarespaceOrders(
         deps.getIncomingDraftByOrderNumber(draft.squarespace_order_number),
         deps.getIncomingDraftByExternalId(draft.external_order_id),
       ]);
-      if (orderExists || draftByNumber || draftByExternalId) {
+      const blockedByDraft = squarespaceDraftBlocksImport(draftByNumber, draft)
+        || squarespaceDraftBlocksImport(draftByExternalId, draft);
+      if (orderExists || blockedByDraft) {
         summary.skippedDuplicate += 1;
         continue;
       }

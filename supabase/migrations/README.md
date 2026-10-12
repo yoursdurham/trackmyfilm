@@ -13,11 +13,12 @@ Run these in order in: **Supabase Dashboard → SQL Editor → New Query**
 | `013_allow_110_film_type.sql` | Extends `film_type` CHECK constraints to include `110` | Run if 110 orders fail DB validation |
 | `014_add_scan_notes.sql` | Adds optional `scan_notes` on `film_orders` for scans_sent emails | Yes — when using customer scan notes |
 | `015_incoming_squarespace_drafts.sql` | Creates `incoming_squarespace_drafts` (Pending Intake queue) | Yes — before using Squarespace intake |
-| `016_hard_delete_intake_rows.sql` | Deletes leftover dismissed and orphaned intake rows, and links accepted drafts to film orders with `ON DELETE CASCADE` | Yes — after 015, before relying on re-import after dismiss or delete |
+| `016_hard_delete_intake_rows.sql` | Deletes leftover dismissed and orphaned intake rows, and links accepted drafts to film orders with `ON DELETE CASCADE` | Yes — after 015. Deleting a film order still removes its accepted intake row |
 | `017_displays.sql` | Creates `displays` (RLS on, no policies) and seeds `studio-vertical` | Yes — before using Displays or `/display/studio-vertical`. Safe to run again. |
 | `018_film_menu.sql` | Creates `film_menus` (RLS on, no policies) and seeds the studio film menu | Yes — before using the Film menu screen. Safe to run again; it will not overwrite later edits. |
 | `019_display_studio_bookings.sql` | Adds the studio-bookings switch and the guest info / checkout lines on `displays` (RLS stays on, no policies) | Yes — before using studio bookings on the screen. Safe to run again; it will not reset a switch or lines you have edited. |
 | `020_add_order_hold_reason.sql` | Adds optional staff-only `hold_reason` on `film_orders` for the On Hold status | Yes — before relying on the On Hold reason. The status itself can be saved before this runs; the reason is skipped until the column exists. Safe to run again. |
+| `021_keep_dismissed_squarespace_orders.sql` | Allows `incoming_squarespace_drafts.status = 'dismissed'` again so a dismissed Squarespace order is not imported a second time | Yes — before Dismiss can stick. Pending Intake, Check Squarespace, and Approve & Receive keep working before this runs; Dismiss returns an error until it does. Safe to run again. |
 
 ## Notes
 

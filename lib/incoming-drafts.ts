@@ -10,6 +10,7 @@ import {
   normalizeEmail,
   normalizeFilmType,
   normalizeOrderNumber,
+  orderNumbersMatch,
 } from "./validation";
 
 /** Matches the roll cap on the New Drop-off form. */
@@ -271,19 +272,61 @@ function parseRoll(
 }
 
 export type IncomingDraftStatusChange =
-  | { ok: true; status: "accepted"; changed: boolean }
+  | { ok: true; status: "accepted" | "dismissed"; changed: boolean }
   | { ok: false; reason: "invalid" | "conflict"; error: string };
 
+/** Thrown-error code when the database check constraint still rejects dismissed. */
+export const DISMISSED_STATUS_NOT_READY = "dismissed_status_not_ready";
+
+export const DISMISSED_STATUS_MIGRATION_ERROR =
+  "Dismiss is not saved yet. Run migration 021_keep_dismissed_squarespace_orders.sql, then try again.";
+
+export function isDismissedStatusNotReady(err: unknown): boolean {
+  return Boolean(
+    err
+    && typeof err === "object"
+    && "code" in err
+    && (err as { code?: unknown }).code === DISMISSED_STATUS_NOT_READY
+  );
+}
+
 /**
- * Pending Intake can be marked accepted. Dismiss is not stored: callers delete the row.
- * Repeating accepted is a no-op.
+ * True when saving status = dismissed was rejected by the pre-021 check constraint.
+ * Other check failures (roll count, blank name) are left to the caller.
+ */
+export function isDismissedStatusCheckViolation(
+  error: { message?: string; code?: string | null } | null | undefined
+): boolean {
+  if (!error) return false;
+  const message = (error.message ?? "").toLowerCase();
+  if (message.includes("incoming_squarespace_drafts_status_check")) return true;
+  return String(error.code ?? "") === "23514" && message.includes("status");
+}
+
+/**
+ * Pending Intake can be marked accepted or dismissed.
+ * Dismissed is stored on the row so a later import can skip that order.
+ * Repeating the current status is a no-op. Accepted drafts are not dismissed.
  */
 export function resolveIncomingDraftStatusChange(
   current: IncomingDraftStatus,
   requested: unknown
 ): IncomingDraftStatusChange {
-  if (requested !== "accepted") {
-    return { ok: false, reason: "invalid", error: "status must be accepted" };
+  if (requested !== "accepted" && requested !== "dismissed") {
+    return { ok: false, reason: "invalid", error: "status must be accepted or dismissed" };
+  }
+  if (requested === "dismissed") {
+    if (current === "dismissed") {
+      return { ok: true, status: "dismissed", changed: false };
+    }
+    if (current !== PENDING_INTAKE_STATUS) {
+      return {
+        ok: false,
+        reason: "conflict",
+        error: `Draft is already ${current} and cannot be dismissed`,
+      };
+    }
+    return { ok: true, status: "dismissed", changed: true };
   }
   if (current === "accepted") {
     return { ok: true, status: "accepted", changed: false };
@@ -296,6 +339,35 @@ export function resolveIncomingDraftStatusChange(
     };
   }
   return { ok: true, status: "accepted", changed: true };
+}
+
+/**
+ * A stored intake row blocks a new Squarespace import of the same order.
+ * The Squarespace order id matches exactly. Order numbers use the existing
+ * normalization, so leading zeros are equal (01034 and 1034). Dismissed rows
+ * are kept so they block too. A row with no identity fields still blocks,
+ * because the lookup already selected it.
+ */
+export function squarespaceDraftBlocksImport(
+  existing: unknown,
+  incoming: { squarespace_order_number: string; external_order_id: string },
+): boolean {
+  if (!existing || typeof existing !== "object") return false;
+  const row = existing as {
+    squarespace_order_number?: string | null;
+    external_order_id?: string | null;
+  };
+
+  const existingExternal = typeof row.external_order_id === "string" ? row.external_order_id.trim() : "";
+  const incomingExternal = incoming.external_order_id.trim();
+  if (existingExternal && incomingExternal && existingExternal === incomingExternal) return true;
+
+  const existingNumber = typeof row.squarespace_order_number === "string" ? row.squarespace_order_number : "";
+  if (existingNumber.trim()) {
+    return orderNumbersMatch(existingNumber, incoming.squarespace_order_number);
+  }
+
+  return true;
 }
 
 export interface IncomingDraftDeleteMatch {
@@ -317,8 +389,9 @@ function uniqueNonEmpty(values: Array<string | null | undefined>): string[] {
 }
 
 /**
- * Keys that must be removed from incoming_squarespace_drafts so this film order
- * no longer blocks a later Squarespace import. Matches the draft order number
+ * Keys for intake rows that share this film order. Callers delete pending and
+ * accepted rows with these keys. Dismissed rows are left in place so the
+ * Squarespace order is not imported again. Matches the draft order number
  * and external_order_id, including when the film order number is the external id.
  */
 export function incomingDraftDeleteMatch(order: {

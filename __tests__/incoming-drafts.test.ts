@@ -1,10 +1,14 @@
 import { describe, it, expect } from "vitest";
 import {
   buildIncomingDraftInsert,
+  DISMISSED_STATUS_NOT_READY,
   incomingDraftDeleteMatch,
+  isDismissedStatusCheckViolation,
+  isDismissedStatusNotReady,
   isIncomingDraftUuid,
   parseIncomingDraftPayload,
   resolveIncomingDraftStatusChange,
+  squarespaceDraftBlocksImport,
 } from "../lib/incoming-drafts";
 
 const validRoll = {
@@ -196,16 +200,25 @@ describe("resolveIncomingDraftStatusChange", () => {
     });
   });
 
-  it("does not treat dismiss as a stored status", () => {
-    const dismissed = resolveIncomingDraftStatusChange("Pending Intake", "dismissed");
-    expect(dismissed.ok).toBe(false);
-    if (dismissed.ok) return;
-    expect(dismissed.reason).toBe("invalid");
+  it("stores dismiss on a Pending Intake row and treats a repeated dismiss as a no-op", () => {
+    expect(resolveIncomingDraftStatusChange("Pending Intake", "dismissed")).toEqual({
+      ok: true, status: "dismissed", changed: true,
+    });
+    expect(resolveIncomingDraftStatusChange("dismissed", "dismissed")).toEqual({
+      ok: true, status: "dismissed", changed: false,
+    });
+  });
 
+  it("rejects an unknown status and dismissing an accepted draft", () => {
     const invalid = resolveIncomingDraftStatusChange("Pending Intake", "Pending Intake");
     expect(invalid.ok).toBe(false);
     if (invalid.ok) return;
     expect(invalid.reason).toBe("invalid");
+
+    const accepted = resolveIncomingDraftStatusChange("accepted", "dismissed");
+    expect(accepted.ok).toBe(false);
+    if (accepted.ok) return;
+    expect(accepted.reason).toBe("conflict");
   });
 
   it("rejects accepting a draft that is no longer Pending Intake", () => {
@@ -213,6 +226,69 @@ describe("resolveIncomingDraftStatusChange", () => {
     expect(conflict.ok).toBe(false);
     if (conflict.ok) return;
     expect(conflict.reason).toBe("conflict");
+  });
+});
+
+describe("squarespaceDraftBlocksImport", () => {
+  const incoming = {
+    squarespace_order_number: "1034",
+    external_order_id: "sq-new",
+  };
+
+  it("blocks a dismissed order with the same Squarespace id or the same normalized number", () => {
+    expect(squarespaceDraftBlocksImport({
+      status: "dismissed",
+      squarespace_order_number: "01034",
+      external_order_id: "sq-old",
+    }, incoming)).toBe(true);
+
+    expect(squarespaceDraftBlocksImport({
+      status: "dismissed",
+      squarespace_order_number: "9999",
+      external_order_id: "sq-new",
+    }, {
+      squarespace_order_number: "1040",
+      external_order_id: " sq-new ",
+    })).toBe(true);
+
+    expect(squarespaceDraftBlocksImport({
+      status: "dismissed",
+      squarespace_order_number: "1034",
+      external_order_id: "other",
+    }, {
+      squarespace_order_number: "01034",
+      external_order_id: "fresh",
+    })).toBe(true);
+  });
+
+  it("does not block a different order, and still blocks a lookup row that has no identity fields", () => {
+    expect(squarespaceDraftBlocksImport({
+      status: "dismissed",
+      squarespace_order_number: "01035",
+      external_order_id: "sq-other",
+    }, incoming)).toBe(false);
+    expect(squarespaceDraftBlocksImport(null, incoming)).toBe(false);
+    expect(squarespaceDraftBlocksImport({ id: "draft-1", status: "dismissed" }, incoming)).toBe(true);
+  });
+});
+
+describe("isDismissedStatusCheckViolation", () => {
+  it("recognizes the status check from migration 016 and ignores other failures", () => {
+    expect(isDismissedStatusCheckViolation({
+      code: "23514",
+      message: 'new row for relation "incoming_squarespace_drafts" violates check constraint "incoming_squarespace_drafts_status_check"',
+    })).toBe(true);
+    expect(isDismissedStatusCheckViolation({
+      code: "23514",
+      message: "new row violates check constraint on status",
+    })).toBe(true);
+    expect(isDismissedStatusCheckViolation({
+      code: "23514",
+      message: "roll_count check failed",
+    })).toBe(false);
+    expect(isDismissedStatusCheckViolation({ code: "23505", message: "duplicate key" })).toBe(false);
+    expect(isDismissedStatusNotReady({ code: DISMISSED_STATUS_NOT_READY })).toBe(true);
+    expect(isDismissedStatusNotReady(new Error("nope"))).toBe(false);
   });
 });
 

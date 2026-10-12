@@ -324,6 +324,45 @@ describe("importSquarespaceOrders", () => {
     expect(deps.createIncomingDraft.mock.calls[0][0].squarespace_order_number).toBe("1036");
   });
 
+  it("skips a dismissed order by Squarespace id and by normalized order number", async () => {
+    deps.getIncomingDraftByOrderNumber.mockImplementation(async (orderNumber: string) => (
+      orderNumbersMatch(orderNumber, "01034")
+        ? {
+          id: "dismissed-number",
+          status: "dismissed",
+          squarespace_order_number: "01034",
+          external_order_id: "ext-1034",
+        }
+        : null
+    ));
+    deps.getIncomingDraftByExternalId.mockImplementation(async (externalId: string) => (
+      externalId === "ext-other"
+        ? {
+          id: "dismissed-external",
+          status: "dismissed",
+          squarespace_order_number: "9999",
+          external_order_id: "ext-other",
+        }
+        : null
+    ));
+
+    const summary = await importSquarespaceOrders([
+      filmOrder({ id: "ext-1034", orderNumber: "1034" }),
+      filmOrder({ id: "ext-other", orderNumber: "1040" }),
+      filmOrder({ id: "fresh-order", orderNumber: "1041" }),
+    ], deps, CHECK_NOW);
+
+    expect(summary.skippedDuplicate).toBe(2);
+    expect(summary.imported).toBe(1);
+    expect(summary.importedOrderNumbers).toEqual(["1041"]);
+    expect(summary.errors).toEqual([]);
+    expect(deps.getIncomingDraftByOrderNumber).toHaveBeenCalledWith("1034");
+    expect(deps.getIncomingDraftByExternalId).toHaveBeenCalledWith("ext-other");
+    expect(deps.createIncomingDraft).toHaveBeenCalledTimes(1);
+    expect(deps.createIncomingDraft.mock.calls[0][0].squarespace_order_number).toBe("1041");
+    expect(deps.createIncomingDraft.mock.calls[0][0].external_order_id).toBe("fresh-order");
+  });
+
   it("keeps orders placed in the last 7 days and skips an older order that was only modified recently", async () => {
     const now = new Date("2026-10-08T15:00:00.000Z");
     const day = 24 * 60 * 60 * 1000;
@@ -495,6 +534,49 @@ describe("POST /api/incoming-drafts/check", () => {
     expect(created).toEqual(["01050", "01070"]);
     expect(mockOrderNumberExists).toHaveBeenCalledWith("01050");
     expect(mockOrderNumberExists).not.toHaveBeenCalledWith("01099");
+  });
+
+  it("skips a dismissed order matched by normalized number or Squarespace id", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-04T12:00:00.000Z"));
+    mockGetIncomingDraftByOrderNumber.mockImplementation(async (orderNumber: string) => (
+      orderNumbersMatch(orderNumber, "01034")
+        ? {
+          id: "dismissed-1",
+          status: "dismissed",
+          squarespace_order_number: "01034",
+          external_order_id: "old-id",
+        }
+        : null
+    ));
+    mockGetIncomingDraftByExternalId.mockImplementation(async (externalId: string) => (
+      externalId === "same-squarespace-id"
+        ? {
+          id: "dismissed-2",
+          status: "dismissed",
+          squarespace_order_number: "8888",
+          external_order_id: "same-squarespace-id",
+        }
+        : null
+    ));
+    vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify({
+      pagination: { hasNextPage: false, nextPageCursor: null },
+      result: [
+        filmOrder({ id: "old-id", orderNumber: "1034" }),
+        filmOrder({ id: "same-squarespace-id", orderNumber: "1044" }),
+        filmOrder({ id: "new-id", orderNumber: "1042" }),
+      ],
+    }), { status: 200 }));
+
+    const res = await POST();
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.skippedDuplicate).toBe(2);
+    expect(body.imported).toBe(1);
+    expect(body.importedOrderNumbers).toEqual(["1042"]);
+    expect(mockCreateIncomingDraft).toHaveBeenCalledTimes(1);
+    expect(mockCreateOrder).not.toHaveBeenCalled();
+    expect(mockSendOrderEmail).not.toHaveBeenCalled();
   });
 });
 

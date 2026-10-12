@@ -2,17 +2,23 @@
  * PATCH /api/incoming-drafts/:id
  * Logged-in staff only.
  *   { status: "accepted" } marks the draft accepted. Does not create a film order or send email.
- *   { status: "dismissed" } hard-deletes the row. A later Check Squarespace can import
- *   that order again when it was placed in the last 7 days.
+ *   { status: "dismissed" } keeps the row with status dismissed. Later imports
+ *   skip that Squarespace order id and the same normalized order number.
  *
  * DELETE /api/incoming-drafts/:id
  * Logged-in staff only. Hard-deletes the row in any status. Does not create or delete a film order.
+ * This is not Dismiss: a deleted row can be imported again.
  */
 
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/api-auth";
 import { deleteIncomingDraft, getIncomingDraftById, updateIncomingDraftStatus } from "@/lib/db";
-import { isIncomingDraftUuid, resolveIncomingDraftStatusChange } from "@/lib/incoming-drafts";
+import {
+  DISMISSED_STATUS_MIGRATION_ERROR,
+  isDismissedStatusNotReady,
+  isIncomingDraftUuid,
+  resolveIncomingDraftStatusChange,
+} from "@/lib/incoming-drafts";
 
 async function loadDraft(id: string) {
   if (!isIncomingDraftUuid(id)) {
@@ -70,11 +76,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       return NextResponse.json({ error: "Draft not found" }, { status: 404 });
     }
 
-    if (requested === "dismissed") {
-      await deleteIncomingDraft(id);
-      return NextResponse.json({ success: true, deleted: true });
-    }
-
     const decision = resolveIncomingDraftStatusChange(draft.status, requested);
     if (!decision.ok) {
       return NextResponse.json(
@@ -90,6 +91,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     const updated = await updateIncomingDraftStatus(id, decision.status);
     return NextResponse.json(updated);
   } catch (err: unknown) {
+    if (isDismissedStatusNotReady(err)) {
+      return NextResponse.json({ error: DISMISSED_STATUS_MIGRATION_ERROR }, { status: 503 });
+    }
     const message = err instanceof Error ? err.message : "Unknown error";
     console.error("[PATCH /api/incoming-drafts/:id]", message);
     return NextResponse.json({ error: "Failed to update draft" }, { status: 500 });
