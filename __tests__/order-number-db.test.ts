@@ -6,10 +6,16 @@ type QueryResult = { data: unknown; error: { message: string; code?: string } | 
 const state: {
   calls: { table: string; method: string; args: unknown[] }[];
   result: QueryResult;
+  queue: QueryResult[];
 } = {
   calls: [],
   result: { data: [], error: null },
+  queue: [],
 };
+
+function nextResult(): QueryResult {
+  return state.queue.length > 0 ? state.queue.shift()! : state.result;
+}
 
 interface QueryBuilder {
   select: (...args: unknown[]) => QueryBuilder;
@@ -21,6 +27,7 @@ interface QueryBuilder {
   limit: (...args: unknown[]) => QueryBuilder;
   delete: (...args: unknown[]) => QueryBuilder;
   update: (...args: unknown[]) => QueryBuilder;
+  insert: (...args: unknown[]) => QueryBuilder;
   single: () => Promise<QueryResult>;
   then: (
     onFulfilled: (value: QueryResult) => unknown,
@@ -66,12 +73,16 @@ function builder(table: string): QueryBuilder {
       state.calls.push({ table, method: "update", args });
       return self;
     },
+    insert(...args) {
+      state.calls.push({ table, method: "insert", args });
+      return self;
+    },
     single() {
       state.calls.push({ table, method: "single", args: [] });
-      return Promise.resolve(state.result);
+      return Promise.resolve(nextResult());
     },
     then(onFulfilled, onRejected) {
-      return Promise.resolve(state.result).then(onFulfilled, onRejected);
+      return Promise.resolve(nextResult()).then(onFulfilled, onRejected);
     },
   };
   return self;
@@ -87,6 +98,7 @@ process.env.NEXT_PUBLIC_SUPABASE_URL = "https://example.supabase.co";
 process.env.SUPABASE_SERVICE_ROLE_KEY = "test-service-role";
 
 import {
+  createIncomingDraft,
   deleteIncomingDraftsForOrder,
   getCustomerByEmail,
   getIncomingDraftByOrderNumber,
@@ -95,6 +107,7 @@ import {
   getPendingIncomingDrafts,
   orderNumberExists,
   updateIncomingDraftStatus,
+  updatePendingIncomingDraft,
 } from "../lib/db";
 import { DISMISSED_STATUS_NOT_READY } from "../lib/incoming-drafts";
 
@@ -106,6 +119,7 @@ function patternMatches(pattern: string, stored: string): boolean {
 describe("order number database lookups", () => {
   beforeEach(() => {
     state.calls = [];
+    state.queue = [];
     state.result = { data: [], error: null };
   });
 
@@ -294,6 +308,99 @@ describe("order number database lookups", () => {
       code: DISMISSED_STATUS_NOT_READY,
     });
     expect(state.calls.some((call) => call.method === "delete")).toBe(false);
+  });
+
+  it("saves a new draft without the film listing column when that migration has not been run", async () => {
+    state.queue = [
+      {
+        data: null,
+        error: {
+          code: "PGRST204",
+          message: "Could not find the 'squarespace_film_listing' column of 'incoming_squarespace_drafts' in the schema cache",
+        },
+      },
+      {
+        data: { id: "draft-1", status: "Pending Intake", squarespace_order_number: "01078" },
+        error: null,
+      },
+    ];
+
+    const created = await createIncomingDraft({
+      squarespace_order_number: "01078",
+      external_order_id: "ext-1078",
+      customer_name: "Ada Lovelace",
+      customer_email: null,
+      dropoff_date: null,
+      roll_count: 1,
+      roll_details: [{
+        film_type: "35mm",
+        film_process: "Color",
+        scan_size: "Standard",
+        prints_4x6: true,
+        film_stock: "Kodak UltraMax 400",
+      }],
+      notes: null,
+      import_source: "squarespace",
+      squarespace_film_listing: "Ultramax 400",
+    });
+
+    expect(created.id).toBe("draft-1");
+    const inserts = state.calls.filter((call) => call.method === "insert");
+    expect(inserts).toHaveLength(2);
+    expect(inserts[0]?.args[0]).toMatchObject({ squarespace_film_listing: "Ultramax 400" });
+    expect(inserts[1]?.args[0]).not.toHaveProperty("squarespace_film_listing");
+    expect(inserts[1]?.args[0]).toMatchObject({
+      roll_details: [{ film_stock: "Kodak UltraMax 400" }],
+    });
+  });
+
+  it("still updates rolls when the film listing column has not been added", async () => {
+    state.queue = [
+      {
+        data: null,
+        error: {
+          code: "42703",
+          message: 'column "squarespace_film_listing" of relation "incoming_squarespace_drafts" does not exist',
+        },
+      },
+      { data: null, error: null },
+    ];
+
+    await updatePendingIncomingDraft("draft-1", {
+      squarespace_film_listing: "Ultramax 400",
+      roll_details: [{
+        film_type: "35mm",
+        film_process: "Color",
+        scan_size: "Standard",
+        prints_4x6: true,
+        film_stock: "Kodak UltraMax 400",
+      }],
+    });
+
+    const updates = state.calls.filter((call) => call.method === "update");
+    expect(updates).toHaveLength(2);
+    expect(updates[0]?.args[0]).toMatchObject({ squarespace_film_listing: "Ultramax 400" });
+    expect(updates[1]?.args[0]).not.toHaveProperty("squarespace_film_listing");
+    expect(updates[1]?.args[0]).toMatchObject({
+      roll_details: [{ film_stock: "Kodak UltraMax 400", prints_4x6: true }],
+    });
+  });
+
+  it("skips the film listing write when that is the only missing column", async () => {
+    state.queue = [
+      {
+        data: null,
+        error: {
+          code: "PGRST204",
+          message: "Could not find the 'squarespace_film_listing' column of 'incoming_squarespace_drafts' in the schema cache",
+        },
+      },
+    ];
+
+    await expect(updatePendingIncomingDraft("draft-1", {
+      squarespace_film_listing: "Ultramax 400",
+    })).resolves.toBeUndefined();
+    expect(state.calls.filter((call) => call.method === "update")).toHaveLength(1);
   });
 
   it("surfaces database errors", async () => {

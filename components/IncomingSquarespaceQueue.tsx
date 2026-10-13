@@ -50,6 +50,11 @@ function CheckSummary({ summary }: { summary: SquarespaceCheckSummary }) {
           New: {summary.importedOrderNumbers.join(", ")}
         </p>
       ) : null}
+      {summary.updated > 0 ? (
+        <p className="mt-1 text-xs text-slate-500">
+          Updated pending: {summary.updatedOrderNumbers.join(", ") || String(summary.updated)}
+        </p>
+      ) : null}
       {summary.errors.length > 0 ? (
         <ul className="mt-2 list-disc pl-4 text-xs text-red-700">
           {summary.errors.slice(0, 10).map((error, index) => (
@@ -111,7 +116,7 @@ export default function IncomingSquarespaceQueue() {
     },
     onSuccess: (summary) => {
       setCheckSummary(summary);
-      if (summary.imported > 0) {
+      if (summary.imported > 0 || summary.updated > 0) {
         queryClient.invalidateQueries({ queryKey: ["incomingDrafts"] });
       }
     },
@@ -200,6 +205,11 @@ export default function IncomingSquarespaceQueue() {
                 {draft.roll_details.length > 0 ? (
                   <p className="mt-1 line-clamp-2 text-xs text-slate-500">
                     {draft.roll_details.map(summarizeRoll).join("; ")}
+                  </p>
+                ) : null}
+                {draft.squarespace_film_listing ? (
+                  <p className="mt-1 line-clamp-3 whitespace-pre-wrap text-xs text-slate-700">
+                    Customer listed film: {draft.squarespace_film_listing}
                   </p>
                 ) : null}
                 {draft.notes ? (

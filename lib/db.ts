@@ -5,7 +5,7 @@
  */
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import type { Customer, CustomerSummary, FilmOrder, IncomingSquarespaceDraft } from "./types";
+import type { Customer, CustomerSummary, FilmOrder, IncomingSquarespaceDraft, RollDetail } from "./types";
 import type { DisplayRow, HeartbeatClient } from "./display";
 import { HEARTBEAT_WRITE_INTERVAL_MS } from "./display-heartbeat";
 import { DEPARTURE_ORDER_SELECT, type DepartureOrder } from "./film-departures";
@@ -281,18 +281,79 @@ export async function getIncomingDraftByExternalId(
   return data as IncomingSquarespaceDraft | null;
 }
 
+function isMissingSquarespaceFilmListingColumn(error: { message?: string; code?: string }): boolean {
+  const message = (error.message ?? "").toLowerCase();
+  if (!message.includes("squarespace_film_listing")) return false;
+  return error.code === "42703"
+    || error.code === "PGRST204"
+    || message.includes("schema cache")
+    || message.includes("does not exist");
+}
+
+function withoutFilmListing<T extends { squarespace_film_listing?: string }>(row: T): Omit<T, "squarespace_film_listing"> {
+  const rest = { ...row };
+  delete rest.squarespace_film_listing;
+  return rest;
+}
+
 export async function createIncomingDraft(data: IncomingDraftInput): Promise<IncomingSquarespaceDraft> {
-  const { data: created, error } = await getSupabase()
+  const inserted = buildIncomingDraftInsert(data);
+  const write = (includeListing: boolean) => getSupabase()
     .from("incoming_squarespace_drafts")
-    .insert(buildIncomingDraftInsert(data))
+    .insert(includeListing ? inserted : withoutFilmListing(inserted))
     .select()
     .single();
+
+  let { data: created, error } = await write(true);
+  if (error && inserted.squarespace_film_listing && isMissingSquarespaceFilmListingColumn(error)) {
+    ({ data: created, error } = await write(false));
+  }
   if (error) {
     const err = new Error(error.message) as Error & { code?: string };
     err.code = error.code;
     throw err;
   }
   return created as IncomingSquarespaceDraft;
+}
+
+export interface PendingIncomingDraftFilmPatch {
+  squarespace_film_listing?: string;
+  roll_details?: RollDetail[];
+  notes?: string | null;
+}
+
+/**
+ * Fills film-type text, matched stocks, and print choices on a Pending Intake
+ * row. If migration 022 has not been run, the listing column is skipped and
+ * the roll and notes updates still save.
+ */
+export async function updatePendingIncomingDraft(
+  id: string,
+  patch: PendingIncomingDraftFilmPatch,
+): Promise<void> {
+  const updatedAt = new Date().toISOString();
+  const write = (includeListing: boolean) => {
+    const body: PendingIncomingDraftFilmPatch & { updated_at: string } = { updated_at: updatedAt };
+    if (includeListing && patch.squarespace_film_listing) {
+      body.squarespace_film_listing = patch.squarespace_film_listing;
+    }
+    if (patch.roll_details) body.roll_details = patch.roll_details;
+    if (patch.notes !== undefined) body.notes = patch.notes;
+    return getSupabase()
+      .from("incoming_squarespace_drafts")
+      .update(body)
+      .eq("id", id)
+      .eq("status", PENDING_INTAKE_STATUS);
+  };
+
+  const includeListing = Boolean(patch.squarespace_film_listing);
+  let { error } = await write(includeListing);
+  if (error && includeListing && isMissingSquarespaceFilmListingColumn(error)) {
+    const hasOther = Boolean(patch.roll_details) || patch.notes !== undefined;
+    if (!hasOther) return;
+    ({ error } = await write(false));
+  }
+  if (error) throw new Error(error.message);
 }
 
 function isMissingFilmOrderLinkColumn(error: { message?: string; code?: string }): boolean {

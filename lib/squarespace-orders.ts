@@ -10,8 +10,21 @@
  * combined with other query parameters.
  */
 
+import {
+  applyFilmListingToRolls,
+  mergeCustomerFilmNote,
+} from "./film-stock-match";
 import { parseIncomingDraftPayload, type IncomingDraftInput, MAX_INCOMING_DRAFT_ROLLS } from "./incoming-drafts";
 import type { RollDetail } from "./types";
+
+/** Raw customer answer stored on the draft. Longer text is cut so the row stays small. */
+const MAX_SQUARESPACE_FILM_LISTING = 2000;
+const MAX_DRAFT_NOTES = 5000;
+
+function clampDraftNotes(value: string | null): string | null {
+  if (!value || value.length <= MAX_DRAFT_NOTES) return value;
+  return value.slice(0, MAX_DRAFT_NOTES);
+}
 
 export const SQUARESPACE_API_KEY_ENV = "SQUARESPACE_API_KEY";
 export const SQUARESPACE_ORDERS_ENDPOINT = "https://api.squarespace.com/1.0/commerce/orders";
@@ -40,8 +53,11 @@ export interface SquarespaceCheckSummary {
   skippedDuplicate: number;
   skippedNoFilm: number;
   skippedPos: number;
+  /** Pending Intake rows filled in with a film-type answer or print choice on a later check. */
+  updated: number;
   errors: SquarespaceCheckError[];
   importedOrderNumbers: string[];
+  updatedOrderNumbers: string[];
   truncated: boolean;
 }
 
@@ -53,8 +69,10 @@ export function missingSquarespaceApiKeySummary(): SquarespaceCheckSummary {
     skippedDuplicate: 0,
     skippedNoFilm: 0,
     skippedPos: 0,
+    updated: 0,
     errors: [],
     importedOrderNumbers: [],
+    updatedOrderNumbers: [],
     truncated: false,
   };
 }
@@ -66,8 +84,10 @@ export function emptySquarespaceCheckSummary(): SquarespaceCheckSummary {
     skippedDuplicate: 0,
     skippedNoFilm: 0,
     skippedPos: 0,
+    updated: 0,
     errors: [],
     importedOrderNumbers: [],
+    updatedOrderNumbers: [],
     truncated: false,
   };
 }
@@ -275,21 +295,64 @@ function processFromProductName(productName: string): "Color" | "Black & White" 
   return null;
 }
 
-function lineItemOptions(line: Record<string, unknown>): NamedValue[] {
-  const options: NamedValue[] = [];
-  for (const key of ["variantOptions", "customizations"] as const) {
-    const list = line[key];
-    if (!Array.isArray(list)) continue;
-    for (const entry of list) {
-      const record = asRecord(entry);
-      if (!record) continue;
-      const label = readString(record.optionName) ?? readString(record.label) ?? "";
-      const value = readString(record.value) ?? "";
-      if (!label.trim() && !value.trim()) continue;
-      options.push({ label: label.trim(), value: value.trim() });
-    }
+function namedValue(entry: unknown): NamedValue | null {
+  const record = asRecord(entry);
+  if (!record) return null;
+  const label = readString(record.optionName) ?? readString(record.label) ?? readString(record.title) ?? "";
+  const value = readString(record.value) ?? "";
+  if (!label.trim() && !value.trim()) return null;
+  return { label: label.trim(), value: value.trim() };
+}
+
+function readNamedValues(list: unknown): NamedValue[] {
+  if (Array.isArray(list)) {
+    return list.flatMap((entry) => {
+      const value = namedValue(entry);
+      return value ? [value] : [];
+    });
   }
-  return options;
+  const value = namedValue(list);
+  return value ? [value] : [];
+}
+
+function lineItemOptions(line: Record<string, unknown>): NamedValue[] {
+  return ["variantOptions", "customizations"].flatMap((key) => readNamedValues(line[key]));
+}
+
+/**
+ * Product question such as "PLEASE LIST WHAT FILM TYPE(S) YOU ARE DROPPING OFF".
+ * A variant named "Film Stock" is not this question.
+ */
+function isFilmTypeQuestion(label: string): boolean {
+  const text = label.trim();
+  if (!text) return false;
+  if (/film\s*types?\b/i.test(text)) return true;
+  return /\bwhat\s+film\b/i.test(text);
+}
+
+function joinUnique(values: string[]): string {
+  const seen = new Set<string>();
+  const parts: string[] = [];
+  for (const value of values) {
+    const trimmed = value.trim();
+    if (!trimmed || seen.has(trimmed)) continue;
+    seen.add(trimmed);
+    parts.push(trimmed);
+  }
+  return parts.join("\n");
+}
+
+function filmTypeListing(options: NamedValue[]): string {
+  return joinUnique(
+    options
+      .filter((option) => isFilmTypeQuestion(option.label) && option.value.trim())
+      .map((option) => option.value.trim()),
+  );
+}
+
+function orderFilmTypeListing(order: Record<string, unknown>): string {
+  const options = [order.formSubmission, order.formSubmissions].flatMap((list) => readNamedValues(list));
+  return filmTypeListing(options);
 }
 
 function scanSizeFromOptions(options: NamedValue[]): RollDetail["scan_size"] {
@@ -308,8 +371,10 @@ function scanSizeFromOptions(options: NamedValue[]): RollDetail["scan_size"] {
 function printsFromOptions(options: NamedValue[]): boolean {
   for (const option of options) {
     if (!/4\s*x\s*6|print/i.test(option.label)) continue;
-    if (/^(yes|y|true)$/i.test(option.value)) return true;
-    if (/^(no|n|false)$/i.test(option.value)) return false;
+    const value = option.value.trim();
+    // Squarespace appends the price: `4x6" Prints: Yes - $7`.
+    if (/^(yes|y|true)\b/i.test(value)) return true;
+    if (/^(no|n|false)\b/i.test(value)) return false;
   }
   return false;
 }
@@ -433,7 +498,11 @@ export function classifySquarespaceOrder(order: unknown): ClassifiedSquarespaceO
   const lineItems = Array.isArray(record.lineItems) ? record.lineItems : [];
   const rolls: RollDetail[] = [];
   const problems: string[] = [];
+  const collectedListings: string[] = [];
+  let notes: string | null = null;
   let sawFilm = false;
+  let usedOrderListing = false;
+  const orderListing = orderFilmTypeListing(record);
 
   lineItems.forEach((line, index) => {
     const item = asRecord(line);
@@ -441,9 +510,20 @@ export function classifySquarespaceOrder(order: unknown): ClassifiedSquarespaceO
     if (!item || !isFilmProcessingProductName(productName)) return;
     sawFilm = true;
     const mapped = mapFilmLine(item, index);
-    if (!mapped.ok) problems.push(mapped.error);
-    else rolls.push(...mapped.rolls);
+    if (!mapped.ok) {
+      problems.push(mapped.error);
+      return;
+    }
+    const lineListing = filmTypeListing(lineItemOptions(item));
+    const listing = lineListing || orderListing;
+    if (lineListing) collectedListings.push(lineListing);
+    else if (orderListing) usedOrderListing = true;
+    const applied = applyFilmListingToRolls(mapped.rolls, listing || null);
+    rolls.push(...applied.rolls);
+    notes = mergeCustomerFilmNote(notes, applied.unmatchedNote);
   });
+  if (usedOrderListing && orderListing) collectedListings.push(orderListing);
+  const squarespaceFilmListing = joinUnique(collectedListings).slice(0, MAX_SQUARESPACE_FILM_LISTING);
 
   if (!sawFilm) return { kind: "skip_no_film" };
   if (problems.length > 0) {
@@ -482,9 +562,15 @@ export function classifySquarespaceOrder(order: unknown): ClassifiedSquarespaceO
     dropoff_date: dropoffDate,
     roll_count: rolls.length,
     roll_details: rolls,
+    notes: clampDraftNotes(notes),
   });
   if (!parsed.ok) {
     return { kind: "error", orderNumber, message: parsed.error };
   }
-  return { kind: "import", draft: parsed.value };
+  return {
+    kind: "import",
+    draft: squarespaceFilmListing
+      ? { ...parsed.value, squarespace_film_listing: squarespaceFilmListing }
+      : parsed.value,
+  };
 }

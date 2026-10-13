@@ -69,6 +69,8 @@ export interface IncomingSquarespaceDraft {
   roll_count: number;
   roll_details: RollDetail[];
   notes: string | null;
+  /** Raw film-type answer from Squarespace. Absent until migration 022 has been run. */
+  squarespace_film_listing?: string | null;
   import_source: string;
   status: IncomingDraftStatus;
   /** Set when Approve & Receive creates the film order. Deleting that order cascades. */

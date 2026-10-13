@@ -7,6 +7,7 @@ const {
   mockGetIncomingDraftByOrderNumber,
   mockGetIncomingDraftByExternalId,
   mockCreateIncomingDraft,
+  mockUpdatePendingIncomingDraft,
   mockCreateOrder,
   mockSendOrderEmail,
 } = vi.hoisted(() => ({
@@ -15,6 +16,7 @@ const {
   mockGetIncomingDraftByOrderNumber: vi.fn(),
   mockGetIncomingDraftByExternalId: vi.fn(),
   mockCreateIncomingDraft: vi.fn(),
+  mockUpdatePendingIncomingDraft: vi.fn(),
   mockCreateOrder: vi.fn(),
   mockSendOrderEmail: vi.fn(),
 }));
@@ -28,6 +30,7 @@ vi.mock("@/lib/db", () => ({
   getIncomingDraftByOrderNumber: (...args: unknown[]) => mockGetIncomingDraftByOrderNumber(...args),
   getIncomingDraftByExternalId: (...args: unknown[]) => mockGetIncomingDraftByExternalId(...args),
   createIncomingDraft: (...args: unknown[]) => mockCreateIncomingDraft(...args),
+  updatePendingIncomingDraft: (...args: unknown[]) => mockUpdatePendingIncomingDraft(...args),
   createOrder: (...args: unknown[]) => mockCreateOrder(...args),
 }));
 
@@ -49,7 +52,7 @@ import {
   selectSquarespaceOrdersForIntake,
   squarespaceLookbackWindow,
 } from "../lib/squarespace-orders";
-import { importSquarespaceOrders } from "../lib/squarespace-import";
+import { importSquarespaceOrders, pendingDraftFilmBackfill } from "../lib/squarespace-import";
 import { orderNumbersMatch } from "../lib/validation";
 
 const ORDER_ID = "585d498fdee9f31a60284a37";
@@ -154,6 +157,104 @@ describe("classifySquarespaceOrder", () => {
     ]);
   });
 
+  it("captures the film-type customization and a priced Yes print choice", () => {
+    const result = classifySquarespaceOrder(filmOrder({
+      orderNumber: "01078",
+      id: "order-01078",
+      lineItems: [{
+        productName: "C41 (color) - 35mm Develop...",
+        quantity: 1,
+        variantOptions: [
+          { optionName: '4x6" Prints', value: "Yes - $7" },
+          { optionName: "Processing", value: "Dev + Standard Scan" },
+        ],
+        customizations: [{
+          label: "PLEASE LIST WHAT FILM TYPE(S) YOU ARE DROPPING OFF",
+          value: "Ultramax 400",
+        }],
+      }],
+    }));
+    expect(result.kind).toBe("import");
+    if (result.kind !== "import") return;
+    expect(result.draft.squarespace_film_listing).toBe("Ultramax 400");
+    expect(result.draft.notes).toBeNull();
+    expect(result.draft.roll_details).toEqual([{
+      film_type: "35mm",
+      film_process: "Color",
+      scan_size: "Standard",
+      prints_4x6: true,
+      film_stock: "Kodak UltraMax 400",
+    }]);
+  });
+
+  it("reads the film-type answer from the order form when the line has none", () => {
+    const result = classifySquarespaceOrder(filmOrder({
+      orderNumber: "01079",
+      id: "order-form",
+      formSubmission: [{
+        label: "PLEASE LIST WHAT FILM TYPE(S) YOU ARE DROPPING OFF",
+        value: "HP5",
+      }],
+      lineItems: [{
+        productName: "Black & White - 35mm Development",
+        quantity: 2,
+        variantOptions: [
+          { optionName: "Processing", value: "Dev + Standard Scan" },
+          { optionName: "4x6 Prints", value: "No" },
+        ],
+      }],
+    }));
+    expect(result.kind).toBe("import");
+    if (result.kind !== "import") return;
+    expect(result.draft.squarespace_film_listing).toBe("HP5");
+    expect(result.draft.roll_details.map((roll) => roll.film_stock)).toEqual([
+      "Ilford HP5 Plus 400",
+      "Ilford HP5 Plus 400",
+    ]);
+    expect(result.draft.roll_details.every((roll) => roll.prints_4x6 === false)).toBe(true);
+  });
+
+  it("assigns a list of stocks in order and keeps an unmatched answer in notes", () => {
+    const listed = classifySquarespaceOrder(filmOrder({
+      orderNumber: "01081",
+      id: "listed",
+      lineItems: [{
+        productName: "C41 (color) - 35mm Development",
+        quantity: 3,
+        variantOptions: [{ optionName: "Processing", value: "Dev + Standard Scan" }],
+        customizations: [{
+          label: "What film type are you dropping off",
+          value: "2x Portra 400, Ultramax",
+        }],
+      }],
+    }));
+    expect(listed.kind).toBe("import");
+    if (listed.kind !== "import") return;
+    expect(listed.draft.roll_details.map((roll) => roll.film_stock ?? "")).toEqual([
+      "Kodak Portra 400",
+      "Kodak Portra 400",
+      "Kodak UltraMax 400",
+    ]);
+
+    const unmatched = classifySquarespaceOrder(filmOrder({
+      orderNumber: "01082",
+      id: "unmatched",
+      lineItems: [{
+        productName: "C41 (color) - 35mm Development",
+        quantity: 1,
+        customizations: [{
+          label: "PLEASE LIST WHAT FILM TYPE(S) YOU ARE DROPPING OFF",
+          value: "some weird film",
+        }],
+      }],
+    }));
+    expect(unmatched.kind).toBe("import");
+    if (unmatched.kind !== "import") return;
+    expect(unmatched.draft.roll_details[0].film_stock).toBeUndefined();
+    expect(unmatched.draft.notes).toBe("Customer listed film: some weird film");
+    expect(unmatched.draft.squarespace_film_listing).toBe("some weird film");
+  });
+
   it("maps 110 development", () => {
     const result = classifySquarespaceOrder(filmOrder({
       lineItems: [{
@@ -248,6 +349,7 @@ describe("importSquarespaceOrders", () => {
     getIncomingDraftByOrderNumber: vi.fn(),
     getIncomingDraftByExternalId: vi.fn(),
     createIncomingDraft: vi.fn(),
+    updatePendingIncomingDraft: vi.fn(),
   };
 
   beforeEach(() => {
@@ -413,6 +515,120 @@ describe("importSquarespaceOrders", () => {
     expect(summary.errors.every((error) => /createdOn/i.test(error.message))).toBe(true);
     expect(deps.createIncomingDraft).toHaveBeenCalledTimes(1);
     expect(deps.orderNumberExists).not.toHaveBeenCalledWith("01092");
+  });
+
+  it("backfills a pending draft with the film-type answer and does not touch a dismissed one", async () => {
+    const pendingRolls = [{
+      film_type: "35mm",
+      film_process: "Color",
+      scan_size: "Standard",
+      prints_4x6: false,
+    }];
+    deps.getIncomingDraftByExternalId.mockImplementation(async (externalId: string) => {
+      if (externalId === "pending-old") {
+        return {
+          id: "draft-pending",
+          status: "Pending Intake",
+          squarespace_order_number: "01078",
+          external_order_id: "pending-old",
+          roll_details: pendingRolls,
+          notes: null,
+        };
+      }
+      if (externalId === "dismissed-old") {
+        return {
+          id: "draft-dismissed",
+          status: "dismissed",
+          squarespace_order_number: "01083",
+          external_order_id: "dismissed-old",
+          roll_details: pendingRolls,
+        };
+      }
+      return null;
+    });
+
+    const summary = await importSquarespaceOrders([
+      filmOrder({
+        id: "pending-old",
+        orderNumber: "01078",
+        lineItems: [{
+          productName: "C41 (color) - 35mm Development",
+          quantity: 1,
+          variantOptions: [
+            { optionName: '4x6" Prints', value: "Yes - $7" },
+            { optionName: "Processing", value: "Dev + Standard Scan" },
+          ],
+          customizations: [{
+            label: "PLEASE LIST WHAT FILM TYPE(S) YOU ARE DROPPING OFF",
+            value: "Ultramax 400",
+          }],
+        }],
+      }),
+      filmOrder({
+        id: "dismissed-old",
+        orderNumber: "01083",
+        lineItems: [{
+          productName: "C41 (color) - 35mm Development",
+          quantity: 1,
+          customizations: [{
+            label: "PLEASE LIST WHAT FILM TYPE(S) YOU ARE DROPPING OFF",
+            value: "Ultramax 400",
+          }],
+        }],
+      }),
+    ], deps, CHECK_NOW);
+
+    expect(summary.imported).toBe(0);
+    expect(summary.skippedDuplicate).toBe(2);
+    expect(summary.updated).toBe(1);
+    expect(summary.updatedOrderNumbers).toEqual(["01078"]);
+    expect(deps.createIncomingDraft).not.toHaveBeenCalled();
+    expect(deps.updatePendingIncomingDraft).toHaveBeenCalledTimes(1);
+    expect(deps.updatePendingIncomingDraft).toHaveBeenCalledWith("draft-pending", {
+      squarespace_film_listing: "Ultramax 400",
+      roll_details: [{
+        film_type: "35mm",
+        film_process: "Color",
+        scan_size: "Standard",
+        prints_4x6: true,
+        film_stock: "Kodak UltraMax 400",
+      }],
+    });
+
+    const again = pendingDraftFilmBackfill(
+      {
+        id: "draft-pending",
+        status: "Pending Intake",
+        squarespace_film_listing: "Ultramax 400",
+        notes: null,
+        roll_details: [{
+          film_type: "35mm",
+          film_process: "Color",
+          scan_size: "Standard",
+          prints_4x6: true,
+          film_stock: "Kodak UltraMax 400",
+        }],
+      },
+      {
+        squarespace_order_number: "01078",
+        external_order_id: "pending-old",
+        customer_name: "Justin Eisner",
+        customer_email: null,
+        dropoff_date: "2026-10-01",
+        roll_count: 1,
+        roll_details: [{
+          film_type: "35mm",
+          film_process: "Color",
+          scan_size: "Standard",
+          prints_4x6: true,
+          film_stock: "Kodak UltraMax 400",
+        }],
+        notes: null,
+        squarespace_film_listing: "Ultramax 400",
+        import_source: "squarespace",
+      },
+    );
+    expect(again).toBeNull();
   });
 });
 

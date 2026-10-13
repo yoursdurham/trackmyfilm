@@ -4,9 +4,10 @@
  * creates Pending Intake drafts for film-processing purchases placed in that
  * window that are not already in the system. The Orders API filters by
  * modified date; import also requires createdOn within the same 7 days.
- * Does not send email, does not create film orders, and does not change
- * drafts or film orders that are already stored. Dismissed orders stay
- * dismissed and are skipped by Squarespace order id and normalized order number.
+ * Does not send email and does not create film orders. Dismissed and accepted
+ * drafts stay as they are. A Pending Intake row can be updated with the
+ * customer's film-type answer and a Yes print choice. Dismissed orders are
+ * skipped by Squarespace order id and normalized order number.
  */
 
 import { NextResponse } from "next/server";
@@ -16,6 +17,7 @@ import {
   getIncomingDraftByExternalId,
   getIncomingDraftByOrderNumber,
   orderNumberExists,
+  updatePendingIncomingDraft,
 } from "@/lib/db";
 import { importSquarespaceOrders } from "@/lib/squarespace-import";
 import {
@@ -42,6 +44,7 @@ export async function POST() {
       getIncomingDraftByOrderNumber,
       getIncomingDraftByExternalId,
       createIncomingDraft,
+      updatePendingIncomingDraft,
     }, now);
     summary.truncated = fetched.truncated;
     if (!fetched.ok) {
