@@ -61,8 +61,10 @@ function mergeBackfillRolls(existingRolls: unknown, incomingRolls: RollDetail[])
       roll.film_stock = incoming.film_stock;
       changed = true;
     }
-    if (roll.prints_4x6 !== true && incoming?.prints_4x6 === true) {
-      roll.prints_4x6 = true;
+    const incomingPrints = incoming?.prints_4x6 === true;
+    const existingPrints = roll.prints_4x6 === true;
+    if (existingPrints !== incomingPrints) {
+      roll.prints_4x6 = incomingPrints;
       changed = true;
     }
     return roll;

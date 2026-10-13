@@ -46,6 +46,7 @@ import {
   filmTypeFromProductName,
   isFilmProcessingProductName,
   isSquarespacePosOrder,
+  prints4x6FromSquarespaceVariant,
   SQUARESPACE_API_KEY_ENV,
   SQUARESPACE_LOOKBACK_DAYS,
   SQUARESPACE_USER_AGENT,
@@ -155,6 +156,90 @@ describe("classifySquarespaceOrder", () => {
       { film_type: "120", film_process: "Black & White", scan_size: "Standard", prints_4x6: false },
       { film_type: "120", film_process: "Black & White", scan_size: "Standard", prints_4x6: false },
     ]);
+  });
+
+  it("reads 4x6 print variant text as Yes or No", () => {
+    expect(prints4x6FromSquarespaceVariant('4x6" Prints: Yes - $7')).toBe(true);
+    expect(prints4x6FromSquarespaceVariant("4x6\" Prints: Yes - $7")).toBe(true);
+    expect(prints4x6FromSquarespaceVariant('4x6" Prints: No')).toBe(false);
+    expect(prints4x6FromSquarespaceVariant("4x6 Prints: No")).toBe(false);
+    expect(prints4x6FromSquarespaceVariant("Processing: Dev + Standard Scan")).toBeNull();
+  });
+
+  it("prefills 4x6 Prints Yes on every roll when the variant is Yes - $7", () => {
+    const result = classifySquarespaceOrder(filmOrder({
+      orderNumber: "01084",
+      id: "prints-yes",
+      lineItems: [{
+        productName: "C41 (color) - 35mm Development",
+        quantity: 3,
+        variantOptions: [
+          { optionName: '4x6" Prints', value: "Yes - $7" },
+          { optionName: "Processing", value: "Dev + Standard Scan" },
+        ],
+      }],
+    }));
+    expect(result.kind).toBe("import");
+    if (result.kind !== "import") return;
+    expect(result.draft.roll_count).toBe(3);
+    expect(result.draft.roll_details.map((roll) => roll.prints_4x6)).toEqual([true, true, true]);
+    expect(result.draft.roll_details.every((roll) => roll.scan_size === "Standard")).toBe(true);
+  });
+
+  it("prefills 4x6 Prints No on every roll when the variant is No", () => {
+    const structured = classifySquarespaceOrder(filmOrder({
+      orderNumber: "01085",
+      id: "prints-no",
+      lineItems: [{
+        productName: "C41 (color) - 120 Development",
+        quantity: 2,
+        variantOptions: [
+          { optionName: '4x6" Prints', value: "No" },
+          { optionName: "Processing", value: "Dev + Standard Scan" },
+        ],
+      }],
+    }));
+    expect(structured.kind).toBe("import");
+    if (structured.kind !== "import") return;
+    expect(structured.draft.roll_details.map((roll) => roll.prints_4x6)).toEqual([false, false]);
+
+    const asText = classifySquarespaceOrder(filmOrder({
+      orderNumber: "01086",
+      id: "prints-text",
+      lineItems: [{
+        productName: "C41 (color) - 35mm Development",
+        quantity: 2,
+        variantOptions: [
+          '4x6" Prints: Yes - $7',
+          "Processing: Dev + Standard Scan",
+        ],
+      }],
+    }));
+    expect(asText.kind).toBe("import");
+    if (asText.kind !== "import") return;
+    expect(asText.draft.roll_details.map((roll) => roll.prints_4x6)).toEqual([true, true]);
+    expect(asText.draft.roll_details.every((roll) => roll.scan_size === "Standard")).toBe(true);
+
+    const noText = classifySquarespaceOrder(filmOrder({
+      orderNumber: "01087",
+      id: "prints-no-text",
+      lineItems: [
+        {
+          productName: "C41 (color) - 35mm Development",
+          quantity: 2,
+          variantOptions: ['4x6" Prints: Yes - $7', "Processing: Dev + High Res Scan"],
+        },
+        {
+          productName: "Black & White - 120 Development",
+          quantity: 1,
+          variantOptions: ['4x6" Prints: No', "Processing: Dev + Standard Scan"],
+        },
+      ],
+    }));
+    expect(noText.kind).toBe("import");
+    if (noText.kind !== "import") return;
+    expect(noText.draft.roll_details.map((roll) => roll.prints_4x6)).toEqual([true, true, false]);
+    expect(noText.draft.roll_details.map((roll) => roll.scan_size)).toEqual(["High-Res", "High-Res", "Standard"]);
   });
 
   it("captures the film-type customization and a priced Yes print choice", () => {
@@ -629,6 +714,37 @@ describe("importSquarespaceOrders", () => {
       },
     );
     expect(again).toBeNull();
+  });
+
+  it("backfills 4x6 Prints to No when the Squarespace variant is No", () => {
+    const backfill = pendingDraftFilmBackfill(
+      {
+        id: "draft-prints",
+        status: "Pending Intake",
+        squarespace_order_number: "01085",
+        external_order_id: "prints-old",
+        roll_details: [
+          { film_type: "120", film_process: "Color", scan_size: "Standard", prints_4x6: true },
+          { film_type: "120", film_process: "Color", scan_size: "Standard", prints_4x6: true },
+        ],
+        notes: null,
+      },
+      {
+        squarespace_order_number: "01085",
+        external_order_id: "prints-old",
+        customer_name: "Justin Eisner",
+        customer_email: null,
+        dropoff_date: "2026-10-01",
+        roll_count: 2,
+        roll_details: [
+          { film_type: "120", film_process: "Color", scan_size: "Standard", prints_4x6: false },
+          { film_type: "120", film_process: "Color", scan_size: "Standard", prints_4x6: false },
+        ],
+        notes: null,
+        import_source: "squarespace",
+      },
+    );
+    expect(backfill?.roll_details?.map((roll) => roll.prints_4x6)).toEqual([false, false]);
   });
 });
 

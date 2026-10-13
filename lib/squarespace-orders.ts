@@ -305,8 +305,16 @@ function namedValue(entry: unknown): NamedValue | null {
 }
 
 function readNamedValues(list: unknown): NamedValue[] {
+  if (typeof list === "string") {
+    const trimmed = list.trim();
+    return trimmed ? [{ label: "", value: trimmed }] : [];
+  }
   if (Array.isArray(list)) {
     return list.flatMap((entry) => {
+      if (typeof entry === "string") {
+        const trimmed = entry.trim();
+        return trimmed ? [{ label: "", value: trimmed }] : [];
+      }
       const value = namedValue(entry);
       return value ? [value] : [];
     });
@@ -368,13 +376,30 @@ function scanSizeFromOptions(options: NamedValue[]): RollDetail["scan_size"] {
   return "Standard";
 }
 
+/**
+ * Squarespace shows the print choice as variant text:
+ * `4x6" Prints: Yes - $7` or `4x6" Prints: No`.
+ * Also matches a structured option whose label is the print name and whose
+ * value is `Yes - $7` or `No`. Null when this text is not a print choice.
+ */
+export function prints4x6FromSquarespaceVariant(text: string): boolean | null {
+  const match = text.match(/4\s*x\s*6\s*(?:["″”']|\s)*prints?\s*:\s*(yes|no|y|n|true|false)\b/i);
+  if (!match) return null;
+  return /^(yes|y|true)$/i.test(match[1]);
+}
+
 function printsFromOptions(options: NamedValue[]): boolean {
   for (const option of options) {
-    if (!/4\s*x\s*6|print/i.test(option.label)) continue;
-    const value = option.value.trim();
-    // Squarespace appends the price: `4x6" Prints: Yes - $7`.
-    if (/^(yes|y|true)\b/i.test(value)) return true;
-    if (/^(no|n|false)\b/i.test(value)) return false;
+    const texts = [
+      option.label && option.value ? `${option.label}: ${option.value}` : "",
+      option.value,
+      option.label,
+    ];
+    for (const text of texts) {
+      if (!text.trim()) continue;
+      const choice = prints4x6FromSquarespaceVariant(text);
+      if (choice !== null) return choice;
+    }
   }
   return false;
 }
