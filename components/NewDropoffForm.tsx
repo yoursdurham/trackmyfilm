@@ -10,6 +10,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { User, Calendar, Hash, Layers, Loader2, Film, Mail } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
+import { applyFilmListingToRolls, mergeCustomerFilmNote } from "@/lib/film-stock-match";
+import { FILM_STOCKS } from "@/lib/film-stocks";
 import type { Customer, FilmType, FilmProcess, IncomingSquarespaceDraft, RollDetail } from "@/lib/types";
 import { DROP_OFF_FILM_TYPES, isValidEmail, normalizeEmail } from "@/lib/validation";
 import {
@@ -33,17 +35,6 @@ interface Props {
   /** When set, the dialog reviews a Squarespace draft. Hand-entered drop-offs leave this unset. */
   incomingDraft?: IncomingSquarespaceDraft | null;
 }
-
-const FILM_STOCKS = [
-  "Kodak Portra 400", "Kodak Portra 800", "Kodak Portra 160",
-  "Kodak Gold 200", "Kodak UltraMax 400", "Kodak ColorPlus 200",
-  "Kodak Ektar 100", "Kodak T-Max 400", "Kodak T-Max 100", "Kodak Tri-X 400",
-  "Fujifilm Superia 400", "Fujifilm Superia 200", "Fujifilm Pro 400H",
-  "Fujifilm Velvia 50", "Fujifilm Provia 100F",
-  "Ilford HP5 Plus 400", "Ilford Delta 400", "Ilford XP2 Super 400",
-  "Cinestill 800T", "Cinestill 400D",
-  "Lomography Color 400",
-];
 
 const FILM_TYPES = DROP_OFF_FILM_TYPES;
 const FILM_PROCESSES: FilmProcess[] = ["Color", "Black & White"];
@@ -90,7 +81,9 @@ const emptyMeta = {
 
 function formStateFromDraft(draft: IncomingSquarespaceDraft) {
   const details = draft.roll_details.slice(0, MAX_ROLLS);
-  const rolls = details.length > 0 ? details.map(rollStateFromDetail) : [createEmptyDropoffRoll()];
+  const applied = applyFilmListingToRolls(details, draft.squarespace_film_listing);
+  const source = applied.rolls.length > 0 ? applied.rolls : details;
+  const rolls = source.length > 0 ? source.map(rollStateFromDetail) : [createEmptyDropoffRoll()];
   return {
     formData: {
       customer_name: draft.customer_name,
@@ -98,7 +91,7 @@ function formStateFromDraft(draft: IncomingSquarespaceDraft) {
       order_number: draft.squarespace_order_number,
       dropoff_date: draft.dropoff_date || format(new Date(), "yyyy-MM-dd"),
       roll_count: rolls.length,
-      notes: draft.notes ?? "",
+      notes: mergeCustomerFilmNote(draft.notes, applied.unmatchedNote) ?? "",
     },
     rolls,
   };
@@ -312,6 +305,11 @@ export default function NewDropoffForm({
           {incomingDraft ? (
             <p className="text-sm text-slate-500">
               Pending Intake from Squarespace ({incomingDraft.squarespace_order_number}). Approving sets Received by Yours and sends the confirmation email when the box below is checked.
+            </p>
+          ) : null}
+          {incomingDraft?.squarespace_film_listing ? (
+            <p className="whitespace-pre-wrap text-sm text-slate-700">
+              Customer listed film: {incomingDraft.squarespace_film_listing}
             </p>
           ) : null}
         </DialogHeader>

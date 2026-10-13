@@ -39,11 +39,17 @@ export interface IncomingDraftInput {
   roll_count: number;
   roll_details: RollDetail[];
   notes: string | null;
+  /**
+   * Raw Squarespace answer for the film-type question. Omitted when the
+   * customer did not answer. The column is added in migration 022.
+   */
+  squarespace_film_listing?: string | null;
   import_source: string;
 }
 
 /** Row written on import. Status is always Pending Intake — never a received order. */
 export function buildIncomingDraftInsert(input: IncomingDraftInput) {
+  const listing = input.squarespace_film_listing?.trim();
   return {
     squarespace_order_number: input.squarespace_order_number,
     external_order_id: input.external_order_id,
@@ -53,6 +59,7 @@ export function buildIncomingDraftInsert(input: IncomingDraftInput) {
     roll_count: input.roll_count,
     roll_details: input.roll_details,
     notes: input.notes,
+    ...(listing ? { squarespace_film_listing: listing } : {}),
     import_source: input.import_source,
     status: PENDING_INTAKE_STATUS,
   };
