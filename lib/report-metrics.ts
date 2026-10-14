@@ -152,12 +152,26 @@ export function buildReportCsv(args: {
   metrics: ReportMetrics;
   averageTurnaroundDays: number | null;
   completedOrders: number;
+  /**
+   * All-time summary only. Date-range and month-end exports omit this so the
+   * pre-2026 estimate stays out of filtered totals.
+   */
+  allTimeFilmRolls?: {
+    totalFilmRollsDeveloped: number;
+    pre2026RollsIncluded: number;
+  };
 }): string {
   const turnaround =
     args.averageTurnaroundDays !== null
       ? (Math.round(args.averageTurnaroundDays * 10) / 10).toFixed(1)
       : "";
   const { metrics } = args;
+  const allTimeLines = args.allTimeFilmRolls
+    ? [
+        `Total Film Rolls Developed,${args.allTimeFilmRolls.totalFilmRollsDeveloped}`,
+        `Pre-2026 Rolls Included,${args.allTimeFilmRolls.pre2026RollsIncluded}`,
+      ]
+    : [];
 
   return [
     "TrackMyFilm Report",
@@ -165,6 +179,7 @@ export function buildReportCsv(args: {
     `Time frame: ${args.timeFrameLabel}`,
     "",
     "METRICS",
+    ...allTimeLines,
     `Total Individual Customers,${metrics.totalCustomers}`,
     `Total B/W Rolls,${metrics.totalBWRolls}`,
     `Total Color Rolls,${metrics.totalColorRolls}`,

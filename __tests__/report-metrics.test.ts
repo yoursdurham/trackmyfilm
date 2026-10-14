@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { legacyRollsRounded, totalFilmRollsDeveloped } from "@/lib/legacy-rolls";
 import { buildReportCsv, calculateReportMetrics } from "@/lib/report-metrics";
 import {
   isBlankRoll,
@@ -175,6 +176,8 @@ describe("calculateReportMetrics", () => {
     });
 
     expect(csv).toContain("Time frame: Last 30 days");
+    expect(csv).not.toContain("Total Film Rolls Developed");
+    expect(csv).not.toContain("Pre-2026 Rolls Included");
     expect(csv).toContain("Total B/W Rolls,1");
     expect(csv).toContain("Total Color Rolls,1");
     expect(csv).toContain("Total Blank Rolls,1");
@@ -186,5 +189,40 @@ describe("calculateReportMetrics", () => {
     expect(csv).toContain("Blank 110 Rolls,0");
     expect(csv).toContain("Average Turnaround Time (days),4.3");
     expect(csv).toContain("Completed Orders (turnaround),3");
+  });
+
+  it("adds the pre-2026 rolls only to the all-time summary", () => {
+    const orders = [
+      order({
+        roll_count: 2,
+        roll_details: [
+          { film_type: "35mm", film_process: "Color" },
+          { film_type: "120", film_process: "Black & White", blank: true },
+        ],
+      }),
+    ];
+    const metrics = calculateReportMetrics(orders);
+    expect(metrics.totalColorRolls).toBe(1);
+    expect(metrics.totalBWRolls).toBe(1);
+    expect(metrics.totalBlankRolls).toBe(1);
+
+    const developed = totalFilmRollsDeveloped(orders, true);
+    expect(developed).toBe(2 + legacyRollsRounded());
+
+    const csv = buildReportCsv({
+      generatedAt: "Oct 14, 2026",
+      timeFrameLabel: "All time",
+      metrics,
+      averageTurnaroundDays: null,
+      completedOrders: 0,
+      allTimeFilmRolls: {
+        totalFilmRollsDeveloped: developed,
+        pre2026RollsIncluded: legacyRollsRounded(),
+      },
+    });
+    expect(csv).toContain(`Total Film Rolls Developed,${developed}`);
+    expect(csv).toContain(`Pre-2026 Rolls Included,${legacyRollsRounded()}`);
+    expect(csv).toContain("Total Color Rolls,1");
+    expect(csv).toContain("Total Blank Rolls,1");
   });
 });

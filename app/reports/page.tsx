@@ -10,6 +10,7 @@ import {
   calculateTurnaroundForPeriod,
   formatTurnaroundDays,
 } from "@/lib/turnaround-time";
+import { legacyRollsRounded, totalFilmRollsDeveloped } from "@/lib/legacy-rolls";
 import { buildReportCsv, calculateReportMetrics } from "@/lib/report-metrics";
 import { toast } from "sonner";
 import InternalHeader from "@/components/InternalHeader";
@@ -54,7 +55,7 @@ export default function Reports() {
   const [customStartDate, setCustomStartDate] = useState("");
   const [customEndDate, setCustomEndDate] = useState("");
 
-  const { data: orders = [] } = useQuery<FilmOrder[]>({
+  const { data: orders = [], isLoading } = useQuery<FilmOrder[]>({
     queryKey: ["filmOrders"],
     queryFn: async () => {
       const r = await fetch("/api/orders");
@@ -104,6 +105,8 @@ export default function Reports() {
   });
 
   const metrics = calculateReportMetrics(filteredOrders);
+  const includeLegacyRolls = selectedTimeFrame === "all" && !isLoading;
+  const filmRollsDeveloped = totalFilmRollsDeveloped(filteredOrders, includeLegacyRolls);
   const turnaround =
     selectedTimeFrame === "custom" && hasValidCustomRange && customStart && customEnd
       ? calculateTurnaroundForDateRange(orders, customStart, customEnd)
@@ -120,6 +123,12 @@ export default function Reports() {
       metrics,
       averageTurnaroundDays: turnaround.averageDays,
       completedOrders: turnaround.orderCount,
+      allTimeFilmRolls: includeLegacyRolls
+        ? {
+            totalFilmRollsDeveloped: filmRollsDeveloped,
+            pre2026RollsIncluded: legacyRollsRounded(),
+          }
+        : undefined,
     });
 
     const blob = new Blob([csvContent], { type: "text/csv" });
@@ -193,6 +202,18 @@ export default function Reports() {
             </Button>
           </div>
         </div>
+
+        <Card className="mb-4 border border-stone-100" data-testid="film-rolls-developed">
+          <CardContent className="p-5">
+            <p className="text-xs text-slate-500 uppercase tracking-wide">Total film rolls developed</p>
+            <p className="text-3xl font-bold text-slate-800">{filmRollsDeveloped}</p>
+            {includeLegacyRolls ? (
+              <p className="mt-1 text-xs text-slate-500">
+                includes {legacyRollsRounded()} pre-2026 rolls
+              </p>
+            ) : null}
+          </CardContent>
+        </Card>
 
         {/* Key Metrics Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-8">
