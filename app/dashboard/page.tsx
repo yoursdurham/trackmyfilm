@@ -14,6 +14,7 @@ import InternalHeader, { openNewDropoffDialog } from "@/components/InternalHeade
 import OrderCard from "@/components/OrderCard";
 import BulkStatusActionBar from "@/components/BulkStatusActionBar";
 import { countDashboardStatuses, orderMatchesDashboardFilter } from "@/lib/dashboard-status";
+import { totalFilmRollsDeveloped } from "@/lib/legacy-rolls";
 import { getUrgentAgeDays, isUrgent } from "@/lib/order-urgency";
 import { ORDER_STATUS } from "@/lib/constants";
 import { orderNumberMatchesSearch } from "@/lib/validation";
@@ -183,6 +184,10 @@ function Dashboard() {
   });
 
   const statusCounts = countDashboardStatuses(dateFilteredOrders);
+  const filmRollsDeveloped = totalFilmRollsDeveloped(
+    dateFilteredOrders,
+    selectedTimeFrame === "all" && !isLoading,
+  );
 
   const isReceivedTab = activeFilter === ORDER_STATUS.RECEIVED_BY_YOURS;
   const showBulkSelection = isReceivedTab;
@@ -276,7 +281,7 @@ function Dashboard() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-3 mb-6 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 mb-6 sm:grid-cols-2 xl:grid-cols-4">
           {[
             { label: "Received by Yours", count: statusCounts["Received by Yours"], labelClass: "text-[#A77B43]" },
             { label: "Received at Lab",   count: statusCounts["Received at Lab"],   labelClass: "text-[#806A91]" },
@@ -287,6 +292,10 @@ function Dashboard() {
               <p className={`text-xs sm:text-sm leading-snug ${stat.labelClass}`}>{stat.label}</p>
             </div>
           ))}
+          <div className="bg-white rounded-xl p-3 sm:p-4 shadow-sm border border-stone-100" data-testid="film-rolls-developed">
+            <p className="text-2xl font-bold text-slate-800">{filmRollsDeveloped}</p>
+            <p className="text-xs sm:text-sm leading-snug text-slate-600">Total film rolls developed</p>
+          </div>
         </div>
 
         {showBulkSelection ? (
