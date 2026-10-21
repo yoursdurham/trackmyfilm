@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2, AlertCircle, CheckCircle } from "lucide-react";
+import PublicHeader from "@/components/PublicHeader";
 import RecoverySessionRedirect from "@/components/RecoverySessionRedirect";
 import WindowFrame from "@/components/WindowFrame";
 
@@ -83,13 +84,13 @@ function LoginForm() {
         {error && (
           <div className="flex items-start gap-2.5 rounded-xl border-2 border-neutral-900 bg-[#FFF6D3] p-3">
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-neutral-900" />
-            <p className="text-sm text-neutral-900">{error}</p>
+            <p className="text-base leading-relaxed text-neutral-900">{error}</p>
           </div>
         )}
         {success && (
           <div className="flex items-start gap-2.5 rounded-xl border-2 border-neutral-900 bg-[#A1CC93]/40 p-3">
             <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-neutral-900" />
-            <p className="text-sm text-neutral-900">{success}</p>
+            <p className="text-base leading-relaxed text-neutral-900">{success}</p>
           </div>
         )}
 
@@ -132,7 +133,7 @@ function LoginForm() {
       {error && (
         <div className="flex items-start gap-2.5 rounded-xl border-2 border-neutral-900 bg-[#FFF6D3] p-3">
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-neutral-900" />
-          <p className="text-sm text-neutral-900">{error}</p>
+          <p className="text-base leading-relaxed text-neutral-900">{error}</p>
         </div>
       )}
 
@@ -145,20 +146,21 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <div className="min-h-screen bg-[#FFF6D3] text-neutral-900">
+    <div className="flex min-h-screen flex-col bg-[#FFF6D3] font-jetbrains text-neutral-900">
       <RecoverySessionRedirect />
-      <main className="mx-auto flex min-h-screen max-w-lg flex-col justify-center px-4 py-12">
+      <PublicHeader heading="p" />
+      <main className="mx-auto flex w-full max-w-lg flex-1 flex-col justify-center px-4 pb-12">
         <WindowFrame title="Yours Durham" bodyClassName="p-6 sm:p-8">
           <div className="mb-6 flex items-center gap-3">
             <Image src="/logo.png" alt="Yours Durham" width={48} height={48} className="h-12 w-12 rounded-xl object-cover" />
             <div>
               <p className="font-jetbrains text-lg font-bold leading-tight text-neutral-900">Yours Durham</p>
-              <p className="text-sm text-slate-600">Film Lab · Durham, NC</p>
+              <p className="text-base leading-relaxed text-neutral-900">Film Lab · Durham, NC</p>
             </div>
           </div>
 
           <h1 className="font-jetbrains text-2xl font-bold text-neutral-900">Welcome back</h1>
-          <p className="mb-8 mt-1 text-sm text-slate-600">Sign in to access the lab dashboard</p>
+          <p className="mb-8 mt-1 text-base leading-relaxed text-neutral-900">Sign in to access the lab dashboard</p>
 
           <Suspense fallback={
             <div className="flex h-48 items-center justify-center">
@@ -170,7 +172,7 @@ export default function LoginPage() {
 
           <div className="mt-8 border-t border-neutral-200 pt-6">
             <p className="text-center font-jetbrains text-xs font-bold uppercase tracking-widest text-neutral-900">Staff Portal</p>
-            <ul className="mt-4 space-y-2 text-center text-sm text-slate-600">
+            <ul className="mt-4 space-y-2 text-center text-base leading-relaxed text-neutral-900">
               <li>Track every drop-off in real time</li>
               <li>Update status · trigger customer emails</li>
               <li>Manage your customer roll history</li>

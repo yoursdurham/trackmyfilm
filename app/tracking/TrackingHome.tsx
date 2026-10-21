@@ -18,6 +18,7 @@ import {
   Printer,
   Search,
 } from "lucide-react";
+import PublicHeader from "@/components/PublicHeader";
 import WindowFrame from "@/components/WindowFrame";
 import { Input } from "@/components/ui/input";
 import FilmProcessBadge from "@/components/FilmProcessBadge";
@@ -164,13 +165,13 @@ function OrderTimeline({
               </div>
               <p
                 className={`mt-2 max-w-[92px] text-center font-jetbrains text-xs leading-tight sm:max-w-[120px] ${
-                  isActive ? `${step.activeText} font-bold` : "text-slate-500"
+                  isActive ? `${step.activeText} font-bold` : "text-neutral-800"
                 }`}
               >
                 {step.status}
               </p>
               {timestamp ? (
-                <p className="mt-0.5 max-w-[100px] text-center text-xs text-slate-400">
+                <p className="mt-0.5 max-w-[100px] text-center font-jetbrains text-xs leading-relaxed text-neutral-800">
                   {timestamp}
                 </p>
               ) : null}
@@ -337,17 +338,8 @@ export default function TrackingHome({ milesSaved }: { milesSaved: ReactNode }) 
   };
 
   return (
-    <div className="min-h-screen bg-[#FFF6D3]">
-      <header className="bg-[#FFF6D3]">
-        <div className="mx-auto max-w-5xl px-4 pb-10 pt-10 text-center sm:px-6 lg:px-8">
-          <h1 className="font-jetbrains text-sm font-bold tracking-tight text-neutral-900 sm:text-xl sm:whitespace-nowrap">
-            Track My Film
-            <span className="ml-1 font-normal text-slate-600 sm:ml-2">
-              - A Project by Yours, Durham
-            </span>
-          </h1>
-        </div>
-      </header>
+    <div className="min-h-screen bg-[#FFF6D3] font-jetbrains text-neutral-900">
+      <PublicHeader />
       <main className="mx-auto w-full min-w-0 max-w-5xl overflow-x-clip px-4 pb-10 sm:px-6 lg:px-8">
         <WindowFrame
           title="Enter an order number or the email on the order."
@@ -431,7 +423,7 @@ export default function TrackingHome({ milesSaved }: { milesSaved: ReactNode }) 
                 <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-[#DDB1B1]">
                   <Film className="h-8 w-8 text-neutral-900" />
                 </div>
-                <p className="text-slate-600">Please try again in a moment.</p>
+                <p className="text-base leading-relaxed text-neutral-900">Please try again in a moment.</p>
               </WindowFrame>
             </motion.div>
           ) : hasSearched && orders.length === 0 ? (
@@ -445,7 +437,7 @@ export default function TrackingHome({ milesSaved }: { milesSaved: ReactNode }) 
                 <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-[#C5AED7]">
                   <Film className="h-8 w-8 text-neutral-900" />
                 </div>
-                <p className="text-slate-600">
+                <p className="text-base leading-relaxed text-neutral-900">
                   {committed?.type === "email"
                     ? "No orders found for this email address"
                     : committed?.type === "order" && committed.email
@@ -507,7 +499,7 @@ export default function TrackingHome({ milesSaved }: { milesSaved: ReactNode }) 
                     />
 
                     {partialProgress.length > 0 && order.status !== "Scans Sent" ? (
-                      <div className="mt-6 rounded-xl border-2 border-neutral-900 bg-[#C5AED7]/30 px-4 py-3 text-sm text-neutral-900">
+                      <div className="mt-6 rounded-xl border-2 border-neutral-900 bg-[#C5AED7]/30 px-4 py-3 text-base leading-relaxed text-neutral-900">
                         <p className="mb-2 font-jetbrains font-bold">Scan delivery progress</p>
                         <ul className="space-y-1.5">
                           {partialProgress.map((item) => (
@@ -538,7 +530,7 @@ export default function TrackingHome({ milesSaved }: { milesSaved: ReactNode }) 
                         </div>
                         <div>
                           <p className="font-jetbrains text-xs font-bold text-neutral-900">Dropped off</p>
-                          <p className="text-sm font-medium text-neutral-900">
+                          <p className="text-base leading-relaxed text-neutral-900">
                             {format(new Date(order.dropoff_date), "MMM d, yyyy")}
                           </p>
                         </div>
@@ -550,7 +542,7 @@ export default function TrackingHome({ milesSaved }: { milesSaved: ReactNode }) 
                         </div>
                         <div>
                           <p className="font-jetbrains text-xs font-bold text-neutral-900">Number of rolls</p>
-                          <p className="text-sm font-medium text-neutral-900">
+                          <p className="text-base leading-relaxed text-neutral-900">
                             {order.roll_count} roll{order.roll_count > 1 ? "s" : ""}
                           </p>
                         </div>
@@ -566,7 +558,7 @@ export default function TrackingHome({ milesSaved }: { milesSaved: ReactNode }) 
                             key={`${order.id}-roll-${index}`}
                             className="flex flex-wrap items-center gap-2 text-sm"
                           >
-                            <span className="min-w-[44px] font-medium text-slate-600">
+                            <span className="min-w-[44px] text-base leading-relaxed text-neutral-900">
                               Roll {index + 1}
                             </span>
                             <span className="rounded-full bg-[#FFF6D3] px-2 py-0.5 text-xs font-bold text-neutral-900">
@@ -632,7 +624,7 @@ export default function TrackingHome({ milesSaved }: { milesSaved: ReactNode }) 
                         <p className="font-jetbrains text-xs font-bold uppercase tracking-wide text-neutral-900">
                           Order notes
                         </p>
-                        <p className="whitespace-pre-wrap text-sm text-slate-700">
+                        <p className="whitespace-pre-wrap text-base leading-relaxed text-neutral-900">
                           {customerOrderNote}
                         </p>
                       </div>
@@ -686,7 +678,7 @@ export default function TrackingHome({ milesSaved }: { milesSaved: ReactNode }) 
                         </button>
                         {resendMessages[order.id] ? (
                           <p
-                            className="text-center text-sm font-medium text-slate-600"
+                            className="text-center text-base leading-relaxed text-neutral-900"
                           >
                             {resendMessages[order.id]}
                           </p>
@@ -733,7 +725,7 @@ export default function TrackingHome({ milesSaved }: { milesSaved: ReactNode }) 
                 <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-[#A1CC93]">
                   <Package className="h-6 w-6 text-neutral-900" />
                 </div>
-                <p className="text-slate-600">
+                <p className="text-base leading-relaxed text-neutral-900">
                   Professional film developing services for all your analog photography needs
                 </p>
               </WindowFrame>
@@ -754,7 +746,7 @@ export default function TrackingHome({ milesSaved }: { milesSaved: ReactNode }) 
                 <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-[#C5AED7]">
                   <Film className="h-6 w-6 text-neutral-900" />
                 </div>
-                <p className="text-slate-600">
+                <p className="text-base leading-relaxed text-neutral-900">
                   Browse our selection of premium film stock and photography supplies
                 </p>
               </WindowFrame>
@@ -773,25 +765,25 @@ export default function TrackingHome({ milesSaved }: { milesSaved: ReactNode }) 
                 <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-[#DDB1B1]">
                   <Mail className="h-6 w-6 text-neutral-900" />
                 </div>
-                <p className="text-slate-600">Click here to send us an email!</p>
+                <p className="text-base leading-relaxed text-neutral-900">Click here to send us an email!</p>
               </WindowFrame>
             </a>
           </div>
         </div>
 
-        <div className="mt-8 flex flex-col gap-2 px-1 text-left text-sm leading-relaxed text-slate-600 sm:px-0 sm:text-center">
-          <span className="font-semibold tracking-wide text-[#24324A]">INFO:</span>
+        <div className="mt-8 flex flex-col gap-2 px-1 text-left text-base leading-relaxed text-neutral-900 sm:px-0 sm:text-center">
+          <span className="font-semibold tracking-wide">INFO:</span>
           <a
             href="https://www.yoursdurham.com"
             target="_blank"
             rel="noopener noreferrer"
-            className="font-bold text-[#24324A] underline underline-offset-2 hover:no-underline"
+            className="font-bold underline underline-offset-2 hover:no-underline"
           >
             Yours, Durham
           </a>
           <a
             href="https://maps.apple/p/3E3GveJFzj_71S"
-            className="text-[#24324A] underline underline-offset-2 hover:no-underline"
+            className="underline underline-offset-2 hover:no-underline"
           >
             209 N. Gregson St. Durham, NC 27701
           </a>
