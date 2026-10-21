@@ -18,7 +18,7 @@ import {
   Printer,
   Search,
 } from "lucide-react";
-import PublicHeader from "@/components/PublicHeader";
+import PublicHeader, { TRACKING_HOME_EVENT } from "@/components/PublicHeader";
 import WindowFrame from "@/components/WindowFrame";
 import { Input } from "@/components/ui/input";
 import FilmProcessBadge from "@/components/FilmProcessBadge";
@@ -136,10 +136,15 @@ function OrderTimeline({
         {steps.slice(0, -1).map((step, index) => (
           <div
             key={`${step.status}-line`}
-            className={`h-1 flex-1 rounded-full transition-all ${
-              index < currentIndex ? step.activeLine : "bg-slate-200"
-            }`}
-          />
+            className="h-1 flex-1 overflow-hidden rounded-full bg-slate-200"
+          >
+            {index < currentIndex ? (
+              <div
+                className={`timeline-line-fill h-full origin-left ${step.activeLine}`}
+                style={{ animationDelay: `${index * 420}ms` }}
+              />
+            ) : null}
+          </div>
         ))}
       </div>
 
@@ -153,9 +158,9 @@ function OrderTimeline({
           return (
             <div key={step.status} className="flex min-w-0 flex-col items-center">
               <div
-                className={`flex h-9 w-9 items-center justify-center rounded-full transition-all sm:h-12 sm:w-12 ${
+                className={`flex h-9 w-9 items-center justify-center rounded-full sm:h-12 sm:w-12 ${
                   isActive ? `${step.activeBg} shadow-lg` : "bg-slate-200"
-                } ${isCurrent ? `ring-4 ${step.activeRing}` : ""}`}
+                } ${isCurrent ? `timeline-step-pulse ring-4 ${step.activeRing}` : ""}`}
               >
                 <Icon
                   className={`h-4 w-4 sm:h-6 sm:w-6 ${
@@ -255,6 +260,16 @@ export default function TrackingHome({ milesSaved }: { milesSaved: ReactNode }) 
 
   const orders = data?.orders ?? [];
   const customerName = data?.customerName ?? null;
+
+  useEffect(() => {
+    const clearSearch = () => {
+      setManualSearch("cleared");
+      setOrderDraft("");
+      setEmailDraft("");
+    };
+    window.addEventListener(TRACKING_HOME_EVENT, clearSearch);
+    return () => window.removeEventListener(TRACKING_HOME_EVENT, clearSearch);
+  }, []);
 
   useEffect(() => {
     const hasActiveCooldown = Object.values(resendCooldowns).some((seconds) => seconds > 0);
