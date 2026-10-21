@@ -128,3 +128,28 @@ body {
     animation: none;
   }
 }
+
+@keyframes timeline-line-fill {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
+.timeline-line-fill {
+  animation: timeline-line-fill 650ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes timeline-step-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.06); }
+}
+
+.timeline-step-pulse {
+  animation: timeline-step-pulse 1.8s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .timeline-line-fill,
+  .timeline-step-pulse {
+    animation: none;
+  }
+}
