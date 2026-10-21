@@ -251,6 +251,7 @@ const variables: Record<string, string> = {
       batch === "Color" ? order.color_scans_wetransfer_link : order.bw_scans_wetransfer_link;
     const pending = pendingBatchLabel(order, batch);
     variables.batch_label = batch === "Color" ? "Color" : "Black & White";
+    variables.scan_type = batch === "Color" ? "color" : "B&W";
     variables.wetransfer_link = batchLink ?? "";
     variables.pending_batch_label = pending;
     variables.partial_message =
