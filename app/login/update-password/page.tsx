@@ -8,6 +8,7 @@ import { createClient } from "@/lib/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2, AlertCircle, CheckCircle } from "lucide-react";
+import PublicHeader from "@/components/PublicHeader";
 import WindowFrame from "@/components/WindowFrame";
 
 const fieldClass =
@@ -73,22 +74,23 @@ export default function UpdatePasswordPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#FFF6D3] text-neutral-900">
-      <main className="mx-auto flex min-h-screen max-w-lg flex-col justify-center px-4 py-12">
+    <div className="flex min-h-screen flex-col bg-[#FFF6D3] font-jetbrains text-neutral-900">
+      <PublicHeader heading="p" />
+      <main className="mx-auto flex w-full max-w-lg flex-1 flex-col justify-center px-4 pb-12">
         <WindowFrame title="Set new password" titleAs="h1" bodyClassName="p-6 sm:p-8">
           <div className="mb-6 flex items-center gap-3">
             <Image src="/logo.png" alt="Yours Durham" width={44} height={44} className="h-11 w-11 rounded-xl object-cover" />
             <div>
               <p className="font-jetbrains text-lg font-bold text-neutral-900">Yours Durham</p>
-              <p className="text-xs text-slate-600">Film Lab Tracker</p>
+              <p className="text-base leading-relaxed text-neutral-900">Film Lab Tracker</p>
             </div>
           </div>
-          <p className="mb-6 text-sm text-slate-600">Choose a new password for your account</p>
+          <p className="mb-6 text-base leading-relaxed text-neutral-900">Choose a new password for your account</p>
 
           {success ? (
             <div className="flex items-start gap-2 rounded-xl border-2 border-neutral-900 bg-[#A1CC93]/40 p-3">
               <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-neutral-900" />
-              <p className="text-sm text-neutral-900">Password updated! Redirecting to dashboard...</p>
+              <p className="text-base leading-relaxed text-neutral-900">Password updated! Redirecting to dashboard...</p>
             </div>
           ) : sessionState === "checking" ? (
             <div className="flex items-center justify-center py-8">
@@ -98,7 +100,7 @@ export default function UpdatePasswordPage() {
             <div className="space-y-4">
               <div className="flex items-start gap-2 rounded-xl border-2 border-neutral-900 bg-[#FFF6D3] p-3">
                 <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-neutral-900" />
-                <p className="text-sm text-neutral-900">
+                <p className="text-base leading-relaxed text-neutral-900">
                   This reset link is invalid or has expired. Request a new one and open it on this device.
                 </p>
               </div>
@@ -141,7 +143,7 @@ export default function UpdatePasswordPage() {
               {error && (
                 <div className="flex items-start gap-2 rounded-xl border-2 border-neutral-900 bg-[#FFF6D3] p-3">
                   <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-neutral-900" />
-                  <p className="text-sm text-neutral-900">{error}</p>
+                  <p className="text-base leading-relaxed text-neutral-900">{error}</p>
                 </div>
               )}
 

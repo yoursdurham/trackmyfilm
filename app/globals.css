@@ -1,6 +1,7 @@
 @import "tailwindcss";
 
 @theme inline {
+  --font-jetbrains: "JetBrains Mono", "JetBrains Mono Fallback", ui-monospace, SFMono-Regular, Menlo, monospace;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -49,11 +50,6 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: sans-serif;
-}
-
-/* Public-page headings. The variable is set on the root document. */
-.font-jetbrains {
-  font-family: var(--font-jetbrains), ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
 @layer base {

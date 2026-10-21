@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import Link from "next/link";
+import PublicHeader from "@/components/PublicHeader";
 import WindowFrame from "@/components/WindowFrame";
 
 const primaryButton =
@@ -22,12 +23,13 @@ export default function PublicErrorScreen({
   }, [error]);
 
   return (
-    <div className="min-h-screen bg-[#FFF6D3] text-neutral-900">
-      <main className="mx-auto flex min-h-screen max-w-lg flex-col justify-center px-4 py-12">
+    <div className="flex min-h-screen flex-col bg-[#FFF6D3] font-jetbrains text-neutral-900">
+      <PublicHeader heading="p" />
+      <main className="mx-auto flex w-full max-w-lg flex-1 flex-col justify-center px-4 pb-12">
         <WindowFrame title="Something went wrong" titleAs="h1" bodyClassName="p-6 sm:p-8">
-          <p className="text-slate-600">Please try again in a moment.</p>
+          <p className="text-base leading-relaxed text-neutral-900">Please try again in a moment.</p>
           {error.digest ? (
-            <p className="mt-3 font-jetbrains text-xs text-slate-500">Reference {error.digest}</p>
+            <p className="mt-3 font-jetbrains text-sm leading-relaxed text-neutral-800">Reference {error.digest}</p>
           ) : null}
           <button type="button" onClick={() => retry()} className={primaryButton}>
             Try again
