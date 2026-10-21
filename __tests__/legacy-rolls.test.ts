@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  LEGACY_2026_SHEET_DROPOFFS,
   LEGACY_DROPOFF_COUNT,
   LEGACY_ROLLS_PER_DROPOFF,
   countFilmRollsDeveloped,
@@ -14,6 +15,11 @@ describe("legacy drop-off rolls", () => {
     expect(LEGACY_ROLLS_PER_DROPOFF).toBe(1.5);
     expect(legacyRollsExact()).toBe(1444.5);
     expect(legacyRollsRounded()).toBe(1445);
+  });
+
+  it("keeps the 2026 sheet drop-offs separate from the all-time roll estimate", () => {
+    expect(LEGACY_2026_SHEET_DROPOFFS).toBe(479);
+    expect(totalFilmRollsDeveloped([], true)).toBe(1445);
   });
 
   it("counts stored rolls and leaves the legacy estimate out", () => {

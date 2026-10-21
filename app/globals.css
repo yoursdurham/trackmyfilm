@@ -51,6 +51,11 @@ body {
   font-family: sans-serif;
 }
 
+/* Public-page headings. The variable is set on the root document. */
+.font-jetbrains {
+  font-family: var(--font-jetbrains), ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
 @layer base {
   * {
     border-color: var(--border);

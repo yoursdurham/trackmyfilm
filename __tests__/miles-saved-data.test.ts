@@ -1,0 +1,72 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+const { mockCount, cacheOptions } = vi.hoisted(() => ({
+  mockCount: vi.fn(),
+  cacheOptions: { revalidate: undefined as number | undefined, keys: undefined as string[] | undefined },
+}));
+
+vi.mock("next/cache", () => ({
+  unstable_cache: (fn: () => Promise<unknown>, keys: string[], opts: { revalidate?: number }) => {
+    cacheOptions.keys = keys;
+    cacheOptions.revalidate = opts.revalidate;
+    return fn;
+  },
+}));
+
+vi.mock("@/lib/db", () => ({
+  countFilmOrdersCreatedInRange: (...args: unknown[]) => mockCount(...args),
+}));
+
+import { getCachedPublicMilesSaved, loadPublicMilesSaved } from "@/lib/miles-saved-data";
+
+const NOW = new Date("2026-10-21T18:41:00.000Z");
+
+describe("public miles saved loader", () => {
+  beforeEach(() => {
+    mockCount.mockReset();
+    mockCount.mockResolvedValue(681);
+    vi.unstubAllEnvs();
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.useRealTimers();
+  });
+
+  it("caches the count for an hour and returns miles, laps, and year only", async () => {
+    const result = await loadPublicMilesSaved(NOW);
+
+    expect(cacheOptions.revalidate).toBe(3600);
+    expect(cacheOptions.keys).toEqual(["public-miles-saved"]);
+    expect(mockCount).toHaveBeenCalledTimes(1);
+    expect(mockCount).toHaveBeenCalledWith(
+      "2026-01-01T05:00:00.000Z",
+      "2027-01-01T05:00:00.000Z",
+    );
+    expect(result).toEqual({ miles: 34464, laps: 34464 / 24901, year: 2026 });
+    expect(result).not.toHaveProperty("ordersCreated");
+    expect(result).not.toHaveProperty("trips");
+  });
+
+  it("uses a non-production preview count and ignores it in production", async () => {
+    vi.stubEnv("MILES_SAVED_PREVIEW_ORDERS", "681");
+    mockCount.mockResolvedValue(0);
+    const preview = await loadPublicMilesSaved(NOW);
+    expect(preview.miles).toBe(34464);
+    expect(mockCount).not.toHaveBeenCalled();
+
+    vi.stubEnv("NODE_ENV", "production");
+    mockCount.mockResolvedValue(681);
+    const production = await loadPublicMilesSaved(NOW);
+    expect(production.miles).toBe(34464);
+    expect(mockCount).toHaveBeenCalledTimes(1);
+  });
+
+  it("reads through the hourly cache wrapper", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+    const cached = await getCachedPublicMilesSaved();
+    expect(cached.miles).toBe(34464);
+    expect(cached.year).toBe(2026);
+  });
+});

@@ -17,6 +17,14 @@
 export const LEGACY_DROPOFF_COUNT = 963;
 export const LEGACY_ROLLS_PER_DROPOFF = 1.5;
 
+/**
+ * Sheet drop-offs from Jan 1 through Apr 24, 2026 only.
+ * The first trackmyfilm.com order is Apr 25, so this fills that gap for the
+ * public miles-saved figure. It is not added to roll totals. Names, emails,
+ * and dates are not stored.
+ */
+export const LEGACY_2026_SHEET_DROPOFFS = 479;
+
 export interface DevelopedRollSource {
   roll_count?: number | null;
   roll_details?: readonly unknown[] | null;

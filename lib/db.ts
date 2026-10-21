@@ -75,6 +75,25 @@ export async function getFilmMetricsOrders(now = new Date()): Promise<FilmOrder[
 }
 
 /**
+ * How many film orders were created in [startIso, endIso).
+ * Returns a count only. `head: true` so the response has no order rows.
+ *
+ * On Hold stays in the count. Volume totals (customer order counts, report
+ * roll totals) keep parked orders, and a parked drop-off still saved the
+ * customer the drive to Raleigh. Averages and "in process" totals leave
+ * On Hold out; this figure is a drop-off count, not an average.
+ */
+export async function countFilmOrdersCreatedInRange(startIso: string, endIso: string): Promise<number> {
+  const { count, error } = await getSupabase()
+    .from("film_orders")
+    .select("id", { count: "exact", head: true })
+    .gte("created_at", startIso)
+    .lt("created_at", endIso);
+  if (error) throw new Error(error.message);
+  return count ?? 0;
+}
+
+/**
  * In-process orders, plus scans sent in the last 36 hours so today's LANDED
  * rows survive a timezone boundary. Older scans-sent orders are left out.
  */
