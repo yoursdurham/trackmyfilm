@@ -130,7 +130,7 @@ function OrderTimeline({
   const timestampMap = buildTimestampMap(statusHistory);
 
   return (
-    <div className="relative mx-auto mb-8 max-w-2xl px-2 sm:px-6">
+    <div className="relative mx-auto mb-8 w-full min-w-0 max-w-2xl px-0 sm:px-6">
       <div className="absolute left-[16.666%] right-[16.666%] top-[18px] z-0 flex -translate-y-1/2 sm:top-6">
         {steps.slice(0, -1).map((step, index) => (
           <div
@@ -142,7 +142,7 @@ function OrderTimeline({
         ))}
       </div>
 
-      <div className="relative z-10 grid grid-cols-3">
+      <div className="relative z-10 grid w-full min-w-0 grid-cols-3">
         {steps.map((step, index) => {
           const Icon = step.icon;
           const isActive = index <= currentIndex;
@@ -348,7 +348,7 @@ export default function TrackingHome({ milesSaved }: { milesSaved: ReactNode }) 
           </h1>
         </div>
       </header>
-      <main className="mx-auto max-w-5xl px-4 pb-10 sm:px-6 lg:px-8">
+      <main className="mx-auto w-full min-w-0 max-w-5xl overflow-x-clip px-4 pb-10 sm:px-6 lg:px-8">
         <WindowFrame
           title="Enter an order number or the email on the order."
           className="mb-14"
@@ -425,7 +425,7 @@ export default function TrackingHome({ milesSaved }: { milesSaved: ReactNode }) 
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
-              className="mb-14"
+              className="mb-14 w-full min-w-0 max-w-full"
             >
               <WindowFrame title="Search unavailable" titleAs="h3" bodyClassName="px-6 py-10 text-center">
                 <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-[#DDB1B1]">
@@ -439,7 +439,7 @@ export default function TrackingHome({ milesSaved }: { milesSaved: ReactNode }) 
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
-              className="mb-14"
+              className="mb-14 w-full min-w-0 max-w-full"
             >
               <WindowFrame title="No orders found" titleAs="h3" bodyClassName="px-6 py-10 text-center">
                 <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-[#C5AED7]">
@@ -459,7 +459,7 @@ export default function TrackingHome({ milesSaved }: { milesSaved: ReactNode }) 
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
-              className="space-y-6"
+              className="flex w-full min-w-0 max-w-full flex-col gap-6"
             >
               {customerName ? (
                 <p className="font-jetbrains text-base font-bold text-neutral-900">
@@ -467,6 +467,7 @@ export default function TrackingHome({ milesSaved }: { milesSaved: ReactNode }) 
                 </p>
               ) : null}
 
+              <div className="flex w-full min-w-0 max-w-full flex-col gap-12">
               {orders.map((order) => {
                 const processOnlyOrder = order.process_only;
                 const partialProgress = order.scan_progress;
@@ -477,22 +478,21 @@ export default function TrackingHome({ milesSaved }: { milesSaved: ReactNode }) 
                   key={order.id}
                   title={`Order #${order.order_number}`}
                   titleAs="h2"
-                  bodyClassName="p-6"
+                  className="w-full min-w-0 max-w-full"
+                  bodyClassName="p-4 sm:p-6"
+                  trailing={
+                    <span
+                      className={`inline-flex max-w-full whitespace-nowrap rounded-full px-3 py-1 text-center font-jetbrains text-xs font-bold leading-tight sm:px-4 sm:py-1.5 sm:text-sm ${getStatusBadgeClass(
+                        order.status,
+                      )}`}
+                    >
+                      {order.status}
+                    </span>
+                  }
                 >
-                    <div className="mb-6 flex items-start justify-between gap-4">
-                      <div>
-                        {order.first_name ? (
-                          <p className="font-jetbrains text-lg font-bold text-neutral-900">{order.first_name}</p>
-                        ) : null}
-                      </div>
-                      <div
-                        className={`rounded-full px-4 py-2 font-jetbrains text-sm font-bold ${getStatusBadgeClass(
-                          order.status
-                        )}`}
-                      >
-                        {order.status}
-                      </div>
-                    </div>
+                    {order.first_name ? (
+                      <p className="mb-6 font-jetbrains text-lg font-bold text-neutral-900">{order.first_name}</p>
+                    ) : null}
 
                     {order.status === "On Hold" ? (
                       <div className="mb-6 rounded-xl border-2 border-neutral-900 bg-[#FFF6D3] px-4 py-3 text-center font-jetbrains text-sm font-bold text-neutral-900">
@@ -706,22 +706,23 @@ export default function TrackingHome({ milesSaved }: { milesSaved: ReactNode }) 
                 </WindowFrame>
                 );
               })}
+              </div>
             </motion.div>
           ) : null}
         </AnimatePresence>
 
-        {milesSaved}
+        {hasSearched ? null : milesSaved}
 
         <div className="mb-10 mt-12">
           <h2 className="mb-8 text-center font-jetbrains text-2xl font-bold tracking-tight text-neutral-900 sm:text-3xl">
             Explore Our Services
           </h2>
-          <div className="grid gap-6 md:grid-cols-3">
+          <div className="grid w-full min-w-0 grid-cols-1 gap-6 md:grid-cols-3">
             <a
               href="https://www.yoursdurham.com/develop"
               target="_blank"
               rel="noopener noreferrer"
-              className="block rounded-[1.7rem] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900 focus-visible:ring-offset-2 focus-visible:ring-offset-[#FFF6D3]"
+              className="block min-w-0 rounded-[1.7rem] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900 focus-visible:ring-offset-2 focus-visible:ring-offset-[#FFF6D3]"
             >
               <WindowFrame
                 title="Film Developing"
@@ -742,7 +743,7 @@ export default function TrackingHome({ milesSaved }: { milesSaved: ReactNode }) 
               href="https://www.yoursdurham.com/shop-now"
               target="_blank"
               rel="noopener noreferrer"
-              className="block rounded-[1.7rem] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900 focus-visible:ring-offset-2 focus-visible:ring-offset-[#FFF6D3]"
+              className="block min-w-0 rounded-[1.7rem] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900 focus-visible:ring-offset-2 focus-visible:ring-offset-[#FFF6D3]"
             >
               <WindowFrame
                 title="Shop Film"
@@ -761,7 +762,7 @@ export default function TrackingHome({ milesSaved }: { milesSaved: ReactNode }) 
 
             <a
               href="mailto:hello@yoursdurham.com"
-              className="block rounded-[1.7rem] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900 focus-visible:ring-offset-2 focus-visible:ring-offset-[#FFF6D3]"
+              className="block min-w-0 rounded-[1.7rem] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900 focus-visible:ring-offset-2 focus-visible:ring-offset-[#FFF6D3]"
             >
               <WindowFrame
                 title="Need help?"
