@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 type WindowFrameProps = {
   title: ReactNode;
   /** Heading level for the title bar. Use "p" when the page already has the heading. */
-  titleAs?: "p" | "h2" | "h3";
+  titleAs?: "p" | "h1" | "h2" | "h3";
   titleId?: string;
   className?: string;
   bodyClassName?: string;

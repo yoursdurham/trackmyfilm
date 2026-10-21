@@ -18,8 +18,6 @@ import {
   Printer,
   Search,
 } from "lucide-react";
-import Image from "next/image";
-import { Card, CardContent } from "@/components/ui/card";
 import WindowFrame from "@/components/WindowFrame";
 import { Input } from "@/components/ui/input";
 import FilmProcessBadge from "@/components/FilmProcessBadge";
@@ -54,26 +52,26 @@ const statusSteps: StatusStep[] = [
   {
     status: "Received by Yours",
     icon: Clock,
-    activeBg: "bg-[var(--accent-tan)]",
-    activeRing: "ring-[var(--accent-tan)]/35",
-    activeText: "text-[#A77B43]",
-    activeLine: "bg-[var(--accent-tan)]",
+    activeBg: "bg-[#DDB1B1]",
+    activeRing: "ring-[#DDB1B1]/70",
+    activeText: "text-neutral-900",
+    activeLine: "bg-[#DDB1B1]",
   },
   {
     status: "Received at Lab",
     icon: Package,
-    activeBg: "bg-[var(--accent-purple)]",
-    activeRing: "ring-[var(--accent-purple)]/35",
-    activeText: "text-[#806A91]",
-    activeLine: "bg-[var(--accent-purple)]",
+    activeBg: "bg-[#C5AED7]",
+    activeRing: "ring-[#C5AED7]/70",
+    activeText: "text-neutral-900",
+    activeLine: "bg-[#C5AED7]",
   },
   {
     status: "Scans Sent",
     icon: CheckCircle,
-    activeBg: "bg-[var(--accent-green)]",
-    activeRing: "ring-[var(--accent-green)]/35",
-    activeText: "text-[#5E8068]",
-    activeLine: "bg-[var(--accent-green)]",
+    activeBg: "bg-[#A1CC93]",
+    activeRing: "ring-[#A1CC93]/70",
+    activeText: "text-neutral-900",
+    activeLine: "bg-[#A1CC93]",
   },
 ];
 
@@ -83,10 +81,10 @@ const processOnlyStatusSteps: StatusStep[] = [
   {
     status: "Ready for Pickup",
     icon: Hand,
-    activeBg: "bg-amber-500",
-    activeRing: "ring-amber-500/35",
-    activeText: "text-amber-700",
-    activeLine: "bg-amber-500",
+    activeBg: "bg-[#A1CC93]",
+    activeRing: "ring-[#A1CC93]/70",
+    activeText: "text-neutral-900",
+    activeLine: "bg-[#A1CC93]",
   },
 ];
 
@@ -104,17 +102,17 @@ function buildTimestampMap(statusHistory?: StatusHistoryEntry[]) {
 function getStatusBadgeClass(status: OrderStatus) {
   switch (status) {
     case "Received by Yours":
-      return "bg-[var(--accent-tan)] text-[#A77B43]";
+      return "bg-[#DDB1B1] text-neutral-900";
     case "Received at Lab":
-      return "bg-[var(--accent-purple)] text-white";
+      return "bg-[#C5AED7] text-neutral-900";
     case "Ready for Pickup":
-      return "bg-amber-500 text-white";
+      return "bg-[#A1CC93] text-neutral-900";
     case "Scans Sent":
-      return "bg-[var(--accent-green)] text-white";
+      return "bg-[#A1CC93] text-neutral-900";
     case "On Hold":
-      return "bg-stone-200 text-stone-700";
+      return "bg-[#FFF6D3] text-neutral-900 ring-1 ring-neutral-900";
     default:
-      return "bg-slate-100 text-slate-700";
+      return "bg-white text-neutral-900 ring-1 ring-neutral-900";
   }
 }
 
@@ -160,13 +158,13 @@ function OrderTimeline({
               >
                 <Icon
                   className={`h-4 w-4 sm:h-6 sm:w-6 ${
-                    isActive ? "text-white" : "text-slate-400"
+                    isActive ? "text-neutral-900" : "text-slate-500"
                   }`}
                 />
               </div>
               <p
-                className={`mt-2 max-w-[92px] text-center text-xs leading-tight sm:max-w-[120px] ${
-                  isActive ? `${step.activeText} font-medium` : "text-slate-400"
+                className={`mt-2 max-w-[92px] text-center font-jetbrains text-xs leading-tight sm:max-w-[120px] ${
+                  isActive ? `${step.activeText} font-bold` : "text-slate-500"
                 }`}
               >
                 {step.status}
@@ -301,14 +299,6 @@ export default function TrackingHome({ milesSaved }: { milesSaved: ReactNode }) 
     if (normalizedEmailTerm) handleTrackEmail();
   };
 
-  const handleReset = () => {
-    setOrderDraft("");
-    setEmailDraft("");
-    setManualSearch("cleared");
-    setResendMessages({});
-    setResendCooldowns({});
-  };
-
   const handleResendDownloadLink = async (order: PublicTrackingOrder) => {
     if (resendInFlight.current.has(order.id) || (resendCooldowns[order.id] ?? 0) > 0) return;
 
@@ -350,20 +340,6 @@ export default function TrackingHome({ milesSaved }: { milesSaved: ReactNode }) 
     <div className="min-h-screen bg-[#FFF6D3]">
       <header className="bg-[#FFF6D3]">
         <div className="mx-auto max-w-5xl px-4 pb-10 pt-10 text-center sm:px-6 lg:px-8">
-          <button
-            type="button"
-            onClick={handleReset}
-            aria-label="Reset tracking search"
-            className="mx-auto mb-4 block rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900 focus-visible:ring-offset-2 focus-visible:ring-offset-[#FFF6D3]"
-          >
-            <Image
-              src="/logo.png"
-              alt="Yours Durham"
-              width={48}
-              height={48}
-              className="h-12 w-12 rounded-xl"
-            />
-          </button>
           <h1 className="font-jetbrains text-sm font-bold tracking-tight text-neutral-900 sm:text-xl sm:whitespace-nowrap">
             Track My Film
             <span className="ml-1 font-normal text-slate-600 sm:ml-2">
@@ -437,40 +413,46 @@ export default function TrackingHome({ milesSaved }: { milesSaved: ReactNode }) 
 
         <AnimatePresence mode="wait">
           {isLoading ? (
-            <div className="flex items-center justify-center py-20">
-              <Loader2 className="h-8 w-8 animate-spin text-[#C9A34B]" />
-            </div>
+            <WindowFrame
+              title="Looking up your order"
+              className="mb-14"
+              bodyClassName="flex items-center justify-center px-6 py-16"
+            >
+              <Loader2 className="h-8 w-8 animate-spin text-neutral-900" />
+            </WindowFrame>
           ) : isError ? (
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
-              className="py-20 text-center"
+              className="mb-14"
             >
-              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-red-50">
-                <Film className="h-8 w-8 text-red-300" />
-              </div>
-              <h3 className="mb-1 text-lg font-medium text-slate-700">Search unavailable</h3>
-              <p className="text-slate-500">Please try again in a moment.</p>
+              <WindowFrame title="Search unavailable" titleAs="h3" bodyClassName="px-6 py-10 text-center">
+                <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-[#DDB1B1]">
+                  <Film className="h-8 w-8 text-neutral-900" />
+                </div>
+                <p className="text-slate-600">Please try again in a moment.</p>
+              </WindowFrame>
             </motion.div>
           ) : hasSearched && orders.length === 0 ? (
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
-              className="py-20 text-center"
+              className="mb-14"
             >
-              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-slate-100">
-                <Film className="h-8 w-8 text-slate-400" />
-              </div>
-              <h3 className="mb-1 text-lg font-medium text-slate-700">No orders found</h3>
-              <p className="text-slate-500">
-                {committed?.type === "email"
-                  ? "No orders found for this email address"
-                  : committed?.type === "order" && committed.email
-                    ? "No orders found. Check the order number and email, then try again."
-                    : "Order number not found. Please check and try again."}
-              </p>
+              <WindowFrame title="No orders found" titleAs="h3" bodyClassName="px-6 py-10 text-center">
+                <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-[#C5AED7]">
+                  <Film className="h-8 w-8 text-neutral-900" />
+                </div>
+                <p className="text-slate-600">
+                  {committed?.type === "email"
+                    ? "No orders found for this email address"
+                    : committed?.type === "order" && committed.email
+                      ? "No orders found. Check the order number and email, then try again."
+                      : "Order number not found. Please check and try again."}
+                </p>
+              </WindowFrame>
             </motion.div>
           ) : orders.length > 0 ? (
             <motion.div
@@ -480,7 +462,7 @@ export default function TrackingHome({ milesSaved }: { milesSaved: ReactNode }) 
               className="space-y-6"
             >
               {customerName ? (
-                <p className="font-medium text-slate-600">
+                <p className="font-jetbrains text-base font-bold text-neutral-900">
                   Showing orders for <strong>{customerName}</strong>
                 </p>
               ) : null}
@@ -491,22 +473,20 @@ export default function TrackingHome({ milesSaved }: { milesSaved: ReactNode }) 
                 const customerOrderNote = orderNoteForCustomerDisplay(order.notes);
 
                 return (
-                <Card
+                <WindowFrame
                   key={order.id}
-                  className="overflow-hidden border border-[var(--border-soft)] bg-[var(--card-bg)] shadow-sm ring-0 transition hover:shadow-md"
+                  title={`Order #${order.order_number}`}
+                  titleAs="h2"
+                  bodyClassName="p-6"
                 >
-                  <CardContent className="p-6">
                     <div className="mb-6 flex items-start justify-between gap-4">
                       <div>
-                        <h2 className="mb-1 text-xl font-bold text-slate-800">
-                          Order #{order.order_number}
-                        </h2>
                         {order.first_name ? (
-                          <p className="text-slate-600">{order.first_name}</p>
+                          <p className="font-jetbrains text-lg font-bold text-neutral-900">{order.first_name}</p>
                         ) : null}
                       </div>
                       <div
-                        className={`rounded-full px-4 py-2 text-sm font-medium ${getStatusBadgeClass(
+                        className={`rounded-full px-4 py-2 font-jetbrains text-sm font-bold ${getStatusBadgeClass(
                           order.status
                         )}`}
                       >
@@ -515,7 +495,7 @@ export default function TrackingHome({ milesSaved }: { milesSaved: ReactNode }) 
                     </div>
 
                     {order.status === "On Hold" ? (
-                      <div className="mb-6 rounded-lg border border-stone-200 bg-stone-50 px-4 py-3 text-center text-sm font-medium text-slate-700">
+                      <div className="mb-6 rounded-xl border-2 border-neutral-900 bg-[#FFF6D3] px-4 py-3 text-center font-jetbrains text-sm font-bold text-neutral-900">
                         {PUBLIC_ON_HOLD_MESSAGE}
                       </div>
                     ) : null}
@@ -527,8 +507,8 @@ export default function TrackingHome({ milesSaved }: { milesSaved: ReactNode }) 
                     />
 
                     {partialProgress.length > 0 && order.status !== "Scans Sent" ? (
-                      <div className="mt-6 rounded-lg border border-purple-100 bg-purple-50/60 px-4 py-3 text-sm text-slate-700">
-                        <p className="mb-2 font-semibold text-purple-900">Scan delivery progress</p>
+                      <div className="mt-6 rounded-xl border-2 border-neutral-900 bg-[#C5AED7]/30 px-4 py-3 text-sm text-neutral-900">
+                        <p className="mb-2 font-jetbrains font-bold">Scan delivery progress</p>
                         <ul className="space-y-1.5">
                           {partialProgress.map((item) => (
                             <li key={item.batch}>
@@ -553,24 +533,24 @@ export default function TrackingHome({ milesSaved }: { milesSaved: ReactNode }) 
 
                     <div className="grid grid-cols-1 gap-4 border-t border-slate-100 pt-6 sm:grid-cols-2">
                       <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-100">
-                          <Calendar className="h-5 w-5 text-slate-600" />
+                        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#DDB1B1]">
+                          <Calendar className="h-5 w-5 text-neutral-900" />
                         </div>
                         <div>
-                          <p className="text-xs text-slate-500">Dropped off</p>
-                          <p className="text-sm font-medium text-slate-800">
+                          <p className="font-jetbrains text-xs font-bold text-neutral-900">Dropped off</p>
+                          <p className="text-sm font-medium text-neutral-900">
                             {format(new Date(order.dropoff_date), "MMM d, yyyy")}
                           </p>
                         </div>
                       </div>
 
                       <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-100">
-                          <Layers className="h-5 w-5 text-slate-600" />
+                        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#A1CC93]">
+                          <Layers className="h-5 w-5 text-neutral-900" />
                         </div>
                         <div>
-                          <p className="text-xs text-slate-500">Number of rolls</p>
-                          <p className="text-sm font-medium text-slate-800">
+                          <p className="font-jetbrains text-xs font-bold text-neutral-900">Number of rolls</p>
+                          <p className="text-sm font-medium text-neutral-900">
                             {order.roll_count} roll{order.roll_count > 1 ? "s" : ""}
                           </p>
                         </div>
@@ -578,7 +558,7 @@ export default function TrackingHome({ milesSaved }: { milesSaved: ReactNode }) 
                     </div>
                     {order.roll_details && order.roll_details.length > 0 ? (
                       <div className="mt-4 space-y-2 border-t border-slate-100 pt-4">
-                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        <p className="font-jetbrains text-xs font-bold uppercase tracking-wide text-neutral-900">
                           Film Details
                         </p>
                         {order.roll_details.map((roll, index) => (
@@ -589,7 +569,7 @@ export default function TrackingHome({ milesSaved }: { milesSaved: ReactNode }) 
                             <span className="min-w-[44px] font-medium text-slate-600">
                               Roll {index + 1}
                             </span>
-                            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
+                            <span className="rounded-full bg-[#FFF6D3] px-2 py-0.5 text-xs font-bold text-neutral-900">
                               {roll.film_type}
                             </span>
                             <FilmProcessBadge
@@ -597,17 +577,17 @@ export default function TrackingHome({ milesSaved }: { milesSaved: ReactNode }) 
                               className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700"
                             />
                             {roll.scan_size ? (
-                              <span className="rounded-full bg-violet-100 px-2 py-0.5 text-xs font-medium text-violet-700">
+                              <span className="rounded-full bg-[#C5AED7] px-2 py-0.5 text-xs font-bold text-neutral-900">
                                 {roll.scan_size}
                               </span>
                             ) : null}
                             {roll.film_stock ? (
-                              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
+                              <span className="rounded-full bg-white px-2 py-0.5 text-xs font-medium text-neutral-900 ring-1 ring-neutral-900">
                                 {roll.film_stock}
                               </span>
                             ) : null}
                             {roll.prints_4x6 ? (
-                              <span className="flex items-center gap-1 rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700">
+                              <span className="flex items-center gap-1 rounded-full bg-[#A1CC93] px-2 py-0.5 text-xs font-bold text-neutral-900">
                                 <Printer className="h-3 w-3" />
                                 4x6 Prints
                               </span>
@@ -617,12 +597,12 @@ export default function TrackingHome({ milesSaved }: { milesSaved: ReactNode }) 
                       </div>
                     ) : order.film_type || order.film_process ? (
                       <div className="mt-4 space-y-2 border-t border-slate-100 pt-4">
-                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        <p className="font-jetbrains text-xs font-bold uppercase tracking-wide text-neutral-900">
                           Film Details
                         </p>
                         <div className="flex flex-wrap gap-2">
                           {order.film_type ? (
-                            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
+                            <span className="rounded-full bg-[#FFF6D3] px-2 py-0.5 text-xs font-bold text-neutral-900">
                               {order.film_type}
                             </span>
                           ) : null}
@@ -633,12 +613,12 @@ export default function TrackingHome({ milesSaved }: { milesSaved: ReactNode }) 
                             />
                           ) : null}
                           {order.film_stock ? (
-                            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
+                            <span className="rounded-full bg-white px-2 py-0.5 text-xs font-medium text-neutral-900 ring-1 ring-neutral-900">
                               {order.film_stock}
                             </span>
                           ) : null}
                           {order.prints_4x6 ? (
-                            <span className="flex items-center gap-1 rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700">
+                            <span className="flex items-center gap-1 rounded-full bg-[#A1CC93] px-2 py-0.5 text-xs font-bold text-neutral-900">
                               <Printer className="h-3 w-3" />
                               4x6 Prints
                             </span>
@@ -649,7 +629,7 @@ export default function TrackingHome({ milesSaved }: { milesSaved: ReactNode }) 
 
                     {customerOrderNote ? (
                       <div className="mt-4 space-y-2 border-t border-slate-100 pt-4">
-                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        <p className="font-jetbrains text-xs font-bold uppercase tracking-wide text-neutral-900">
                           Order notes
                         </p>
                         <p className="whitespace-pre-wrap text-sm text-slate-700">
@@ -666,7 +646,7 @@ export default function TrackingHome({ milesSaved }: { milesSaved: ReactNode }) 
                             href="https://www.yoursdurham.com/filmdev/4x6-prints"
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="flex items-center justify-center gap-2 rounded-lg bg-[var(--accent-purple)] px-4 py-3 font-medium text-white shadow-md transition-all hover:bg-[#6f5a94] hover:shadow-lg"
+                            className="flex items-center justify-center gap-2 rounded-xl bg-[#C5AED7] px-4 py-3 font-jetbrains text-sm font-bold text-neutral-900 transition-colors hover:bg-[#b79dce] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900 focus-visible:ring-offset-2"
                           >
                             <Printer className="h-5 w-5" />
                             Want to add prints?
@@ -676,14 +656,14 @@ export default function TrackingHome({ milesSaved }: { milesSaved: ReactNode }) 
                     })()}
 
                     {order.status === "Ready for Pickup" && processOnlyOrder ? (
-                      <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-center text-sm font-medium text-amber-800">
+                      <div className="mt-4 rounded-xl border-2 border-neutral-900 bg-[#FFF6D3] px-4 py-3 text-center font-jetbrains text-sm font-bold text-neutral-900">
                         Your negatives are ready. No scans are included with this order. Please check your email for pickup or delivery details.
                       </div>
                     ) : null}
 
                     {order.status === "Scans Sent" ? (
                       <div className="mt-4 space-y-3 border-t border-slate-100 pt-4">
-                        <div className="rounded-lg bg-[var(--accent-green)]/10 px-4 py-3 text-center text-sm font-medium text-[#5E8068]">
+                        <div className="rounded-xl bg-[#A1CC93]/40 px-4 py-3 text-center font-jetbrains text-sm font-bold text-neutral-900">
                           Your download link was sent to your email
                         </div>
                         <button
@@ -693,7 +673,7 @@ export default function TrackingHome({ milesSaved }: { milesSaved: ReactNode }) 
                             resendingOrderId === order.id ||
                             (resendCooldowns[order.id] ?? 0) > 0
                           }
-                          className="flex w-full items-center justify-center gap-2 rounded-lg border border-[var(--border-soft)] bg-white px-4 py-3 font-medium text-slate-700 shadow-sm transition-all hover:border-[var(--accent-green)]/40 hover:bg-[var(--accent-green)]/10 hover:text-[#5E8068] disabled:cursor-not-allowed disabled:opacity-60"
+                          className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-neutral-900 bg-white px-4 py-3 font-jetbrains text-sm font-bold text-neutral-900 transition-colors hover:bg-[#FFF6D3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
                         >
                           {resendingOrderId === order.id ? (
                             <Loader2 className="h-5 w-5 animate-spin" />
@@ -717,14 +697,13 @@ export default function TrackingHome({ milesSaved }: { milesSaved: ReactNode }) 
                     <div className="mt-4 border-t border-slate-100 pt-4">
                       <a
                         href={`mailto:hello@yoursdurham.com?subject=Order%20%23${order.order_number}`}
-                        className="flex items-center justify-center gap-2 rounded-lg bg-[var(--accent-green)] px-4 py-3 font-medium text-white shadow-md transition-all hover:bg-[#7D9E88] hover:shadow-lg"
+                        className="flex items-center justify-center gap-2 rounded-xl bg-[#A1CC93] px-4 py-3 font-jetbrains text-sm font-bold text-neutral-900 transition-colors hover:bg-[#8fbe80] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900 focus-visible:ring-offset-2"
                       >
                         <Mail className="h-5 w-5" />
                         Questions about this order?
                       </a>
                     </div>
-                  </CardContent>
-                </Card>
+                </WindowFrame>
                 );
               })}
             </motion.div>

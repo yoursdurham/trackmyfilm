@@ -51,7 +51,7 @@ body {
   font-family: sans-serif;
 }
 
-/* Homepage headings. The variable is set by next/font on the tracking page. */
+/* Public-page headings. The variable is set on the root document. */
 .font-jetbrains {
   font-family: var(--font-jetbrains), ui-monospace, SFMono-Regular, Menlo, monospace;
 }
