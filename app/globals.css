@@ -129,18 +129,6 @@ body {
   }
 }
 
-/* Homepage globe. Grid spin is continuous; rings draw once via inline transition. */
-@keyframes miles-globe-spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
-.miles-globe-spin {
-  transform-box: fill-box;
-  transform-origin: center;
-  animation: miles-globe-spin 22s linear infinite;
-}
-
 @keyframes timeline-line-fill {
   from { transform: scaleX(0); }
   to { transform: scaleX(1); }
@@ -160,7 +148,6 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .miles-globe-spin,
   .timeline-line-fill,
   .timeline-step-pulse {
     animation: none;

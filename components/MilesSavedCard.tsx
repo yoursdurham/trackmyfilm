@@ -53,7 +53,7 @@ function EarthGlobe({ cx, cy }: { cx: number; cy: number }) {
     <g>
       <circle cx={cx} cy={cy} r={r} fill={GLOBE} />
       <g clipPath="url(#miles-saved-globe-clip)">
-        <g className="miles-globe-spin" fill="none" stroke={GRID} strokeWidth="1.6">
+        <g fill="none" stroke={GRID} strokeWidth="1.6">
           <ellipse cx={cx} cy={cy} rx={r} ry={r * 0.28} />
           <ellipse cx={cx} cy={cy - r * 0.42} rx={r * 0.74} ry={r * 0.15} />
           <ellipse cx={cx} cy={cy + r * 0.42} rx={r * 0.74} ry={r * 0.15} />
