@@ -10,39 +10,48 @@ type PublicHeaderProps = {
 const COLORS = ["#DDB1B1", "#C5AED7", "#A1CC93"] as const;
 const WORDMARK = "Track My Film";
 
-const WORDMARK_WORDS = (() => {
-  const words: { word: string; letters: { char: string; color: string }[] }[] = [];
+/** User units. textLength matches this width so the phrase fills the card. */
+const MARK_WIDTH = 780;
+const MARK_HEIGHT = 118;
+const MARK_BASELINE = 90;
+
+const WORDMARK_GLYPHS = (() => {
+  const glyphs: { char: string; color: string; key: string }[] = [];
   let colorIndex = 0;
-  for (const word of WORDMARK.split(" ")) {
-    const letters = [];
-    for (const char of word) {
-      letters.push({ char, color: COLORS[colorIndex % COLORS.length] });
-      colorIndex += 1;
-    }
-    words.push({ word, letters });
+  for (const [index, char] of WORDMARK.split("").entries()) {
+    const color = char === " " ? "transparent" : COLORS[colorIndex % COLORS.length];
+    if (char !== " ") colorIndex += 1;
+    glyphs.push({ char, color, key: `${index}-${char}` });
   }
-  return words;
+  return glyphs;
 })();
 
 /** Lets the tracking page drop order results even when that search lives only in memory. */
 export const TRACKING_HOME_EVENT = "trackmyfilm-home";
 
-function WordmarkLetters() {
+function Wordmark() {
   return (
-    <span
+    <svg
+      viewBox={`0 0 ${MARK_WIDTH} ${MARK_HEIGHT}`}
+      className="block h-auto w-full overflow-visible"
       aria-hidden="true"
-      className="inline-flex max-w-full flex-wrap items-baseline justify-center gap-x-[0.28em] font-jetbrains text-[2.15rem] font-bold leading-none tracking-tight min-[400px]:text-[2.45rem] sm:text-5xl lg:text-6xl"
     >
-      {WORDMARK_WORDS.map(({ word, letters }) => (
-        <span key={word} className="inline-flex">
-          {letters.map((letter) => (
-            <span key={`${word}-${letter.char}`} style={{ color: letter.color }}>
-              {letter.char}
-            </span>
-          ))}
-        </span>
-      ))}
-    </span>
+      <text
+        x="0"
+        y={MARK_BASELINE}
+        textLength={MARK_WIDTH}
+        lengthAdjust="spacingAndGlyphs"
+        fontFamily="var(--font-jetbrains), ui-monospace, monospace"
+        fontSize="100"
+        fontWeight="700"
+      >
+        {WORDMARK_GLYPHS.map((glyph) => (
+          <tspan key={glyph.key} fill={glyph.color}>
+            {glyph.char}
+          </tspan>
+        ))}
+      </text>
+    </svg>
   );
 }
 
@@ -51,18 +60,18 @@ export default function PublicHeader({ heading = "h1" }: PublicHeaderProps) {
 
   return (
     <header className="bg-[#FFF6D3]">
-      <div className="mx-auto flex max-w-5xl flex-col items-center px-4 pb-8 pt-8 text-center sm:px-6 lg:px-8 lg:pb-10 lg:pt-10">
-        <Tag className="m-0 max-w-full">
+      <div className="mx-auto w-full max-w-5xl px-4 pb-8 pt-8 sm:px-6 lg:px-8 lg:pb-10 lg:pt-10">
+        <Tag className="m-0 w-full">
           <Link
             href="/"
             onClick={() => window.dispatchEvent(new Event(TRACKING_HOME_EVENT))}
-            className="rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900 focus-visible:ring-offset-2 focus-visible:ring-offset-[#FFF6D3]"
+            className="block w-full rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900 focus-visible:ring-offset-2 focus-visible:ring-offset-[#FFF6D3]"
           >
             <span className="sr-only">Track My Film</span>
-            <WordmarkLetters />
+            <Wordmark />
           </Link>
         </Tag>
-        <p className="mt-2 font-jetbrains text-sm font-normal leading-relaxed text-neutral-800 sm:text-base">
+        <p className="mt-2 text-center font-jetbrains text-sm font-normal leading-relaxed text-neutral-800 sm:text-base">
           A Project by Yours, Durham
         </p>
       </div>
