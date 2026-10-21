@@ -51,6 +51,11 @@ body {
   font-family: sans-serif;
 }
 
+/* Homepage headings. The variable is set by next/font on the tracking page. */
+.font-jetbrains {
+  font-family: var(--font-jetbrains), ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
 @layer base {
   * {
     border-color: var(--border);

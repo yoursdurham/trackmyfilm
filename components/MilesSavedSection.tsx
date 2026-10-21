@@ -5,6 +5,8 @@ import {
   type PublicMilesSaved,
 } from "@/lib/miles-saved";
 import { getCachedPublicMilesSaved } from "@/lib/miles-saved-data";
+import WindowFrame from "@/components/WindowFrame";
+import { cn } from "@/lib/utils";
 
 const GLOBE = "#A1CC93";
 const GRID = "#2A2A2A";
@@ -81,14 +83,14 @@ function ProgressRings({ cx, cy, laps }: { cx: number; cy: number; laps: number 
   );
 }
 
-function MilesSavedGlobe({ laps }: { laps: number }) {
+function MilesSavedGlobe({ laps, className }: { laps: number; className?: string }) {
   const ringCount = Math.max(1, lapRings(laps).slice(-4).length);
   const outer = FIRST_RING_R + (ringCount - 1) * RING_STEP + RING_STROKE / 2 + 6;
   const size = outer * 2;
   return (
     <svg
       viewBox={`0 0 ${size} ${size}`}
-      className="mx-auto mt-6 mb-7 w-[min(100%,17.5rem)]"
+      className={cn("mx-auto w-[min(100%,15rem)] lg:w-full", className)}
       aria-hidden="true"
     >
       <defs>
@@ -104,47 +106,40 @@ function MilesSavedGlobe({ laps }: { laps: number }) {
 
 function MilesSavedCard({ miles, laps, year }: { miles: number; laps: number; year: number }) {
   return (
-    <section aria-labelledby="miles-saved-heading" className="mx-auto mb-14 w-full max-w-[440px]">
-      <div className="overflow-hidden rounded-[1.7rem] border-2 border-neutral-900 bg-white">
-        <div className="relative flex items-center justify-center bg-[#E4C6C6] px-12 py-2.5">
-          <span className="absolute left-3.5 flex gap-1.5" aria-hidden="true">
-            <span className="size-2.5 rounded-full bg-[#C9B7C6]" />
-            <span className="size-2.5 rounded-full bg-[#E4D48A]" />
-            <span className="size-2.5 rounded-full bg-[#A9C99A]" />
-          </span>
-          <p className="text-[0.82rem] font-semibold tracking-wide text-neutral-900">
-            Yours, Durham · {year}
-          </p>
+    <section aria-labelledby="miles-saved-heading" className="mb-14 w-full">
+      <WindowFrame title={`Yours, Durham · ${year}`}>
+        <div className="flex flex-col items-center px-5 py-7 text-center sm:px-8 sm:py-8 lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(16rem,22rem)] lg:items-center lg:gap-x-10 lg:px-10 lg:py-9 lg:text-left">
+          <div className="order-1 w-full lg:col-start-1 lg:row-start-1">
+            <h2
+              id="miles-saved-heading"
+              className="font-jetbrains text-[1.45rem] font-bold tracking-tight text-neutral-900 sm:text-[1.7rem]"
+            >
+              Our customers saved
+            </h2>
+            <p className="mt-2 font-jetbrains text-[3.25rem] font-extrabold leading-none tracking-[-0.04em] text-neutral-950 tabular-nums sm:text-[4.25rem]">
+              {formatMiles(miles)}
+            </p>
+            <p className="mt-2 font-jetbrains text-[1.02rem] font-bold text-neutral-900 sm:text-[1.15rem]">
+              miles of driving to Raleigh
+            </p>
+            <p className="mt-1 text-[0.95rem] text-slate-600">{lapsCaption(laps)}</p>
+          </div>
+
+          <MilesSavedGlobe laps={laps} className="order-2 my-6 lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:my-0" />
+
+          <div className="order-3 w-full lg:col-start-1 lg:row-start-2 lg:mt-6">
+            <p className="font-jetbrains text-[1.2rem] font-bold tracking-tight text-neutral-900 sm:text-[1.35rem]">
+              Drop off in Durham.
+            </p>
+            <p className="mt-1 font-jetbrains text-[1.02rem] font-bold text-neutral-900 sm:text-[1.12rem]">
+              We drive it to the lab for you.
+            </p>
+            <p className="mx-auto mt-4 max-w-[42ch] text-[0.8rem] leading-relaxed text-slate-600 sm:text-[0.84rem] lg:mx-0">
+              Each drop-off saves a customer a ~32 mi round trip, minus our own twice-a-week lab runs.
+            </p>
+          </div>
         </div>
-
-        <div className="px-5 pb-7 pt-7 text-center sm:px-8 sm:pt-8">
-          <h2
-            id="miles-saved-heading"
-            className="text-[1.55rem] font-bold tracking-tight text-slate-900 sm:text-[1.8rem]"
-          >
-            Our customers saved
-          </h2>
-          <p className="mt-2 text-[3.6rem] font-black leading-none tracking-[-0.045em] text-neutral-950 tabular-nums sm:text-[4.75rem]">
-            {formatMiles(miles)}
-          </p>
-          <p className="mt-2 text-[1.05rem] font-bold text-slate-900 sm:text-[1.25rem]">
-            miles of driving to Raleigh
-          </p>
-          <p className="mt-1 text-[0.95rem] text-slate-500">{lapsCaption(laps)}</p>
-
-          <MilesSavedGlobe laps={laps} />
-
-          <p className="text-[1.28rem] font-bold tracking-tight text-slate-900 sm:text-[1.45rem]">
-            Drop off in Durham.
-          </p>
-          <p className="mt-1 text-[1.05rem] font-bold text-slate-900 sm:text-[1.2rem]">
-            We drive it to the lab for you.
-          </p>
-          <p className="mx-auto mt-5 max-w-[36ch] text-[0.8rem] leading-relaxed text-slate-500 sm:text-[0.84rem]">
-            Each drop-off saves a customer a ~32 mi round trip, minus our own twice-a-week lab runs.
-          </p>
-        </div>
-      </div>
+      </WindowFrame>
     </section>
   );
 }

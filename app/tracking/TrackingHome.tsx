@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import { Card, CardContent } from "@/components/ui/card";
+import WindowFrame from "@/components/WindowFrame";
 import { Input } from "@/components/ui/input";
 import FilmProcessBadge from "@/components/FilmProcessBadge";
 import {
@@ -346,14 +347,14 @@ export default function TrackingHome({ milesSaved }: { milesSaved: ReactNode }) 
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="bg-[#F7F3EC]">
+    <div className="min-h-screen bg-[#FFF6D3]">
+      <header className="bg-[#FFF6D3]">
         <div className="mx-auto max-w-5xl px-4 pb-10 pt-10 text-center sm:px-6 lg:px-8">
           <button
             type="button"
             onClick={handleReset}
             aria-label="Reset tracking search"
-            className="mx-auto mb-4 block rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-purple)] focus-visible:ring-offset-2"
+            className="mx-auto mb-4 block rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900 focus-visible:ring-offset-2 focus-visible:ring-offset-[#FFF6D3]"
           >
             <Image
               src="/logo.png"
@@ -363,34 +364,34 @@ export default function TrackingHome({ milesSaved }: { milesSaved: ReactNode }) 
               className="h-12 w-12 rounded-xl"
             />
           </button>
-          <h1 className="text-sm font-semibold tracking-tight text-slate-900 sm:text-xl sm:whitespace-nowrap">
+          <h1 className="font-jetbrains text-sm font-bold tracking-tight text-neutral-900 sm:text-xl sm:whitespace-nowrap">
             Track My Film
-            <span className="ml-1 font-normal text-slate-500 sm:ml-2">
+            <span className="ml-1 font-normal text-slate-600 sm:ml-2">
               - A Project by Yours, Durham
             </span>
           </h1>
         </div>
       </header>
       <main className="mx-auto max-w-5xl px-4 pb-10 sm:px-6 lg:px-8">
-        <Card className="mb-14 rounded-[24px] border border-[var(--border-soft)] bg-[var(--card-bg)] shadow-sm ring-0">
-          <CardContent className="p-6 sm:p-8">
-            <p className="mb-4 text-sm leading-relaxed text-slate-600">
-              Enter an order number or the email on the order.
-            </p>
+        <WindowFrame
+          title="Enter an order number or the email on the order."
+          className="mb-14"
+          bodyClassName="p-6 sm:p-8"
+        >
             <div className="mb-4 flex flex-col gap-3">
               <div className="relative w-full">
-                <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
+                <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-500" />
                 <Input
                   aria-label="Order number"
                   placeholder="Order number"
                   value={orderTerm}
                   onChange={(event) => setOrderDraft(event.target.value)}
                   onKeyDown={handleEnterKey}
-                  className="h-12 rounded-xl border-[#E1DDD6] bg-[var(--card-bg)] pl-11 text-sm shadow-none ring-0 focus-visible:border-[#B19FBF] focus-visible:ring-2 focus-visible:ring-[#B19FBF]/20 sm:text-base"
+                  className="h-12 rounded-xl border-neutral-300 bg-white pl-11 font-jetbrains text-sm text-neutral-900 shadow-none ring-0 focus-visible:border-neutral-900 focus-visible:ring-2 focus-visible:ring-[#C5AED7] sm:text-base"
                 />
               </div>
               <div className="relative w-full">
-                <Mail className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
+                <Mail className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-500" />
                 <Input
                   aria-label="Email address"
                   type="email"
@@ -398,7 +399,7 @@ export default function TrackingHome({ milesSaved }: { milesSaved: ReactNode }) 
                   value={emailTerm}
                   onChange={(event) => setEmailDraft(event.target.value)}
                   onKeyDown={handleEnterKey}
-                  className="h-12 rounded-xl border-[#E1DDD6] bg-[var(--card-bg)] pl-11 text-sm shadow-none ring-0 focus-visible:border-[#B19FBF] focus-visible:ring-2 focus-visible:ring-[#B19FBF]/20 sm:text-base"
+                  className="h-12 rounded-xl border-neutral-300 bg-white pl-11 font-jetbrains text-sm text-neutral-900 shadow-none ring-0 focus-visible:border-neutral-900 focus-visible:ring-2 focus-visible:ring-[#C5AED7] sm:text-base"
                 />
               </div>
             </div>
@@ -408,7 +409,7 @@ export default function TrackingHome({ milesSaved }: { milesSaved: ReactNode }) 
                 type="button"
                 onClick={handleTrackOrder}
                 disabled={!normalizedOrderTerm || isLoading}
-                className="flex flex-1 items-center justify-start gap-3 rounded-xl bg-[#B19FBF] px-4 py-4 text-left text-white transition-transform active:scale-[0.99] disabled:opacity-50 sm:justify-center sm:text-center"
+                className="flex flex-1 items-center justify-start gap-3 rounded-xl bg-[#C5AED7] px-4 py-4 text-left font-jetbrains text-sm font-bold text-neutral-900 transition-transform hover:bg-[#b79dce] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900 focus-visible:ring-offset-2 active:scale-[0.99] disabled:opacity-50 sm:justify-center sm:text-center"
               >
                 {isLoading ? (
                   <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
@@ -422,7 +423,7 @@ export default function TrackingHome({ milesSaved }: { milesSaved: ReactNode }) 
                 type="button"
                 onClick={handleTrackEmail}
                 disabled={!normalizedEmailTerm || isLoading}
-                className="flex flex-1 items-center justify-start gap-3 rounded-xl bg-[#B19FBF] px-4 py-4 text-left text-white transition-transform active:scale-[0.99] disabled:opacity-50 sm:justify-center sm:text-center"
+                className="flex flex-1 items-center justify-start gap-3 rounded-xl bg-[#A1CC93] px-4 py-4 text-left font-jetbrains text-sm font-bold text-neutral-900 transition-transform hover:bg-[#8fbe80] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900 focus-visible:ring-offset-2 active:scale-[0.99] disabled:opacity-50 sm:justify-center sm:text-center"
               >
                 {isLoading ? (
                   <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
@@ -432,8 +433,7 @@ export default function TrackingHome({ milesSaved }: { milesSaved: ReactNode }) 
                 <span className="flex-1 sm:flex-none">Track by Email</span>
               </button>
             </div>
-          </CardContent>
-        </Card>
+        </WindowFrame>
 
         <AnimatePresence mode="wait">
           {isLoading ? (
@@ -734,48 +734,67 @@ export default function TrackingHome({ milesSaved }: { milesSaved: ReactNode }) 
         {milesSaved}
 
         <div className="mb-10 mt-12">
-          <h2 className="mb-8 text-center text-2xl font-bold text-slate-800 sm:text-3xl">
+          <h2 className="mb-8 text-center font-jetbrains text-2xl font-bold tracking-tight text-neutral-900 sm:text-3xl">
             Explore Our Services
           </h2>
           <div className="grid gap-6 md:grid-cols-3">
-            <a href="https://www.yoursdurham.com/develop" target="_blank" rel="noopener noreferrer">
-              <Card className="h-full cursor-pointer border border-[var(--border-soft)] bg-[var(--card-bg)] shadow-sm ring-0 transition hover:-translate-y-0.5 hover:shadow-md">
-                <CardContent className="p-7 sm:p-8">
-                  <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-[var(--accent-tan)]">
-                    <Package className="h-6 w-6 text-white" />
-                  </div>
-                  <h3 className="mb-2 text-xl font-bold text-slate-800">Film Developing</h3>
-                  <p className="text-slate-600">
-                    Professional film developing services for all your analog photography needs
-                  </p>
-                </CardContent>
-              </Card>
+            <a
+              href="https://www.yoursdurham.com/develop"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block rounded-[1.7rem] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900 focus-visible:ring-offset-2 focus-visible:ring-offset-[#FFF6D3]"
+            >
+              <WindowFrame
+                title="Film Developing"
+                titleAs="h3"
+                className="h-full transition hover:-translate-y-0.5"
+                bodyClassName="p-7 sm:p-8"
+              >
+                <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-[#A1CC93]">
+                  <Package className="h-6 w-6 text-neutral-900" />
+                </div>
+                <p className="text-slate-600">
+                  Professional film developing services for all your analog photography needs
+                </p>
+              </WindowFrame>
             </a>
 
-            <a href="https://www.yoursdurham.com/shop-now" target="_blank" rel="noopener noreferrer">
-              <Card className="h-full cursor-pointer border border-[var(--border-soft)] bg-[var(--card-bg)] shadow-sm ring-0 transition hover:-translate-y-0.5 hover:shadow-md">
-                <CardContent className="p-7 sm:p-8">
-                  <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-[var(--accent-purple)]">
-                    <Film className="h-6 w-6 text-white" />
-                  </div>
-                  <h3 className="mb-2 text-xl font-bold text-slate-800">Shop Film</h3>
-                  <p className="text-slate-600">
-                    Browse our selection of premium film stock and photography supplies
-                  </p>
-                </CardContent>
-              </Card>
+            <a
+              href="https://www.yoursdurham.com/shop-now"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block rounded-[1.7rem] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900 focus-visible:ring-offset-2 focus-visible:ring-offset-[#FFF6D3]"
+            >
+              <WindowFrame
+                title="Shop Film"
+                titleAs="h3"
+                className="h-full transition hover:-translate-y-0.5"
+                bodyClassName="p-7 sm:p-8"
+              >
+                <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-[#C5AED7]">
+                  <Film className="h-6 w-6 text-neutral-900" />
+                </div>
+                <p className="text-slate-600">
+                  Browse our selection of premium film stock and photography supplies
+                </p>
+              </WindowFrame>
             </a>
 
-            <a href="mailto:hello@yoursdurham.com">
-              <Card className="h-full cursor-pointer border border-[var(--border-soft)] bg-[var(--card-bg)] shadow-sm ring-0 transition hover:-translate-y-0.5 hover:shadow-md">
-                <CardContent className="p-7 sm:p-8">
-                  <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-[var(--accent-green)]">
-                    <Mail className="h-6 w-6 text-white" />
-                  </div>
-                  <h3 className="mb-2 text-xl font-bold text-slate-800">Need help?</h3>
-                  <p className="text-slate-600">Click here to send us an email!</p>
-                </CardContent>
-              </Card>
+            <a
+              href="mailto:hello@yoursdurham.com"
+              className="block rounded-[1.7rem] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900 focus-visible:ring-offset-2 focus-visible:ring-offset-[#FFF6D3]"
+            >
+              <WindowFrame
+                title="Need help?"
+                titleAs="h3"
+                className="h-full transition hover:-translate-y-0.5"
+                bodyClassName="p-7 sm:p-8"
+              >
+                <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-[#DDB1B1]">
+                  <Mail className="h-6 w-6 text-neutral-900" />
+                </div>
+                <p className="text-slate-600">Click here to send us an email!</p>
+              </WindowFrame>
             </a>
           </div>
         </div>
