@@ -155,7 +155,7 @@ export default function YoursCleanScreen({
   const studioHasNotes = studioMode === "studio_welcome"
     || studioMode === "studio_active"
     || studioMode === "studio_ending_soon";
-  const compact = filmStats || studioHasNotes;
+  const compact = studioHasNotes;
 
   useEffect(() => {
     const tick = () => setNow(new Date());
@@ -165,6 +165,30 @@ export default function YoursCleanScreen({
   }, []);
 
   const clock = now ? studioClock(now) : null;
+
+  if (filmStats) {
+    return (
+      <div
+        data-display-mode="film_stats"
+        className="relative flex h-dvh w-full flex-col overflow-hidden bg-[#FFF6D3] font-jetbrains text-neutral-900 select-none"
+      >
+        <div className="flex min-h-0 flex-1 flex-col px-[2.2cqw]">
+          <header className="flex shrink-0 justify-center pt-[2vh] pb-[1.3vh]">
+            {/* Static file, not the image optimizer: one small request on a Pi 4. */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/logo.png"
+              alt="Yours Durham"
+              className="h-[6.4vh] w-[6.4vh] max-h-[220px] max-w-[220px] rounded-[12%] object-cover"
+            />
+          </header>
+          <main className="flex min-h-0 w-full flex-1 flex-col pb-[1.8vh]">
+            <FilmStatsBoard data={payload.data} clock={clock} />
+          </main>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -195,16 +219,12 @@ export default function YoursCleanScreen({
           </p>
         </header>
 
-        <main className={`flex min-h-0 flex-1 flex-col px-[1cqw] text-center ${
-          filmStats
-            ? "w-full items-stretch py-[1.2vh]"
-            : studioHasNotes
-              ? "items-center justify-start overflow-hidden pt-[2vh]"
-              : "items-center justify-center"
+        <main className={`flex min-h-0 flex-1 flex-col items-center px-[1cqw] text-center ${
+          studioHasNotes
+            ? "justify-start overflow-hidden pt-[2vh]"
+            : "justify-center"
         }`}>
-          {filmStats ? (
-            <FilmStatsBoard data={payload.data} />
-          ) : notice ? (
+          {notice ? (
             <p className="max-w-[18ch] text-[clamp(2rem,6cqw,4.5rem)] leading-tight font-medium">
               {notice}
             </p>
