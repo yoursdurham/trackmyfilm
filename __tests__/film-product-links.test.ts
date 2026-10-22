@@ -18,6 +18,12 @@ describe("filmProductUrl", () => {
     expect(filmProductUrl("Kodak Tri-X 400", "120")).toBe(
       "https://www.yoursdurham.com/shopping/p/kodak-400tx-120",
     );
+    expect(filmProductUrl("Kodak T-Max 400", "120")).toBe(
+      "https://www.yoursdurham.com/shopping/p/kodak-400-tmax",
+    );
+    expect(filmProductUrl("Kodak T-Max 400", "35mm")).toBe(
+      "https://www.yoursdurham.com/shopping/p/kodak-400-tmax-35mm",
+    );
     expect(filmProductUrl("Lomography Color 400", "35mm")).toBe(
       "https://www.yoursdurham.com/shopping/p/lomography-color-negative-400-35mm-3-pack-36-exp",
     );
@@ -31,7 +37,6 @@ describe("filmProductUrl", () => {
     expect(filmProductUrl("Kodak ColorPlus 200", "120")).toBeNull();
     expect(filmProductUrl("Ilford HP5 Plus 400", "120")).toBeNull();
     expect(filmProductUrl("Lomography Color 400", "120")).toBeNull();
-    expect(filmProductUrl("Kodak T-Max 400", "120")).toBeNull();
     expect(filmProductUrl("Kodak Portra 160", "110")).toBeNull();
     expect(filmProductUrl("Kodak Portra 160", "Disposable Camera")).toBeNull();
     expect(filmProductUrl("Kodak Portra 160", null)).toBeNull();
@@ -100,7 +105,6 @@ describe("filmProductUrl", () => {
     expect(unmatched).toEqual([
       "Kodak UltraMax 400 120",
       "Kodak ColorPlus 200 120",
-      "Kodak T-Max 400 120",
       "Kodak T-Max 100 35mm",
       "Kodak T-Max 100 120",
       "Fujifilm Superia 400 35mm",

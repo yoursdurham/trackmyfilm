@@ -5,9 +5,9 @@
  * Each entry is one catalog stock in one format. Lookup ignores case, spacing,
  * and punctuation, and a leading Kodak / Fujifilm / Ilford / Cinestill / Lomography
  * prefix. A roll links only when that stock is sold in that roll's format.
- * Format comes from the product title or URL. A product whose format cannot be
- * read is omitted. A multipack is used only when it is the only product for that
- * stock and format. Lomography Color 400 is the 35mm 3-pack.
+ * Format comes from the product title or URL, except Kodak 400 TMax, which the
+ * shop confirmed is the 120 T-Max 400 page. A multipack is used only when it is
+ * the only product for that stock and format. Lomography Color 400 is the 35mm 3-pack.
  */
 export type FilmShopFormat = "35mm" | "120";
 
@@ -31,6 +31,7 @@ export const FILM_PRODUCT_LINKS: readonly FilmProductLink[] = [
   { stock: "Kodak Ektar 100", format: "35mm", url: "https://www.yoursdurham.com/shopping/p/kodak-ektar-100-35m" },
   { stock: "Kodak Ektar 100", format: "120", url: "https://www.yoursdurham.com/shopping/p/kodak-ektar-100-120" },
   { stock: "Kodak T-Max 400", format: "35mm", url: "https://www.yoursdurham.com/shopping/p/kodak-400-tmax-35mm" },
+  { stock: "Kodak T-Max 400", format: "120", url: "https://www.yoursdurham.com/shopping/p/kodak-400-tmax" },
   { stock: "Kodak Tri-X 400", format: "35mm", url: "https://www.yoursdurham.com/shopping/p/kodak-400-tri-x-35mm" },
   { stock: "Kodak Tri-X 400", format: "120", url: "https://www.yoursdurham.com/shopping/p/kodak-400tx-120" },
   { stock: "Ilford HP5 Plus 400", format: "35mm", url: "https://www.yoursdurham.com/shopping/p/ilford-hp5-plus-400" },
