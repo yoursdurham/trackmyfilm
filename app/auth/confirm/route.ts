@@ -1,7 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import type { EmailOtpType } from "@supabase/supabase-js";
 import { NextResponse, type NextRequest } from "next/server";
-import { PASSWORD_UPDATE_PATH, safeNextPath } from "@/lib/auth-redirect";
+import { confirmFailurePath, PASSWORD_UPDATE_PATH, safeNextPath } from "@/lib/auth-redirect";
 
 const OTP_TYPES = new Set<EmailOtpType>([
   "signup",
@@ -12,10 +12,8 @@ const OTP_TYPES = new Set<EmailOtpType>([
   "email_change",
 ]);
 
-function failureRedirect(origin: string) {
-  const url = new URL("/login", origin);
-  url.searchParams.set("error", "reset");
-  return NextResponse.redirect(url);
+function failureRedirect(origin: string, next: string | null) {
+  return NextResponse.redirect(new URL(confirmFailurePath(next), origin));
 }
 
 /**
@@ -31,7 +29,8 @@ export async function GET(request: NextRequest) {
   const type = typeParam && OTP_TYPES.has(typeParam as EmailOtpType)
     ? typeParam as EmailOtpType
     : null;
-  const next = safeNextPath(url.searchParams.get("next"))
+  const requestedNext = safeNextPath(url.searchParams.get("next"));
+  const next = requestedNext
     ?? (type === "recovery" || code ? PASSWORD_UPDATE_PATH : "/dashboard");
 
   let redirectResponse = NextResponse.redirect(new URL(next, url.origin));
@@ -59,15 +58,15 @@ export async function GET(request: NextRequest) {
     const { error } = await supabase.auth.verifyOtp({ type, token_hash: tokenHash });
     if (!error) return redirectResponse;
     console.error("[GET /auth/confirm] verifyOtp", error.message);
-    return failureRedirect(url.origin);
+    return failureRedirect(url.origin, requestedNext);
   }
 
   if (code) {
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error) return redirectResponse;
     console.error("[GET /auth/confirm] exchangeCodeForSession", error.message);
-    return failureRedirect(url.origin);
+    return failureRedirect(url.origin, requestedNext);
   }
 
-  return failureRedirect(url.origin);
+  return failureRedirect(url.origin, requestedNext);
 }
