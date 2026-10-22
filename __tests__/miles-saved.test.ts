@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   EARTH_CIRCUMFERENCE_MILES,
   MILES_PER_DROPOFF,
+  allTimeMiles,
   formatMiles,
   labRunsElapsed,
   lapRings,
@@ -81,6 +82,25 @@ describe("miles saved", () => {
     const extra = toPublicMiles({ legacyDropoffs: 0, ordersCreated: 818, labRuns: 0 });
     expect(lapsCaption(extra.laps)).toBe("That's 1.1 times around the Earth.");
     expect(lapRings(extra.laps)).toEqual([1, 0.1]);
+  });
+
+  it("keeps the 2026 sheet and lab runs from Jan 1 2026 in the all-time total", () => {
+    const sameYear = allTimeMiles({ ordersCreated: 681, now: PUBLISHED_AT });
+    expect(sameYear.miles).toBe(34_464);
+    expect(sameYear.miles).toBe((479 + 681 - 83) * MILES_PER_DROPOFF);
+
+    const later = new Date("2027-02-01T17:00:00.000Z");
+    const yearWindow = shopYearWindow(later);
+    const yearOnly = toPublicMiles({
+      legacyDropoffs: legacyDropoffsForYear(yearWindow.year),
+      ordersCreated: 10,
+      labRuns: labRunsElapsed(later, yearWindow.start),
+    });
+    const allTime = allTimeMiles({ ordersCreated: 681 + 10, now: later });
+    const labRunsSinceBaseline = labRunsElapsed(later, shopMidnight(2026, 1, 1));
+    expect(yearOnly.miles).toBe((10 - labRunsElapsed(later, yearWindow.start)) * MILES_PER_DROPOFF);
+    expect(allTime.miles).toBe((479 + 681 + 10 - labRunsSinceBaseline) * MILES_PER_DROPOFF);
+    expect(allTime.miles).toBeGreaterThan(yearOnly.miles);
   });
 
   it("leaves the 2026 sheet out of a later year", () => {

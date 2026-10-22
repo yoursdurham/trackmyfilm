@@ -5,6 +5,13 @@ describe("displaySafeArea", () => {
   it("insets studio-vertical by 222px on the left", () => {
     expect(DISPLAY_SAFE_AREA["studio-vertical"]).toEqual({ left: 222 });
     expect(displaySafeArea("studio-vertical")).toEqual({ left: 222 });
+    expect(displaySafeArea("studio-vertical", "film_departures")).toEqual({ left: 222 });
+    expect(displaySafeArea("studio-vertical", "idle")).toEqual({ left: 222 });
+  });
+
+  it("insets the studio stats layout by 215px", () => {
+    expect(displaySafeArea("studio-vertical", "film_stats")).toEqual({ left: 215 });
+    expect(displaySafeArea("lobby", "film_stats")).toEqual({ left: 0 });
   });
 
   it("leaves every other slug full bleed", () => {

@@ -196,6 +196,7 @@ describe("resolveDisplayState", () => {
         averageColorTurnaroundDays: 5.5,
         averageBwTurnaroundDays: null,
         nextLabRun: "Friday 12:00 PM",
+        milesSaved: 34464,
         revenue: 400,
         email: "lab@example.com",
         customer_name: "Ada",
@@ -213,6 +214,7 @@ describe("resolveDisplayState", () => {
       averageColorTurnaroundDays: 5.5,
       averageBwTurnaroundDays: null,
       nextLabRun: "Friday 12:00 PM",
+      milesSaved: 34464,
     });
   });
 

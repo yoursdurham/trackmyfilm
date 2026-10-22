@@ -173,15 +173,15 @@ export default function YoursCleanScreen({
         data-display-mode="film_stats"
         className="relative flex h-dvh w-full flex-col overflow-hidden bg-[#FFF6D3] font-jetbrains text-neutral-900 select-none"
       >
-        <div className="flex min-h-0 flex-1 flex-col px-[2.2cqw]">
-          <header className="flex shrink-0 flex-col items-center pt-[1.6vh] pb-[1.15vh] text-center">
+        <div data-stats-gutter="right-only" className="flex min-h-0 flex-1 flex-col pr-[2.2cqw] pl-0">
+          <header className="flex shrink-0 flex-col items-center pt-[1.15vh] pb-[0.7vh] text-center">
             <span className="sr-only">Track My Film</span>
             <WordmarkLetters className="inline-flex max-w-full flex-nowrap items-baseline justify-center gap-x-[0.28em] font-jetbrains text-[clamp(3.25rem,11.2cqw,7.25rem)] leading-none font-bold tracking-tight" />
             <p className="mt-[0.45vh] font-jetbrains text-[clamp(1.15rem,2.9cqw,2.15rem)] leading-relaxed font-normal text-neutral-800">
               {TRACK_MY_FILM_SUBTEXT}
             </p>
           </header>
-          <main className="flex min-h-0 w-full flex-1 flex-col pb-[1.8vh]">
+          <main className="flex min-h-0 w-full flex-1 flex-col pb-[1.1vh]">
             <FilmStatsBoard data={payload.data} clock={clock} />
           </main>
         </div>

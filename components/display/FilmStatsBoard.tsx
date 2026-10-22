@@ -1,9 +1,11 @@
 import type { ReactNode } from "react";
 import { FILM_METRICS_CONFIG, labRunScheduleLabel } from "@/lib/film-metrics-config";
+import { formatMiles } from "@/lib/miles-saved";
 
 const PINK = "#DDB1B1";
 const LILAC = "#C5AED7";
 const GREEN = "#A1CC93";
+const YELLOW = "#E4D48A";
 
 export type StudioClock = { time: string; day: string };
 
@@ -23,6 +25,11 @@ function labRunLabel(value: unknown): string {
   return typeof value === "string" && value.trim() ? value : "—";
 }
 
+function milesLabel(value: unknown): string {
+  if (typeof value === "number" && Number.isFinite(value)) return formatMiles(value);
+  return "—";
+}
+
 function WindowCard({
   title,
   stat,
@@ -40,7 +47,7 @@ function WindowCard({
       className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-[1.7rem] border-neutral-900 bg-white"
       style={{ flex: `${grow} 1 0%`, borderWidth: "1.5px" }}
     >
-      <div className="relative flex shrink-0 items-center justify-center bg-[#DDB1B1] px-16 py-[1.15vh]">
+      <div className="relative flex shrink-0 items-center justify-center bg-[#DDB1B1] px-16 py-[0.85vh]">
         <span className="absolute left-5 flex items-center gap-2" aria-hidden="true">
           <span className="size-[clamp(0.7rem,1.05vh,1.15rem)] rounded-full bg-[#C9B7C6]" />
           <span className="size-[clamp(0.7rem,1.05vh,1.15rem)] rounded-full bg-[#E4D48A]" />
@@ -50,7 +57,7 @@ function WindowCard({
           {title}
         </h2>
       </div>
-      <div className="flex min-h-0 flex-1 flex-col justify-center bg-white px-[2.2cqw] py-[1.35vh]">
+      <div className="flex min-h-0 flex-1 flex-col justify-center bg-white px-[2.2cqw] py-[0.9vh]">
         {children}
       </div>
     </section>
@@ -115,7 +122,7 @@ export default function FilmStatsBoard({
   const schedule = labRunScheduleLabel();
 
   return (
-    <div className="flex min-h-0 w-full flex-1 flex-col gap-[1.15vh]">
+    <div className="flex min-h-0 w-full flex-1 flex-col gap-[0.7vh]">
       <WindowCard title="Rolls in process" stat="rolls-processing" grow={1.32}>
         <Wash color={LILAC} className="flex-1">
           <Figure value={countLabel(data.rollsProcessing)} featured />
@@ -171,6 +178,13 @@ export default function FilmStatsBoard({
             {labRunLabel(data.nextLabRun)}
           </p>
           {schedule ? <Caption>{schedule}</Caption> : null}
+        </Wash>
+      </WindowCard>
+
+      <WindowCard title="Miles saved" stat="miles-saved" grow={1.02}>
+        <Wash color={YELLOW} className="flex-1">
+          <Figure value={milesLabel(data.milesSaved)} />
+          <Caption>miles of driving saved, all time</Caption>
         </Wash>
       </WindowCard>
 

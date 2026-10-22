@@ -125,7 +125,7 @@ export default function DisplayPlayer({
 
   const screen = payload ?? IDLE;
   const notice = missing && !payload ? "This screen is not set up yet." : null;
-  const inset = displaySafeArea(slug).left;
+  const inset = displaySafeArea(slug, screen.mode).left;
 
   let board;
   if (displayUsesAirportTheme(screen.mode) || screen.theme === AIRPORT_THEME) {

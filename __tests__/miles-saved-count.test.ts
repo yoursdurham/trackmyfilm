@@ -64,7 +64,7 @@ vi.mock("@supabase/supabase-js", () => ({
 process.env.NEXT_PUBLIC_SUPABASE_URL = "https://example.supabase.co";
 process.env.SUPABASE_SERVICE_ROLE_KEY = "test-service-role";
 
-import { countFilmOrdersCreatedInRange } from "@/lib/db";
+import { countAllFilmOrders, countFilmOrdersCreatedInRange } from "@/lib/db";
 
 describe("countFilmOrdersCreatedInRange", () => {
   beforeEach(() => {
@@ -88,6 +88,13 @@ describe("countFilmOrdersCreatedInRange", () => {
     expect(state.calls[1].args).toEqual(["created_at", "2026-01-01T05:00:00.000Z"]);
     expect(state.calls[2].args).toEqual(["created_at", "2027-01-01T05:00:00.000Z"]);
     expect(state.calls.some((call) => call.method === "neq" || call.method === "eq")).toBe(false);
+  });
+
+  it("counts every film order with no date window", async () => {
+    const count = await countAllFilmOrders();
+    expect(count).toBe(681);
+    expect(state.calls.map((call) => call.method)).toEqual(["select"]);
+    expect(state.calls[0].args).toEqual(["id", { count: "exact", head: true }]);
   });
 
   it("throws the database error and does not invent a count", async () => {
