@@ -1,7 +1,12 @@
-import { getOrderById, updateOrder } from "@/lib/db";
+import { getOrderById, getOrdersByCustomerEmail, updateOrder } from "@/lib/db";
 import { normalizeEmail, isWithinDedupWindow } from "@/lib/validation";
 import { pendingBatchLabel, type ScanDeliveryBatch } from "@/lib/scan-batch";
 import { scanNotesForEmail, scanNotesHtml } from "@/lib/scan-notes";
+import {
+  computeCustomerEmailStats,
+  EMPTY_CUSTOMER_EMAIL_STATS,
+  type CustomerEmailStats,
+} from "@/lib/customer-email-stats";
 import type { FilmOrder } from "@/lib/types";
 
 type TemplateName =
@@ -40,6 +45,23 @@ const DEDUP_FIELDS: Record<Exclude<TemplateName, "partial_scans_sent">, keyof Fi
 
 function partialEmailDedupField(batch: ScanDeliveryBatch): keyof FilmOrder {
   return batch === "Color" ? "color_partial_email_sent_at" : "bw_partial_email_sent_at";
+}
+
+/** Stats never block a send. A lookup failure leaves the three variables blank. */
+async function customerEmailStatsFor(order: FilmOrder, email: string): Promise<CustomerEmailStats> {
+  try {
+    const found = await getOrdersByCustomerEmail(email);
+    const orders = found.some((row) => row.id === order.id) ? found : [...found, order];
+    return computeCustomerEmailStats(orders);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown customer stats error";
+    console.error("[email] Customer stats unavailable, sending without them:", {
+      orderId: order.id,
+      orderNumber: order.order_number,
+      error: message,
+    });
+    return { ...EMPTY_CUSTOMER_EMAIL_STATS };
+  }
 }
 
 export const KNOWN_EMAIL_TEMPLATES: TemplateName[] = [
@@ -266,6 +288,11 @@ const variables: Record<string, string> = {
     variables.pickup_instructions =
       "Please reply to this email if you need help coordinating pickup or delivery.";
   }
+
+  const customerStats = await customerEmailStatsFor(order, recipientEmail);
+  variables.rolls_dropped_off = customerStats.rolls_dropped_off;
+  variables.top_stock = customerStats.top_stock;
+  variables.days_since_first_drop = customerStats.days_since_first_drop;
 
   const payload = {
     from: process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev",

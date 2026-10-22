@@ -180,6 +180,20 @@ export async function getOrdersByCustomerId(customerId: string): Promise<FilmOrd
   return data as FilmOrder[];
 }
 
+/** Every film order whose customer email matches, ignoring case. */
+export async function getOrdersByCustomerEmail(email: string): Promise<FilmOrder[]> {
+  const normalizedEmail = normalizeEmail(email);
+  if (!normalizedEmail) return [];
+  const { data, error } = await getSupabase()
+    .from("film_orders")
+    .select("*")
+    .ilike("customer_email", exactEmailIlikePattern(normalizedEmail));
+  if (error) throw new Error(error.message);
+  return ((data ?? []) as FilmOrder[]).filter((row) =>
+    emailsMatchExact(row.customer_email, normalizedEmail)
+  );
+}
+
 export async function createOrder(data: Omit<FilmOrder, "id">): Promise<FilmOrder> {
   const { data: created, error } = await getSupabase()
     .from("film_orders")
