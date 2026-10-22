@@ -31,6 +31,8 @@ describe("matchFilmStock", () => {
     expect(matchFilmStock("ektar")).toBe("Kodak Ektar 100");
     expect(matchFilmStock("800T")).toBe("Cinestill 800T");
     expect(matchFilmStock("Pro 400H")).toBe("Fujifilm Pro 400H");
+    expect(matchFilmStock("Pheonix 200 - Blue")).toBe("Phoenix 200 - Blue");
+    expect(matchFilmStock("Phoenix 200 - Blue")).toBe("Phoenix 200 - Blue");
   });
 
   it("does not guess when several stocks share the name", () => {

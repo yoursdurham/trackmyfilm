@@ -26,6 +26,20 @@ function order(overrides: Partial<FilmOrder> = {}): FilmOrder {
 }
 
 describe("computeCustomerEmailStats", () => {
+  it("counts Pheonix and Phoenix as the same top stock", () => {
+    const stats = computeCustomerEmailStats([
+      order({
+        roll_count: 3,
+        roll_details: [
+          { film_type: "35mm", film_process: "Color", film_stock: "Pheonix 200 - Blue" },
+          { film_type: "35mm", film_process: "Color", film_stock: "Phoenix 200 - Blue" },
+          { film_type: "35mm", film_process: "Color", film_stock: "Kodak Gold 200" },
+        ],
+      }),
+    ], NOW);
+    expect(stats.top_stock).toBe("Phoenix 200 - Blue");
+  });
+
   it("returns blank strings when there are no orders", () => {
     expect(computeCustomerEmailStats([], NOW)).toEqual({
       rolls_dropped_off: "",

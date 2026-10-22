@@ -158,6 +158,18 @@ describe("calculateReportMetrics", () => {
     expect(csv).not.toContain("lost at lab");
   });
 
+  it("groups the Pheonix misspelling with Phoenix on the stock report", () => {
+    const metrics = calculateReportMetrics([
+      order({
+        roll_details: [
+          { film_type: "35mm", film_process: "Color", film_stock: "Pheonix 200 - Blue" },
+          { film_type: "35mm", film_process: "Color", film_stock: "Phoenix 200 - Blue" },
+        ],
+      }),
+    ]);
+    expect(metrics.filmStockUsage).toEqual([{ stock: "Phoenix 200 - Blue", count: 2 }]);
+  });
+
   it("writes blank columns into the monthly CSV", () => {
     const metrics = calculateReportMetrics([
       order({

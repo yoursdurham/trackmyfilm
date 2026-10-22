@@ -11,7 +11,7 @@ import { User, Calendar, Hash, Layers, Loader2, Film, Mail } from "lucide-react"
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { applyFilmListingToRolls, mergeCustomerFilmNote } from "@/lib/film-stock-match";
-import { FILM_STOCKS } from "@/lib/film-stocks";
+import { correctFilmStockSpelling, FILM_STOCKS } from "@/lib/film-stocks";
 import type { Customer, FilmType, FilmProcess, IncomingSquarespaceDraft, RollDetail } from "@/lib/types";
 import { DROP_OFF_FILM_TYPES, isValidEmail, normalizeEmail } from "@/lib/validation";
 import {
@@ -58,7 +58,7 @@ function rollStateFromDetail(roll: RollDetail): DropoffRollState {
   const scanSize = roll.scan_size && (DROP_OFF_SCAN_SIZES as readonly string[]).includes(roll.scan_size)
     ? roll.scan_size as DropoffScanSize
     : "Standard";
-  const stock = roll.film_stock?.trim() ?? "";
+  const stock = correctFilmStockSpelling(roll.film_stock?.trim() ?? "");
   const knownStock = stock !== "" && (FILM_STOCKS as readonly string[]).includes(stock);
   return {
     film_type: filmType,
@@ -123,7 +123,7 @@ export default function NewDropoffForm({
     if (!open) return;
     fetch("/api/film-stocks")
       .then((r) => r.ok ? r.json() : [])
-      .then((data: string[]) => setCustomStocks(data))
+      .then((data: string[]) => setCustomStocks([...new Set(data.map(correctFilmStockSpelling))]))
       .catch(() => {});
   }, [open]);
 

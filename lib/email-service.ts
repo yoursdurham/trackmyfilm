@@ -8,6 +8,7 @@ import {
   type CustomerEmailStats,
 } from "@/lib/customer-email-stats";
 import { filmProductUrl } from "@/lib/film-product-links";
+import { correctFilmStockSpelling } from "@/lib/film-stocks";
 import type { FilmOrder } from "@/lib/types";
 
 type TemplateName =
@@ -101,7 +102,7 @@ function escapeHtml(text: string): string {
 }
 
 function filmStockHtml(stock: string, format: string | undefined): string {
-  const safe = escapeHtml(stock);
+  const safe = escapeHtml(correctFilmStockSpelling(stock));
   const href = filmProductUrl(stock, format);
   if (!href) return safe;
   return `<a href="${escapeHtml(href)}" target="_blank" style="color:#1a1a1a;text-decoration:underline;">${safe}</a>`;

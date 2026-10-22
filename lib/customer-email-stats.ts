@@ -1,4 +1,5 @@
 import { isBlankRoll } from "./blank-roll";
+import { correctFilmStockSpelling } from "./film-stocks";
 import type { FilmOrder } from "./types";
 
 const SHOP_TIME_ZONE = "America/New_York";
@@ -64,15 +65,15 @@ function countedRolls(order: FilmOrder): { stock: string; index: number }[] {
       .map((roll, index) => ({ roll, index }))
       .filter(({ roll }) => !isBlankRoll(roll));
     const anyRollStock = kept.some((entry) => Boolean(entry.roll.film_stock?.trim()));
-    const orderStock = order.film_stock?.trim() ?? "";
+    const orderStock = correctFilmStockSpelling(order.film_stock?.trim() ?? "");
     return kept.map(({ roll, index }) => ({
-      stock: roll.film_stock?.trim() || (anyRollStock ? "" : orderStock),
+      stock: correctFilmStockSpelling(roll.film_stock?.trim() || (anyRollStock ? "" : orderStock)),
       index,
     }));
   }
 
   const count = Number.isFinite(order.roll_count) ? Math.max(0, Math.floor(order.roll_count)) : 0;
-  const stock = order.film_stock?.trim() ?? "";
+  const stock = correctFilmStockSpelling(order.film_stock?.trim() ?? "");
   return Array.from({ length: count }, (_, index) => ({ stock, index }));
 }
 
