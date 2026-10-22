@@ -2,11 +2,13 @@ import { displayNow } from "@/lib/display-clock";
 import { getCachedFilmDepartures } from "@/lib/film-departures-cache";
 import { getCachedFilmMenu } from "@/lib/film-menu-cache";
 import { getCachedFilmMetrics } from "@/lib/film-metrics-cache";
+import { getCachedAllTimeMilesSaved } from "@/lib/miles-saved-data";
 import {
   clampRefreshSeconds,
   publicPayloadForDisplay,
   type DisplayPayload,
   type DisplayResolveInput,
+  type FilmMetricsInput,
   type StudioDisplayInput,
 } from "@/lib/display";
 import type { FilmDepartures } from "@/lib/film-departures";
@@ -89,7 +91,7 @@ export async function publicPayloadWithFilm(
   const needsDepartures = displayNeedsFilmDepartures(display);
   const needsStudio = displayShowsStudioBookings(display);
 
-  let film: FilmMetrics | null = null;
+  let film: FilmMetrics | FilmMetricsInput | null = null;
   let menu: FilmMenu | null = null;
   let departures: FilmDepartures | null = null;
   let studio: StudioDisplayInput | null = null;
@@ -100,6 +102,15 @@ export async function publicPayloadWithFilm(
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Unknown error";
       console.error("[film-metrics]", message);
+    }
+  }
+  if (winningMode(display) === "film_stats") {
+    try {
+      const saved = await getCachedAllTimeMilesSaved();
+      film = { ...(film ?? {}), milesSaved: saved.miles };
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      console.error("[miles-saved]", message);
     }
   }
   if (needsMenu) {

@@ -1,6 +1,7 @@
 import { unstable_cache } from "next/cache";
-import { countFilmOrdersCreatedInRange } from "@/lib/db";
+import { countAllFilmOrders, countFilmOrdersCreatedInRange } from "@/lib/db";
 import {
+  allTimeMiles,
   labRunsElapsed,
   legacyDropoffsForYear,
   shopYearWindow,
@@ -43,5 +44,22 @@ export async function loadPublicMilesSaved(now = new Date()): Promise<PublicMile
 export const getCachedPublicMilesSaved = unstable_cache(
   async () => loadPublicMilesSaved(new Date()),
   ["public-miles-saved"],
+  { revalidate: REVALIDATE_SECONDS },
+);
+
+/** Miles and laps only. The order count stays on the server. */
+export async function loadAllTimeMilesSaved(now = new Date()): Promise<{ miles: number; laps: number }> {
+  const preview = previewOrderCount();
+  const ordersCreated = preview ?? await countAllFilmOrders();
+  return allTimeMiles({ ordersCreated, now });
+}
+
+/**
+ * Shared with the studio stats payload. The display poll does not recount;
+ * this count runs at most about once an hour, same as the homepage globe.
+ */
+export const getCachedAllTimeMilesSaved = unstable_cache(
+  async () => loadAllTimeMilesSaved(new Date()),
+  ["all-time-miles-saved"],
   { revalidate: REVALIDATE_SECONDS },
 );

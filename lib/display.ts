@@ -37,14 +37,20 @@ export const DISPLAY_SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
  * Physical panels with a dead strip. Keyed by slug so a screen can avoid
  * that edge without a database column. `studio-vertical` is the Acer
  * 1080×3840 mounted portrait: the dead strip runs past the old 210px
- * inset, so the live area starts 222px in and the board uses the rest
- * of the width.
+ * inset. 240px left a black gap; 222px is the inset for every mode
+ * except film stats, which sits at 215px so the cards meet the strip.
  */
+export const STUDIO_VERTICAL_DEAD_ZONE_PX = 222;
+export const STUDIO_STATS_DEAD_ZONE_PX = 215;
+
 export const DISPLAY_SAFE_AREA = {
-  "studio-vertical": { left: 222 },
+  "studio-vertical": { left: STUDIO_VERTICAL_DEAD_ZONE_PX },
 } as const;
 
-export function displaySafeArea(slug: string): { left: number } {
+export function displaySafeArea(slug: string, mode?: string | null): { left: number } {
+  if (slug === "studio-vertical" && mode === "film_stats") {
+    return { left: STUDIO_STATS_DEAD_ZONE_PX };
+  }
   if (Object.prototype.hasOwnProperty.call(DISPLAY_SAFE_AREA, slug)) {
     return DISPLAY_SAFE_AREA[slug as keyof typeof DISPLAY_SAFE_AREA];
   }
@@ -71,6 +77,7 @@ export const FILM_STATS_DATA_KEYS = [
   "averageColorTurnaroundDays",
   "averageBwTurnaroundDays",
   "nextLabRun",
+  "milesSaved",
 ] as const;
 export const FILM_STATUS_DATA_KEYS = [
   "averageColorTurnaroundDays",
@@ -140,6 +147,7 @@ export interface FilmMetricsInput {
   averageColorTurnaroundDays?: number | null;
   averageBwTurnaroundDays?: number | null;
   nextLabRun?: string | null;
+  milesSaved?: number | null;
   [key: string]: unknown;
 }
 

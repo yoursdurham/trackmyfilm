@@ -101,6 +101,21 @@ export function legacyDropoffsForYear(year: number): number {
 }
 
 /**
+ * All-time miles, same formula as the homepage without the shop-year window.
+ * Drop-offs are every film order plus the 2026 sheet gap (479), the only
+ * pre-app baseline the homepage adds. The larger pre-2026 sheet total is for
+ * roll counts, not miles. Lab runs stay two per elapsed week, counted from
+ * Jan 1, 2026 instead of resetting each January.
+ */
+export function allTimeMiles(input: { ordersCreated: number; now: Date }): { miles: number; laps: number } {
+  return toPublicMiles({
+    legacyDropoffs: legacyDropoffsForYear(LEGACY_SHEET_YEAR),
+    ordersCreated: input.ordersCreated,
+    labRuns: labRunsElapsed(input.now, shopMidnight(LEGACY_SHEET_YEAR, 1, 1)),
+  });
+}
+
+/**
  * Public miles and laps only. Trip and order counts stay in the arguments
  * and are not returned.
  */

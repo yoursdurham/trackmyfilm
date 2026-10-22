@@ -95,6 +95,18 @@ export async function countFilmOrdersCreatedInRange(startIso: string, endIso: st
 }
 
 /**
+ * Every film order, including On Hold. Same head count as the year query,
+ * with no created_at window. A parked drop-off still saved the drive.
+ */
+export async function countAllFilmOrders(): Promise<number> {
+  const { count, error } = await getSupabase()
+    .from("film_orders")
+    .select("id", { count: "exact", head: true });
+  if (error) throw new Error(error.message);
+  return count ?? 0;
+}
+
+/**
  * In-process orders, plus scans sent in the last 36 hours so today's LANDED
  * rows survive a timezone boundary. Older scans-sent orders are left out.
  */
