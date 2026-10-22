@@ -7,6 +7,7 @@ import {
   EMPTY_CUSTOMER_EMAIL_STATS,
   type CustomerEmailStats,
 } from "@/lib/customer-email-stats";
+import { filmProductUrl } from "@/lib/film-product-links";
 import type { FilmOrder } from "@/lib/types";
 
 type TemplateName =
@@ -91,6 +92,21 @@ function shouldSkipEmail(template: TemplateName, lastSent: string | undefined) {
 
   return isWithinDedupWindow(lastSent);
 }
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function filmStockHtml(stock: string, format: string | undefined): string {
+  const safe = escapeHtml(stock);
+  const href = filmProductUrl(stock, format);
+  if (!href) return safe;
+  return `<a href="${escapeHtml(href)}" target="_blank" style="color:#1a1a1a;text-decoration:underline;">${safe}</a>`;
+}
+
 function buildFilmDetailsHtml(rollDetails: unknown) {
   if (!Array.isArray(rollDetails) || rollDetails.length === 0) {
     return "";
@@ -112,8 +128,12 @@ function buildFilmDetailsHtml(rollDetails: unknown) {
         r.film_type,
         r.film_process,
         r.scan_size,
-        r.film_stock,
-      ].filter(Boolean);
+      ].filter((part): part is string => typeof part === "string" && part.length > 0)
+        .map(escapeHtml);
+
+      if (typeof r.film_stock === "string" && r.film_stock.length > 0) {
+        parts.push(filmStockHtml(r.film_stock, r.film_type));
+      }
 
       if (parts.length === 0) return "";
 
