@@ -9,8 +9,11 @@
 -- A signed-in customer may read only the film_orders and customers rows
 -- whose email matches the verified auth email, case-insensitive.
 -- Staff notes, hold reasons, and email delivery columns are not granted.
--- The service role used by staff pages bypasses RLS and is unchanged.
--- anon has no access.
+-- The service role used by staff pages, tracking, displays, email, and cron
+-- bypasses RLS. It is re-granted below so this script does not depend on
+-- an older PUBLIC grant. anon has no access.
+-- Staff browser sessions use the anon key only for Auth (getUser, sign-in,
+-- sign-out). They do not read or write these tables as the authenticated role.
 -- ============================================================
 
 create index if not exists film_orders_customer_email_lower_idx
@@ -19,6 +22,12 @@ create index if not exists film_orders_customer_email_lower_idx
 
 revoke all on table public.film_orders from public, anon, authenticated;
 revoke all on table public.customers from public, anon, authenticated;
+
+-- Supabase default privileges also grant these tables to service_role.
+-- Say so again after the revoke. service_role has BYPASSRLS, so the
+-- policies below do not apply to it.
+grant all on table public.film_orders to service_role;
+grant all on table public.customers to service_role;
 
 grant select (
   id,
