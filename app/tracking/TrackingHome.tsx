@@ -192,8 +192,8 @@ function OrderTimeline({
 const FILM_STOCK_PILL_CLASS =
   "rounded-full bg-white px-2 py-0.5 text-xs font-medium text-neutral-900 ring-1 ring-neutral-900";
 
-function FilmStockPill({ stock }: { stock: string }) {
-  const href = filmProductUrl(stock);
+function FilmStockPill({ stock, format }: { stock: string; format?: string | null }) {
+  const href = filmProductUrl(stock, format);
   if (!href) {
     return <span className={FILM_STOCK_PILL_CLASS}>{stock}</span>;
   }
@@ -609,7 +609,9 @@ export default function TrackingHome({ milesSaved }: { milesSaved: ReactNode }) 
                                 {roll.scan_size}
                               </span>
                             ) : null}
-                            {roll.film_stock ? <FilmStockPill stock={roll.film_stock} /> : null}
+                            {roll.film_stock ? (
+                              <FilmStockPill stock={roll.film_stock} format={roll.film_type} />
+                            ) : null}
                             {roll.prints_4x6 ? (
                               <span className="flex items-center gap-1 rounded-full bg-[#A1CC93] px-2 py-0.5 text-xs font-bold text-neutral-900">
                                 <Printer className="h-3 w-3" />
@@ -636,7 +638,9 @@ export default function TrackingHome({ milesSaved }: { milesSaved: ReactNode }) 
                               className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700"
                             />
                           ) : null}
-                          {order.film_stock ? <FilmStockPill stock={order.film_stock} /> : null}
+                          {order.film_stock ? (
+                            <FilmStockPill stock={order.film_stock} format={order.film_type} />
+                          ) : null}
                           {order.prints_4x6 ? (
                             <span className="flex items-center gap-1 rounded-full bg-[#A1CC93] px-2 py-0.5 text-xs font-bold text-neutral-900">
                               <Printer className="h-3 w-3" />

@@ -2,73 +2,123 @@ import { describe, expect, it } from "vitest";
 import { FILM_STOCKS } from "../lib/film-stocks";
 import { FILM_PRODUCT_LINKS, filmProductUrl } from "../lib/film-product-links";
 
+const FORMATS = ["35mm", "120"] as const;
+
 describe("filmProductUrl", () => {
-  it("links catalog stocks to their shop product", () => {
-    expect(filmProductUrl("Kodak Portra 160")).toBe(
+  it("links a stock only to the product for that format", () => {
+    expect(filmProductUrl("Kodak Portra 160", "35mm")).toBe(
       "https://www.yoursdurham.com/shopping/p/kodak-portra-160-35mm",
     );
-    expect(filmProductUrl("Cinestill 800T")).toBe(
-      "https://www.yoursdurham.com/shopping/p/cinestill-800t-35mm",
+    expect(filmProductUrl("Kodak Portra 160", "120")).toBe(
+      "https://www.yoursdurham.com/shopping/p/kodak-portra-160-120",
     );
-    expect(filmProductUrl("Kodak Gold 200")).toBe(
-      "https://www.yoursdurham.com/shopping/p/kodak-gold-200-35mm",
+    expect(filmProductUrl("Cinestill 800T", "120")).toBe(
+      "https://www.yoursdurham.com/shopping/p/cinestill-800t-120",
+    );
+    expect(filmProductUrl("Kodak Tri-X 400", "120")).toBe(
+      "https://www.yoursdurham.com/shopping/p/kodak-400tx-120",
+    );
+    expect(filmProductUrl("Lomography Color 400", "35mm")).toBe(
+      "https://www.yoursdurham.com/shopping/p/lomography-color-negative-400-35mm-3-pack-36-exp",
     );
   });
 
-  it("matches case, spacing, punctuation, and a dropped brand prefix", () => {
-    const portra = "https://www.yoursdurham.com/shopping/p/kodak-portra-160-35mm";
-    expect(filmProductUrl("kodak portra 160")).toBe(portra);
-    expect(filmProductUrl("PORTRA 160")).toBe(portra);
-    expect(filmProductUrl("Kodak   Portra-160")).toBe(portra);
-    expect(filmProductUrl("portra160")).toBe(portra);
-    expect(filmProductUrl("ultra max 400")).toBe(
+  it("does not fall back to the other format", () => {
+    expect(filmProductUrl("Kodak UltraMax 400", "35mm")).toBe(
       "https://www.yoursdurham.com/shopping/p/kodak-ultramax-400-35mm",
     );
-    expect(filmProductUrl("HP5 Plus 400")).toBe(
+    expect(filmProductUrl("Kodak UltraMax 400", "120")).toBeNull();
+    expect(filmProductUrl("Kodak ColorPlus 200", "120")).toBeNull();
+    expect(filmProductUrl("Ilford HP5 Plus 400", "120")).toBeNull();
+    expect(filmProductUrl("Lomography Color 400", "120")).toBeNull();
+    expect(filmProductUrl("Kodak T-Max 400", "120")).toBeNull();
+    expect(filmProductUrl("Kodak Portra 160", "110")).toBeNull();
+    expect(filmProductUrl("Kodak Portra 160", "Disposable Camera")).toBeNull();
+    expect(filmProductUrl("Kodak Portra 160", null)).toBeNull();
+    expect(filmProductUrl("Kodak Portra 160")).toBeNull();
+  });
+
+  it("matches case, spacing, punctuation, and a dropped brand prefix within one format", () => {
+    const portra35 = "https://www.yoursdurham.com/shopping/p/kodak-portra-160-35mm";
+    const portra120 = "https://www.yoursdurham.com/shopping/p/kodak-portra-160-120";
+    expect(filmProductUrl("kodak portra 160", "35 mm")).toBe(portra35);
+    expect(filmProductUrl("PORTRA 160", "120")).toBe(portra120);
+    expect(filmProductUrl("Kodak   Portra-160", "35MM")).toBe(portra35);
+    expect(filmProductUrl("portra160", "35mm")).toBe(portra35);
+    expect(filmProductUrl("ultra max 400", "35mm")).toBe(
+      "https://www.yoursdurham.com/shopping/p/kodak-ultramax-400-35mm",
+    );
+    expect(filmProductUrl("HP5 Plus 400", "35mm")).toBe(
       "https://www.yoursdurham.com/shopping/p/ilford-hp5-plus-400",
     );
-    expect(filmProductUrl("800T")).toBe(
+    expect(filmProductUrl("800T", "35mm")).toBe(
       "https://www.yoursdurham.com/shopping/p/cinestill-800t-35mm",
     );
-    expect(filmProductUrl("Tri-X 400")).toBe(
+    expect(filmProductUrl("800T", "120")).toBe(
+      "https://www.yoursdurham.com/shopping/p/cinestill-800t-120",
+    );
+    expect(filmProductUrl("Tri-X 400", "35mm")).toBe(
       "https://www.yoursdurham.com/shopping/p/kodak-400-tri-x-35mm",
     );
   });
 
-  it("leaves unsold catalog stocks and ambiguous names unlinked", () => {
-    expect(filmProductUrl("Kodak T-Max 100")).toBeNull();
-    expect(filmProductUrl("Fujifilm Superia 400")).toBeNull();
-    expect(filmProductUrl("Fujifilm Superia 200")).toBeNull();
-    expect(filmProductUrl("Fujifilm Pro 400H")).toBeNull();
-    expect(filmProductUrl("Fujifilm Velvia 50")).toBeNull();
-    expect(filmProductUrl("Fujifilm Provia 100F")).toBeNull();
-    expect(filmProductUrl("Ilford Delta 400")).toBeNull();
-    expect(filmProductUrl("Ilford XP2 Super 400")).toBeNull();
-    expect(filmProductUrl("Fujifilm 400")).toBeNull();
-    expect(filmProductUrl("portra")).toBeNull();
-    expect(filmProductUrl("tmax")).toBeNull();
-    expect(filmProductUrl("not a film")).toBeNull();
-    expect(filmProductUrl("")).toBeNull();
-    expect(filmProductUrl(null)).toBeNull();
+  it("leaves unsold stocks and ambiguous names unlinked", () => {
+    expect(filmProductUrl("Kodak T-Max 100", "35mm")).toBeNull();
+    expect(filmProductUrl("Fujifilm Superia 400", "35mm")).toBeNull();
+    expect(filmProductUrl("Fujifilm Superia 200", "120")).toBeNull();
+    expect(filmProductUrl("Fujifilm Pro 400H", "35mm")).toBeNull();
+    expect(filmProductUrl("Fujifilm Velvia 50", "120")).toBeNull();
+    expect(filmProductUrl("Fujifilm Provia 100F", "35mm")).toBeNull();
+    expect(filmProductUrl("Ilford Delta 400", "35mm")).toBeNull();
+    expect(filmProductUrl("Ilford XP2 Super 400", "120")).toBeNull();
+    expect(filmProductUrl("Fujifilm 400", "35mm")).toBeNull();
+    expect(filmProductUrl("portra", "35mm")).toBeNull();
+    expect(filmProductUrl("tmax", "120")).toBeNull();
+    expect(filmProductUrl("not a film", "35mm")).toBeNull();
+    expect(filmProductUrl("", "35mm")).toBeNull();
+    expect(filmProductUrl(null, "35mm")).toBeNull();
   });
 
-  it("only maps catalog names, and every mapped name resolves", () => {
+  it("only maps catalog stock and format pairs", () => {
     const catalog = new Set(FILM_STOCKS);
-    for (const [stock, url] of Object.entries(FILM_PRODUCT_LINKS)) {
-      expect(catalog.has(stock)).toBe(true);
-      expect(url.startsWith("https://www.yoursdurham.com/shopping/p/")).toBe(true);
-      expect(filmProductUrl(stock)).toBe(url);
+    const seen = new Set<string>();
+    for (const link of FILM_PRODUCT_LINKS) {
+      const key = `${link.stock}|${link.format}`;
+      expect(seen.has(key)).toBe(false);
+      seen.add(key);
+      expect(catalog.has(link.stock)).toBe(true);
+      expect(FORMATS).toContain(link.format);
+      expect(link.url.startsWith("https://www.yoursdurham.com/shopping/p/")).toBe(true);
+      expect(filmProductUrl(link.stock, link.format)).toBe(link.url);
     }
-    const unmatched = FILM_STOCKS.filter((stock) => !FILM_PRODUCT_LINKS[stock]);
+
+    const unmatched = FILM_STOCKS.flatMap((stock) => (
+      FORMATS
+        .filter((format) => !FILM_PRODUCT_LINKS.some((link) => link.stock === stock && link.format === format))
+        .map((format) => `${stock} ${format}`)
+    ));
     expect(unmatched).toEqual([
-      "Kodak T-Max 100",
-      "Fujifilm Superia 400",
-      "Fujifilm Superia 200",
-      "Fujifilm Pro 400H",
-      "Fujifilm Velvia 50",
-      "Fujifilm Provia 100F",
-      "Ilford Delta 400",
-      "Ilford XP2 Super 400",
+      "Kodak UltraMax 400 120",
+      "Kodak ColorPlus 200 120",
+      "Kodak T-Max 400 120",
+      "Kodak T-Max 100 35mm",
+      "Kodak T-Max 100 120",
+      "Fujifilm Superia 400 35mm",
+      "Fujifilm Superia 400 120",
+      "Fujifilm Superia 200 35mm",
+      "Fujifilm Superia 200 120",
+      "Fujifilm Pro 400H 35mm",
+      "Fujifilm Pro 400H 120",
+      "Fujifilm Velvia 50 35mm",
+      "Fujifilm Velvia 50 120",
+      "Fujifilm Provia 100F 35mm",
+      "Fujifilm Provia 100F 120",
+      "Ilford HP5 Plus 400 120",
+      "Ilford Delta 400 35mm",
+      "Ilford Delta 400 120",
+      "Ilford XP2 Super 400 35mm",
+      "Ilford XP2 Super 400 120",
+      "Lomography Color 400 120",
     ]);
   });
 });
