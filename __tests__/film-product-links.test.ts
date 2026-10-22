@@ -126,8 +126,6 @@ describe("filmProductUrl", () => {
       "Lomography LomoChrome Metropolis 120",
       "Candido 400 120",
       "Candido 800 120",
-      "Phoenix 200 - Blue 35mm",
-      "Phoenix 200 - Blue 120",
     ]);
   });
 
@@ -157,10 +155,37 @@ describe("filmProductUrl", () => {
       "https://www.yoursdurham.com/shopping/p/kodak-kodacolor-200",
     );
     expect(filmProductUrl("Lomography Color '92", "35mm")).toBeNull();
+    expect(filmProductUrl("Lomography Color '92", "120")).toBeNull();
     expect(filmProductUrl("Harman Red 125", "35mm")).toBeNull();
-    expect(filmProductUrl("Harman Azure", "35mm")).toBeNull();
-    expect(filmProductUrl("Phoenix 200 - Blue", "35mm")).toBeNull();
-    expect(filmProductUrl("Pheonix 200 - Blue", "35mm")).toBeNull();
+    expect(filmProductUrl("Harman Red 125", "120")).toBeNull();
+  });
+
+  it("links Harman Phoenix and Azure by format, including the names already in the stock list", () => {
+    const phoenix12535 = "https://www.yoursdurham.com/shopping/p/harman-phoenix-125-35mm";
+    const phoenix125120 = "https://www.yoursdurham.com/shopping/p/harman-phoenix-125-120";
+    const azure35 = "https://www.yoursdurham.com/shopping/p/harman-switch-azure-125-35mm";
+    const azure120 = "https://www.yoursdurham.com/shopping/p/harman-switch-azure-125";
+    const blue35 = "https://www.yoursdurham.com/shopping/p/harman-phoenix-ii-200";
+    const blue120 = "https://www.yoursdurham.com/shopping/p/harman-phoenix-ii-200-color-120";
+
+    expect(filmProductUrl("Phoenix 125", "35mm")).toBe(phoenix12535);
+    expect(filmProductUrl("Harman Phoenix 125", "35mm")).toBe(phoenix12535);
+    expect(filmProductUrl("Phoenix 125", "120")).toBe(phoenix125120);
+    expect(filmProductUrl("Harman Phoenix 125", "120")).toBe(phoenix125120);
+    expect(filmProductUrl("Phoenix 125", "110")).toBeNull();
+
+    expect(filmProductUrl("Harman Azure 125", "35mm")).toBe(azure35);
+    expect(filmProductUrl("Harman Azure", "35mm")).toBe(azure35);
+    expect(filmProductUrl("Switch Azure", "35mm")).toBe(azure35);
+    expect(filmProductUrl("Harman Azure 125", "120")).toBe(azure120);
+    expect(filmProductUrl("Switch Azure", "120")).toBe(azure120);
+    expect(filmProductUrl("Harman Azure 125", "35mm")).not.toBe(azure120);
+
+    expect(filmProductUrl("Phoenix 200 - Blue", "35mm")).toBe(blue35);
+    expect(filmProductUrl("Pheonix 200 - Blue", "35mm")).toBe(blue35);
+    expect(filmProductUrl("Phoenix 200 - Blue", "120")).toBe(blue120);
+    expect(filmProductUrl("Harman Phoenix 200 - Blue", "120")).toBe(blue120);
+    expect(filmProductUrl("Phoenix 200 - Blue", "35mm")).not.toBe(blue120);
   });
 
   it("links every disposable camera to the Kodak FunSaver page", () => {

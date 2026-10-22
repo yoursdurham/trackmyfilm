@@ -115,6 +115,9 @@ describe("sendOrderEmail film_details_html stock links", () => {
     expect(html).toContain("Phoenix 200 - Blue");
     expect(html).not.toContain("Pheonix");
     expect(html).toContain(
+      '<a href="https://www.yoursdurham.com/shopping/p/harman-phoenix-ii-200" target="_blank" style="color:#1a1a1a;text-decoration:underline;">Phoenix 200 - Blue</a>',
+    );
+    expect(html).toContain(
       '<a href="https://www.yoursdurham.com/shopping/p/kodak-fun-saver-single-use-800-iso" target="_blank" style="color:#1a1a1a;text-decoration:underline;">Kodak Gold 200</a>',
     );
   });

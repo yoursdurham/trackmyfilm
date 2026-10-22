@@ -20,7 +20,7 @@ function compact(value: string): string {
 }
 
 function stripLeadingBrand(compacted: string): string {
-  return compacted.replace(/^(kodak|fujifilm|fuji|ilford|cinestill|lomography)/, "");
+  return compacted.replace(/^(kodak|fujifilm|fuji|ilford|cinestill|lomography|harman)/, "");
 }
 
 /**

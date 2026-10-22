@@ -12,7 +12,7 @@ export const FILM_STOCKS: readonly string[] = [
   "Cinestill 800T", "Cinestill 400D",
   "Lomography Color 400", "Lomography Color '92", "Lomography LomoChrome Metropolis",
   "Candido 400", "Candido 800",
-  "Phoenix 200 - Blue",
+  "Phoenix 125", "Phoenix 200 - Blue", "Harman Azure 125",
 ];
 
 /** Stored rows spelled Harman Phoenix as "Pheonix". Labels and matching use Phoenix. */
