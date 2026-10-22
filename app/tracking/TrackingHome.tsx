@@ -22,6 +22,7 @@ import PublicHeader, { TRACKING_HOME_EVENT } from "@/components/PublicHeader";
 import WindowFrame from "@/components/WindowFrame";
 import { Input } from "@/components/ui/input";
 import FilmProcessBadge from "@/components/FilmProcessBadge";
+import { filmProductUrl } from "@/lib/film-product-links";
 import {
   PUBLIC_ON_HOLD_MESSAGE,
   orderNoteForCustomerDisplay,
@@ -185,6 +186,26 @@ function OrderTimeline({
         })}
       </div>
     </div>
+  );
+}
+
+const FILM_STOCK_PILL_CLASS =
+  "rounded-full bg-white px-2 py-0.5 text-xs font-medium text-neutral-900 ring-1 ring-neutral-900";
+
+function FilmStockPill({ stock, format }: { stock: string; format?: string | null }) {
+  const href = filmProductUrl(stock, format);
+  if (!href) {
+    return <span className={FILM_STOCK_PILL_CLASS}>{stock}</span>;
+  }
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={`${FILM_STOCK_PILL_CLASS} underline-offset-2 hover:underline`}
+    >
+      {stock}
+    </a>
   );
 }
 
@@ -589,9 +610,7 @@ export default function TrackingHome({ milesSaved }: { milesSaved: ReactNode }) 
                               </span>
                             ) : null}
                             {roll.film_stock ? (
-                              <span className="rounded-full bg-white px-2 py-0.5 text-xs font-medium text-neutral-900 ring-1 ring-neutral-900">
-                                {roll.film_stock}
-                              </span>
+                              <FilmStockPill stock={roll.film_stock} format={roll.film_type} />
                             ) : null}
                             {roll.prints_4x6 ? (
                               <span className="flex items-center gap-1 rounded-full bg-[#A1CC93] px-2 py-0.5 text-xs font-bold text-neutral-900">
@@ -620,9 +639,7 @@ export default function TrackingHome({ milesSaved }: { milesSaved: ReactNode }) 
                             />
                           ) : null}
                           {order.film_stock ? (
-                            <span className="rounded-full bg-white px-2 py-0.5 text-xs font-medium text-neutral-900 ring-1 ring-neutral-900">
-                              {order.film_stock}
-                            </span>
+                            <FilmStockPill stock={order.film_stock} format={order.film_type} />
                           ) : null}
                           {order.prints_4x6 ? (
                             <span className="flex items-center gap-1 rounded-full bg-[#A1CC93] px-2 py-0.5 text-xs font-bold text-neutral-900">
