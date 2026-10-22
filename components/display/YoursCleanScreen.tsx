@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import FilmStatsBoard from "@/components/display/FilmStatsBoard";
+import { TRACK_MY_FILM_SUBTEXT, WordmarkLetters } from "@/components/PublicHeader";
 import type { DisplayPayload } from "@/lib/display";
 
 const STUDIO_MODES = new Set([
@@ -173,14 +174,12 @@ export default function YoursCleanScreen({
         className="relative flex h-dvh w-full flex-col overflow-hidden bg-[#FFF6D3] font-jetbrains text-neutral-900 select-none"
       >
         <div className="flex min-h-0 flex-1 flex-col px-[2.2cqw]">
-          <header className="flex shrink-0 justify-center pt-[2vh] pb-[1.3vh]">
-            {/* Static file, not the image optimizer: one small request on a Pi 4. */}
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/logo.png"
-              alt="Yours Durham"
-              className="h-[6.4vh] w-[6.4vh] max-h-[220px] max-w-[220px] rounded-[12%] object-cover"
-            />
+          <header className="flex shrink-0 flex-col items-center pt-[1.6vh] pb-[1.15vh] text-center">
+            <span className="sr-only">Track My Film</span>
+            <WordmarkLetters className="inline-flex max-w-full flex-nowrap items-baseline justify-center gap-x-[0.28em] font-jetbrains text-[clamp(3.25rem,11.2cqw,7.25rem)] leading-none font-bold tracking-tight" />
+            <p className="mt-[0.45vh] font-jetbrains text-[clamp(1.15rem,2.9cqw,2.15rem)] leading-relaxed font-normal text-neutral-800">
+              {TRACK_MY_FILM_SUBTEXT}
+            </p>
           </header>
           <main className="flex min-h-0 w-full flex-1 flex-col pb-[1.8vh]">
             <FilmStatsBoard data={payload.data} clock={clock} />
