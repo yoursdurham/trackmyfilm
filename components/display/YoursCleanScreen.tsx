@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import FilmStatsBoard from "@/components/display/FilmStatsBoard";
+import { TRACK_MY_FILM_SUBTEXT, WordmarkLetters } from "@/components/PublicHeader";
 import type { DisplayPayload } from "@/lib/display";
 
 const STUDIO_MODES = new Set([
@@ -155,7 +156,7 @@ export default function YoursCleanScreen({
   const studioHasNotes = studioMode === "studio_welcome"
     || studioMode === "studio_active"
     || studioMode === "studio_ending_soon";
-  const compact = filmStats || studioHasNotes;
+  const compact = studioHasNotes;
 
   useEffect(() => {
     const tick = () => setNow(new Date());
@@ -165,6 +166,28 @@ export default function YoursCleanScreen({
   }, []);
 
   const clock = now ? studioClock(now) : null;
+
+  if (filmStats) {
+    return (
+      <div
+        data-display-mode="film_stats"
+        className="relative flex h-dvh w-full flex-col overflow-hidden bg-[#FFF6D3] font-jetbrains text-neutral-900 select-none"
+      >
+        <div className="flex min-h-0 flex-1 flex-col px-[2.2cqw]">
+          <header className="flex shrink-0 flex-col items-center pt-[1.6vh] pb-[1.15vh] text-center">
+            <span className="sr-only">Track My Film</span>
+            <WordmarkLetters className="inline-flex max-w-full flex-nowrap items-baseline justify-center gap-x-[0.28em] font-jetbrains text-[clamp(3.25rem,11.2cqw,7.25rem)] leading-none font-bold tracking-tight" />
+            <p className="mt-[0.45vh] font-jetbrains text-[clamp(1.15rem,2.9cqw,2.15rem)] leading-relaxed font-normal text-neutral-800">
+              {TRACK_MY_FILM_SUBTEXT}
+            </p>
+          </header>
+          <main className="flex min-h-0 w-full flex-1 flex-col pb-[1.8vh]">
+            <FilmStatsBoard data={payload.data} clock={clock} />
+          </main>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -195,16 +218,12 @@ export default function YoursCleanScreen({
           </p>
         </header>
 
-        <main className={`flex min-h-0 flex-1 flex-col px-[1cqw] text-center ${
-          filmStats
-            ? "w-full items-stretch py-[1.2vh]"
-            : studioHasNotes
-              ? "items-center justify-start overflow-hidden pt-[2vh]"
-              : "items-center justify-center"
+        <main className={`flex min-h-0 flex-1 flex-col items-center px-[1cqw] text-center ${
+          studioHasNotes
+            ? "justify-start overflow-hidden pt-[2vh]"
+            : "justify-center"
         }`}>
-          {filmStats ? (
-            <FilmStatsBoard data={payload.data} />
-          ) : notice ? (
+          {notice ? (
             <p className="max-w-[18ch] text-[clamp(2rem,6cqw,4.5rem)] leading-tight font-medium">
               {notice}
             </p>

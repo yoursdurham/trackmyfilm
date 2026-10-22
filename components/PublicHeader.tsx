@@ -9,6 +9,10 @@ type PublicHeaderProps = {
 
 const COLORS = ["#DDB1B1", "#C5AED7", "#A1CC93"] as const;
 const WORDMARK = "Track My Film";
+export const TRACK_MY_FILM_SUBTEXT = "A Project by Yours, Durham";
+
+const WORDMARK_CLASS =
+  "inline-flex max-w-full flex-wrap items-baseline justify-center gap-x-[0.28em] font-jetbrains text-[2.15rem] font-bold leading-none tracking-tight min-[400px]:text-[2.45rem] sm:text-5xl lg:text-6xl";
 
 const WORDMARK_WORDS = (() => {
   const words: { word: string; letters: { char: string; color: string }[] }[] = [];
@@ -27,12 +31,9 @@ const WORDMARK_WORDS = (() => {
 /** Lets the tracking page drop order results even when that search lives only in memory. */
 export const TRACKING_HOME_EVENT = "trackmyfilm-home";
 
-function WordmarkLetters() {
+export function WordmarkLetters({ className = WORDMARK_CLASS }: { className?: string }) {
   return (
-    <span
-      aria-hidden="true"
-      className="inline-flex max-w-full flex-wrap items-baseline justify-center gap-x-[0.28em] font-jetbrains text-[2.15rem] font-bold leading-none tracking-tight min-[400px]:text-[2.45rem] sm:text-5xl lg:text-6xl"
-    >
+    <span aria-hidden="true" className={className}>
       {WORDMARK_WORDS.map(({ word, letters }) => (
         <span key={word} className="inline-flex">
           {letters.map((letter) => (
@@ -63,7 +64,7 @@ export default function PublicHeader({ heading = "h1" }: PublicHeaderProps) {
           </Link>
         </Tag>
         <p className="mt-2 font-jetbrains text-sm font-normal leading-relaxed text-neutral-800 sm:text-base">
-          A Project by Yours, Durham
+          {TRACK_MY_FILM_SUBTEXT}
         </p>
       </div>
     </header>
