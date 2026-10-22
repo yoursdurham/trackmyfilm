@@ -28,6 +28,7 @@ import StatusBadge from "./StatusBadge";
 import FilmProcessBadge from "./FilmProcessBadge";
 import CopyField from "./CopyField";
 import { ORDER_STATUS, STATUS_FLOW, STATUS_TEMPLATE_MAP } from "@/lib/constants";
+import { correctFilmStockSpelling } from "@/lib/film-stocks";
 import { HOLD_REASON_MAX_LENGTH } from "@/lib/hold-reason";
 import { getUrgentAgeDays, isUrgent } from "@/lib/order-urgency";
 import { getStatusOptionsForOrder, isProcessOnlyOrder } from "@/lib/order-service";
@@ -953,7 +954,7 @@ export default function OrderCard({
                         <div>
                           <label className="mb-1 block text-xs text-slate-500">Film Stock</label>
                           <Input
-                            value={roll.film_stock ?? ""}
+                            value={correctFilmStockSpelling(roll.film_stock ?? "")}
                             onChange={(event) => updateRollDraft(index, "film_stock", event.target.value)}
                             placeholder="Cinestill 800T"
                             className="border-slate-200"
@@ -1161,7 +1162,7 @@ export default function OrderCard({
                           ) : null}
                           {roll.film_stock ? (
                             <span className="rounded-full bg-slate-200 px-2 py-0.5 text-xs text-slate-700">
-                              {roll.film_stock}
+                              {correctFilmStockSpelling(roll.film_stock)}
                             </span>
                           ) : null}
                           {scanLabel ? (

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { FILM_STOCKS } from "../lib/film-stocks";
-import { FILM_PRODUCT_LINKS, filmProductUrl } from "../lib/film-product-links";
+import { correctFilmStockSpelling, FILM_STOCKS } from "../lib/film-stocks";
+import { FILM_PRODUCT_LINKS, filmProductUrl, KODAK_FUNSAVER_URL } from "../lib/film-product-links";
 
 const FORMATS = ["35mm", "120"] as const;
 
@@ -38,7 +38,6 @@ describe("filmProductUrl", () => {
     expect(filmProductUrl("Ilford HP5 Plus 400", "120")).toBeNull();
     expect(filmProductUrl("Lomography Color 400", "120")).toBeNull();
     expect(filmProductUrl("Kodak Portra 160", "110")).toBeNull();
-    expect(filmProductUrl("Kodak Portra 160", "Disposable Camera")).toBeNull();
     expect(filmProductUrl("Kodak Portra 160", null)).toBeNull();
     expect(filmProductUrl("Kodak Portra 160")).toBeNull();
   });
@@ -69,14 +68,13 @@ describe("filmProductUrl", () => {
 
   it("leaves unsold stocks and ambiguous names unlinked", () => {
     expect(filmProductUrl("Kodak T-Max 100", "35mm")).toBeNull();
-    expect(filmProductUrl("Fujifilm Superia 400", "35mm")).toBeNull();
     expect(filmProductUrl("Fujifilm Superia 200", "120")).toBeNull();
     expect(filmProductUrl("Fujifilm Pro 400H", "35mm")).toBeNull();
     expect(filmProductUrl("Fujifilm Velvia 50", "120")).toBeNull();
     expect(filmProductUrl("Fujifilm Provia 100F", "35mm")).toBeNull();
     expect(filmProductUrl("Ilford Delta 400", "35mm")).toBeNull();
     expect(filmProductUrl("Ilford XP2 Super 400", "120")).toBeNull();
-    expect(filmProductUrl("Fujifilm 400", "35mm")).toBeNull();
+    expect(filmProductUrl("Fujifilm 400", "120")).toBeNull();
     expect(filmProductUrl("portra", "35mm")).toBeNull();
     expect(filmProductUrl("tmax", "120")).toBeNull();
     expect(filmProductUrl("not a film", "35mm")).toBeNull();
@@ -105,11 +103,11 @@ describe("filmProductUrl", () => {
     expect(unmatched).toEqual([
       "Kodak UltraMax 400 120",
       "Kodak ColorPlus 200 120",
+      "Kodak Kodacolor 200 120",
       "Kodak T-Max 100 35mm",
       "Kodak T-Max 100 120",
-      "Fujifilm Superia 400 35mm",
+      "Kodak T-Max P3200 120",
       "Fujifilm Superia 400 120",
-      "Fujifilm Superia 200 35mm",
       "Fujifilm Superia 200 120",
       "Fujifilm Pro 400H 35mm",
       "Fujifilm Pro 400H 120",
@@ -123,6 +121,59 @@ describe("filmProductUrl", () => {
       "Ilford XP2 Super 400 35mm",
       "Ilford XP2 Super 400 120",
       "Lomography Color 400 120",
+      "Lomography Color '92 35mm",
+      "Lomography Color '92 120",
+      "Lomography LomoChrome Metropolis 120",
+      "Candido 400 120",
+      "Candido 800 120",
+      "Phoenix 200 - Blue 35mm",
+      "Phoenix 200 - Blue 120",
     ]);
+  });
+
+  it("links newly catalogued 35mm stocks and their shop-title aliases", () => {
+    const metropolis = "https://www.yoursdurham.com/shopping/p/lomography-lomochrome-metropolis-35mm-xr-100400-36-exp";
+    const fuji200 = "https://www.yoursdurham.com/shopping/p/fuji-200-35mm";
+    const fuji400 = "https://www.yoursdurham.com/shopping/p/fuji-400-35mm";
+    const p3200 = "https://www.yoursdurham.com/shopping/p/kodak-t-max-3200";
+    expect(filmProductUrl("Lomography LomoChrome Metropolis", "35mm")).toBe(metropolis);
+    expect(filmProductUrl("Lomochrome Metropolis", "35mm")).toBe(metropolis);
+    expect(filmProductUrl("Lomography LomoChrome Metropolis", "120")).toBeNull();
+    expect(filmProductUrl("Fujifilm Superia 200", "35mm")).toBe(fuji200);
+    expect(filmProductUrl("Fujifilm 200", "35mm")).toBe(fuji200);
+    expect(filmProductUrl("Fujifilm Superia 400", "35mm")).toBe(fuji400);
+    expect(filmProductUrl("Fujifilm 400", "35mm")).toBe(fuji400);
+    expect(filmProductUrl("Kodak T-Max P3200", "35mm")).toBe(p3200);
+    expect(filmProductUrl("Kodak TMax 3200", "35mm")).toBe(p3200);
+    expect(filmProductUrl("Kodak P3200 T-Max", "35mm")).toBe(p3200);
+    expect(filmProductUrl("Kodak T-Max P3200", "120")).toBeNull();
+    expect(filmProductUrl("Candido 400", "35mm")).toBe(
+      "https://www.yoursdurham.com/shopping/p/candido400-colour-film",
+    );
+    expect(filmProductUrl("CANDIDO800 COLOUR FILM", "35mm")).toBe(
+      "https://www.yoursdurham.com/shopping/p/candido800-colour-film",
+    );
+    expect(filmProductUrl("Kodak Kodacolor 200", "35mm")).toBe(
+      "https://www.yoursdurham.com/shopping/p/kodak-kodacolor-200",
+    );
+    expect(filmProductUrl("Lomography Color '92", "35mm")).toBeNull();
+    expect(filmProductUrl("Harman Red 125", "35mm")).toBeNull();
+    expect(filmProductUrl("Harman Azure", "35mm")).toBeNull();
+    expect(filmProductUrl("Phoenix 200 - Blue", "35mm")).toBeNull();
+    expect(filmProductUrl("Pheonix 200 - Blue", "35mm")).toBeNull();
+  });
+
+  it("links every disposable camera to the Kodak FunSaver page", () => {
+    expect(filmProductUrl("Kodak Portra 160", "Disposable Camera")).toBe(KODAK_FUNSAVER_URL);
+    expect(filmProductUrl("anything", "Disposable")).toBe(KODAK_FUNSAVER_URL);
+    expect(filmProductUrl("Kodak FunSaver", "35mm")).toBe(KODAK_FUNSAVER_URL);
+    expect(filmProductUrl("Kodak Fun Saver", null)).toBe(KODAK_FUNSAVER_URL);
+    expect(filmProductUrl(null, "Disposable Camera")).toBe(KODAK_FUNSAVER_URL);
+  });
+
+  it("rewrites the Pheonix misspelling for display", () => {
+    expect(correctFilmStockSpelling("Pheonix 200 - Blue")).toBe("Phoenix 200 - Blue");
+    expect(correctFilmStockSpelling("PHEONIX 200 - Blue")).toBe("Phoenix 200 - Blue");
+    expect(correctFilmStockSpelling("Kodak Portra 160")).toBe("Kodak Portra 160");
   });
 });

@@ -13,6 +13,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import type { SquarespaceCheckSummary } from "@/lib/squarespace-orders";
+import { correctFilmStockSpelling } from "@/lib/film-stocks";
 import type { IncomingSquarespaceDraft, RollDetail } from "@/lib/types";
 
 function formatDraftDate(date: string | null) {
@@ -28,7 +29,7 @@ function summarizeRoll(roll: RollDetail) {
   const parts: string[] = [roll.film_type, roll.film_process];
   if (roll.scan_size) parts.push(roll.scan_size);
   if (roll.prints_4x6) parts.push("4x6 prints");
-  if (roll.film_stock) parts.push(roll.film_stock);
+  if (roll.film_stock) parts.push(correctFilmStockSpelling(roll.film_stock));
   return parts.join(" · ");
 }
 

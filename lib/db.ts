@@ -8,6 +8,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Customer, CustomerSummary, FilmOrder, IncomingSquarespaceDraft, RollDetail } from "./types";
 import type { DisplayRow, HeartbeatClient } from "./display";
 import { HEARTBEAT_WRITE_INTERVAL_MS } from "./display-heartbeat";
+import { correctFilmStockSpelling } from "./film-stocks";
 import { DEPARTURE_ORDER_SELECT, type DepartureOrder } from "./film-departures";
 import { FILM_METRICS_ORDER_SELECT, filmMetricsOrderOrFilter } from "./film-metrics";
 import { ORDER_STATUS } from "./constants";
@@ -235,7 +236,11 @@ export async function getDistinctFilmStocks(): Promise<string[]> {
     .select("film_stock")
     .not("film_stock", "is", null);
   if (error) throw new Error(error.message);
-  const stocks = [...new Set((data as { film_stock: string }[]).map((r) => r.film_stock).filter(Boolean))];
+  const stocks = [...new Set(
+    (data as { film_stock: string }[])
+      .map((r) => correctFilmStockSpelling(r.film_stock))
+      .filter(Boolean),
+  )];
   return stocks.sort();
 }
 

@@ -3,7 +3,7 @@
  * No database or email side effects.
  */
 
-import { FILM_STOCKS } from "./film-stocks";
+import { correctFilmStockSpelling, FILM_STOCKS } from "./film-stocks";
 
 export const CUSTOMER_FILM_NOTE_PREFIX = "Customer listed film:";
 const MAX_LISTED_QUANTITY = 20;
@@ -32,7 +32,7 @@ export function matchFilmStock(
   query: string,
   catalog: readonly string[] = FILM_STOCKS,
 ): string | null {
-  const trimmed = query.trim();
+  const trimmed = correctFilmStockSpelling(query.trim());
   if (!/[a-z]/i.test(trimmed)) return null;
   const q = compact(trimmed);
   if (q.length < 3) return null;

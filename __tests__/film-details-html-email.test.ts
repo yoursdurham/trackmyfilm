@@ -78,7 +78,7 @@ describe("sendOrderEmail film_details_html stock links", () => {
         '<p style="margin:0 0 6px;padding:0;">Roll 1: 35mm / Color / High-Res / <a href="https://www.yoursdurham.com/shopping/p/kodak-portra-160-35mm" target="_blank" style="color:#1a1a1a;text-decoration:underline;">Kodak Portra 160</a></p>',
         '<p style="margin:0 0 6px;padding:0;">Roll 2: 120 / Black &amp; White / Standard / <a href="https://www.yoursdurham.com/shopping/p/kodak-portra-160-120" target="_blank" style="color:#1a1a1a;text-decoration:underline;">Kodak Portra 160</a></p>',
         '<p style="margin:0 0 6px;padding:0;">Roll 3: 120 / Color / Kodak UltraMax 400</p>',
-        '<p style="margin:0 0 6px;padding:0;">Roll 4: 35mm / Color / Fujifilm &lt;Superia&gt; &amp; 400 + 4x6 Prints</p>',
+        '<p style="margin:0 0 6px;padding:0;">Roll 4: 35mm / Color / <a href="https://www.yoursdurham.com/shopping/p/fuji-400-35mm" target="_blank" style="color:#1a1a1a;text-decoration:underline;">Fujifilm &lt;Superia&gt; &amp; 400</a> + 4x6 Prints</p>',
       ].join(""),
     );
     expect(html).not.toContain("kodak-ultramax-400-35mm");
@@ -89,5 +89,33 @@ describe("sendOrderEmail film_details_html stock links", () => {
     expect(body.template.variables.notes).toBeUndefined();
     expect(body.template.variables.scan_notes).toBeUndefined();
     expect(body.template.variables.film_details).toBeUndefined();
+  });
+
+  it("shows Pheonix rows as Phoenix and links disposable cameras to FunSaver", async () => {
+    mockGetOrderById.mockResolvedValue(makeOrder({
+      roll_count: 2,
+      roll_details: [
+        { film_type: "35mm", film_process: "Color", film_stock: "Pheonix 200 - Blue" },
+        { film_type: "Disposable Camera", film_process: "Color", film_stock: "Kodak Gold 200" },
+      ],
+    }));
+
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ id: "email-2" }),
+    });
+    global.fetch = fetchMock as typeof fetch;
+
+    await sendOrderEmail("order-1", "film_at_lab");
+
+    const body = JSON.parse(String(fetchMock.mock.calls[0][1]?.body)) as {
+      template: { variables: Record<string, string> };
+    };
+    const html = body.template.variables.film_details_html;
+    expect(html).toContain("Phoenix 200 - Blue");
+    expect(html).not.toContain("Pheonix");
+    expect(html).toContain(
+      '<a href="https://www.yoursdurham.com/shopping/p/kodak-fun-saver-single-use-800-iso" target="_blank" style="color:#1a1a1a;text-decoration:underline;">Kodak Gold 200</a>',
+    );
   });
 });

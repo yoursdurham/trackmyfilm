@@ -1,4 +1,5 @@
 import { isBlankRoll } from "./blank-roll";
+import { correctFilmStockSpelling } from "./film-stocks";
 import { ORDER_STATUS } from "./constants";
 import type { FilmOrder, RollDetail } from "./types";
 
@@ -63,7 +64,8 @@ function tallyRoll(
   if (roll.film_type === "110") totals.total110Rolls += 1;
   if (roll.prints_4x6) totals.total4x6Prints += 1;
   if (roll.film_stock) {
-    filmStockMap.set(roll.film_stock, (filmStockMap.get(roll.film_stock) || 0) + 1);
+    const stock = correctFilmStockSpelling(roll.film_stock);
+    filmStockMap.set(stock, (filmStockMap.get(stock) || 0) + 1);
   }
   if (roll.scan_size) {
     scanResolutionMap.set(roll.scan_size, (scanResolutionMap.get(roll.scan_size) || 0) + 1);
@@ -95,7 +97,8 @@ function tallyLegacyOrder(
   if (order.film_type === "110") totals.total110Rolls += count;
   if (order.prints_4x6) totals.total4x6Prints += count;
   if (order.film_stock) {
-    filmStockMap.set(order.film_stock, (filmStockMap.get(order.film_stock) || 0) + count);
+    const stock = correctFilmStockSpelling(order.film_stock);
+    filmStockMap.set(stock, (filmStockMap.get(stock) || 0) + count);
   }
 }
 
