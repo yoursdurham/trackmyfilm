@@ -202,7 +202,7 @@ function FilmStockPill({ stock, format }: { stock: string; format?: string | nul
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      className={`${FILM_STOCK_PILL_CLASS} underline-offset-2 hover:underline`}
+      className={`${FILM_STOCK_PILL_CLASS} underline-offset-2 transition-colors duration-150 ease-out hover:bg-[#C5AED7]/40 hover:underline focus-visible:bg-[#C5AED7]/40 focus-visible:underline focus-visible:outline-none`}
     >
       {stock}
     </a>
