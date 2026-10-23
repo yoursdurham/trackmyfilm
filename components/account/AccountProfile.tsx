@@ -218,6 +218,10 @@ export default function AccountProfile({
         </section>
       ) : null}
 
+      <section data-testid="share-photos-section">
+        <SharePhotosForm mode="account" />
+      </section>
+
       <section data-testid="contact">
         <WindowFrame title="Contact" titleAs="h2" bodyClassName="space-y-4 p-4 sm:p-5">
           <dl className="space-y-3 font-jetbrains text-sm leading-relaxed text-neutral-900">
@@ -235,10 +239,6 @@ export default function AccountProfile({
             <button type="submit" data-testid="sign-out" className={signOutClass}>Sign out</button>
           </form>
         </WindowFrame>
-      </section>
-
-      <section data-testid="share-photos-section">
-        <SharePhotosForm mode="account" />
       </section>
     </main>
   );

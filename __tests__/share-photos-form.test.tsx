@@ -27,9 +27,11 @@ describe("Share your photos", () => {
     expect(html).toContain("bg-[#DDB1B1]");
 
     const profile = renderToStaticMarkup(<AccountProfile profile={previewAccountProfile()} />);
-    const contact = profile.indexOf('data-testid="contact"');
+    const recommend = profile.indexOf('data-testid="try-something-new"');
     const share = profile.indexOf('data-testid="share-photos-section"');
-    expect(share).toBeGreaterThan(contact);
+    const contact = profile.indexOf('data-testid="contact"');
+    expect(share).toBeGreaterThan(recommend);
+    expect(contact).toBeGreaterThan(share);
     expect(profile).not.toContain('id="share-photos-email"');
   });
 

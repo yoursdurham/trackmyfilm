@@ -26,11 +26,14 @@ describe("Share your photos placement", () => {
     expect(info).toBeGreaterThan(share);
   });
 
-  it("leaves the account uploader after Contact", () => {
+  it("puts the account uploader after Try something new and above Contact", () => {
     const profile = renderToStaticMarkup(<AccountProfile profile={previewAccountProfile()} />);
-    const contact = profile.indexOf('data-testid="contact"');
+    const recommend = profile.indexOf('data-testid="try-something-new"');
     const share = profile.indexOf('data-testid="share-photos-section"');
-    expect(share).toBeGreaterThan(contact);
+    const contact = profile.indexOf('data-testid="contact"');
+    expect(recommend).toBeGreaterThan(-1);
+    expect(share).toBeGreaterThan(recommend);
+    expect(contact).toBeGreaterThan(share);
     expect(profile).not.toContain('data-testid="home-share-photos"');
   });
 });
