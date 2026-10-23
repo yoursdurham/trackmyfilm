@@ -1,4 +1,5 @@
-import { isBlankRoll } from "@/lib/blank-roll";
+import { isBlankRoll, orderHasOnlyBlankRolls } from "@/lib/blank-roll";
+import { formatMiles, MILES_PER_DROPOFF } from "@/lib/miles-saved";
 import { computeCustomerEmailStats, type CustomerEmailStats } from "@/lib/customer-email-stats";
 import { ORDER_STATUS, KNOWN_ORDER_STATUSES } from "@/lib/constants";
 import { filmProductUrl } from "@/lib/film-product-links";
@@ -72,10 +73,28 @@ export type AccountProfileData = {
   email: string;
   contactName: string | null;
   stats: CustomerEmailStats;
+  milesSaved: string;
   current: AccountOrderView[];
   history: AccountOrderView[];
   favorites: AccountFavorite[];
 };
+
+/**
+ * One of this customer's drop-offs is one round trip to Raleigh they did not
+ * drive. Orders whose rolls are all blank do not count. The 32 miles match
+ * the homepage and studio figure.
+ */
+export function accountMilesSaved(orders: Pick<AccountOrderInput, "id" | "roll_details">[]): string {
+  const seen = new Set<string>();
+  let dropoffs = 0;
+  for (const order of orders) {
+    if (seen.has(order.id)) continue;
+    seen.add(order.id);
+    if (orderHasOnlyBlankRolls({ roll_details: order.roll_details ?? undefined })) continue;
+    dropoffs += 1;
+  }
+  return `${formatMiles(dropoffs * MILES_PER_DROPOFF)} mi`;
+}
 
 export function isAccountPreview(preview: string | undefined, nodeEnv = process.env.NODE_ENV): boolean {
   return nodeEnv !== "production" && preview === "1";
@@ -346,6 +365,7 @@ export function buildAccountProfile(input: {
     email: input.email.trim(),
     contactName,
     stats: computeCustomerEmailStats(orders.map(asFilmOrder), input.now),
+    milesSaved: accountMilesSaved(orders),
     current: views.filter((entry) => entry.phase === "current").map((entry) => entry.view),
     history: views.filter((entry) => entry.phase === "history").map((entry) => entry.view),
     favorites: accountFavorites(orders),

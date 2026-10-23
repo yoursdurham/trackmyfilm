@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   accountFavorites,
   accountGreetingName,
+  accountMilesSaved,
   accountProgress,
   buildAccountProfile,
   isAccountPreview,
@@ -78,6 +79,7 @@ describe("customer isolation in the profile builder", () => {
     expect(profile.greetingName).toBe("Ada L.");
     expect(profile.current.map((entry) => entry.orderNumber)).toEqual(["TEST-ADA-1"]);
     expect(profile.stats.rolls_dropped_off).toBe("1");
+    expect(profile.milesSaved).toBe("32 mi");
     expect(ordersForVerifiedEmail([
       { customer_email: "ADA@example.com" },
       { customer_email: "bea@example.com" },
@@ -94,6 +96,7 @@ describe("customer isolation in the profile builder", () => {
     expect(profile.stats.rolls_dropped_off).toBe("6");
     expect(profile.stats.top_stock).toBe("Kodak Portra 400");
     expect(profile.stats.days_since_first_drop).toBe("180");
+    expect(profile.milesSaved).toBe("96 mi");
     expect(profile.favorites.find((favorite) => favorite.stock === "Kodak Portra 400")?.href)
       .toBe("https://www.yoursdurham.com/shopping/p/kodak-portra-400-35mm");
     expect(profile.current.find((entry) => entry.orderNumber === "YM-1180")?.holdMessage)
@@ -114,6 +117,20 @@ describe("customer isolation in the profile builder", () => {
       }),
     ]);
     expect(favorites).toEqual([{ stock: "Kodak Portra 400", href: null }]);
+  });
+});
+
+describe("account miles saved", () => {
+  it("counts each of this customer's drop-offs as 32 miles and skips all-blank orders", () => {
+    expect(accountMilesSaved([
+      order({ id: "kept", roll_details: [{ film_type: "35mm", film_process: "Color", film_stock: "Kodak Portra 400" }] }),
+      order({ id: "kept" }),
+      order({
+        id: "blank",
+        roll_details: [{ film_type: "35mm", film_process: "Color", film_stock: "Kodak Gold 200", blank: true }],
+      }),
+    ])).toBe("32 mi");
+    expect(accountMilesSaved([])).toBe("0 mi");
   });
 });
 

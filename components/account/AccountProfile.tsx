@@ -76,10 +76,20 @@ function OrderCard({ order, showProgress }: { order: AccountOrderView; showProgr
   );
 }
 
-function StatCard({ label, value, testId }: { label: string; value: string; testId: string }) {
+function StatCard({
+  label,
+  value,
+  testId,
+  caption,
+}: {
+  label: string;
+  value: string;
+  testId: string;
+  caption?: string;
+}) {
   const compact = value.trim().length > 6;
   return (
-    <div className="w-full min-w-0 overflow-hidden rounded-[1.7rem] border-2 border-neutral-900 bg-white">
+    <div className="flex h-full w-full min-w-0 flex-col overflow-hidden rounded-[1.7rem] border-2 border-neutral-900 bg-white">
       <div className="relative flex min-h-11 items-center bg-[#DDB1B1] py-2 pl-16 pr-3">
         <span className="absolute left-3.5 flex gap-1.5" aria-hidden="true">
           <span className="size-2.5 rounded-full bg-[#C9B7C6]" />
@@ -90,13 +100,16 @@ function StatCard({ label, value, testId }: { label: string; value: string; test
           {label}
         </h3>
       </div>
-      <div className="flex min-h-24 items-center justify-center bg-white px-3 py-4">
+      <div className="flex min-h-24 flex-1 flex-col items-center justify-center bg-white px-3 py-4 text-center">
         <p
           data-testid={testId}
-          className={`text-center font-jetbrains font-bold leading-tight text-neutral-900 ${compact ? "text-lg sm:text-xl" : "text-3xl"}`}
+          className={`font-jetbrains font-bold leading-tight text-neutral-900 ${compact ? "text-lg sm:text-xl" : "text-3xl"}`}
         >
           {value}
         </p>
+        {caption ? (
+          <p className="mt-1 font-jetbrains text-[0.7rem] leading-snug text-neutral-700">{caption}</p>
+        ) : null}
       </div>
     </div>
   );
@@ -123,10 +136,16 @@ export default function AccountProfile({
         </p>
       </header>
 
-      <section aria-label="Your film so far" className="grid gap-3 sm:grid-cols-3">
+      <section aria-label="Your film so far" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard label="Rolls dropped off" value={displayStat(profile.stats.rolls_dropped_off, "—")} testId="stat-rolls" />
         <StatCard label="Most-used film" value={displayStat(profile.stats.top_stock, "—")} testId="stat-stock" />
         <StatCard label="Days since first drop" value={displayStat(profile.stats.days_since_first_drop, "—")} testId="stat-days" />
+        <StatCard
+          label="Miles saved"
+          value={profile.milesSaved}
+          caption="not driven to Raleigh"
+          testId="stat-miles"
+        />
       </section>
 
       <section className="space-y-3" data-testid="current-orders">
