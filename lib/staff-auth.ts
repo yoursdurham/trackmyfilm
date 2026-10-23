@@ -23,13 +23,21 @@ export function staffEmailAllowlist(): string[] | null {
   return emails.length > 0 ? emails : null;
 }
 
+/** Addresses that may try the customer account while it is still hidden. Not staff. */
+export function isCustomerAccountTester(email: string | null | undefined): boolean {
+  const listed = parseEmailAllowlist(process.env.CUSTOMER_ACCOUNT_TESTERS);
+  if (!email || listed.length === 0) return false;
+  return listed.includes(email.trim().toLowerCase());
+}
+
 export function isStaffEmail(email: string | null | undefined): boolean {
   const allowlist = staffEmailAllowlist();
   if (!allowlist) {
+    if (isCustomerAccountTester(email)) return false;
     if (!staffAllowlistWarningLogged) {
       staffAllowlistWarningLogged = true;
       console.warn(
-        "[auth] STAFF_EMAILS is not set. Any signed-in user is treated as staff until this env var is configured."
+        "[auth] STAFF_EMAILS is not set. Any signed-in user is treated as staff until this env var is configured. Addresses in CUSTOMER_ACCOUNT_TESTERS are not staff."
       );
     }
     return true;

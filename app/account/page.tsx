@@ -3,6 +3,7 @@ import AccountProfile from "@/components/account/AccountProfile";
 import { isAccountPreview, previewAccountProfile } from "@/lib/account-profile";
 import { loadAccountProfile } from "@/lib/account-orders";
 import { customerAccountPageAllowed, customerAccountsEnabled } from "@/lib/customer-accounts";
+import { isCustomerAccountTester } from "@/lib/staff-auth";
 import { createClient } from "@/lib/supabase/server";
 import { notFound, redirect } from "next/navigation";
 
@@ -15,10 +16,12 @@ export default async function AccountPage({
 }) {
   const params = await searchParams;
   const accountsOpen = customerAccountsEnabled();
+  let sessionEmail: string | null = null;
   if (!accountsOpen) {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
-    if (!customerAccountPageAllowed(user?.email)) notFound();
+    sessionEmail = user?.email ?? null;
+    if (!customerAccountPageAllowed(sessionEmail)) notFound();
   } else if (isAccountPreview(params.preview)) {
     return (
       <div className="flex min-h-screen flex-col bg-[#FFF6D3] font-jetbrains text-neutral-900">
@@ -40,7 +43,7 @@ export default async function AccountPage({
       <AccountProfile
         profile={loaded.profile}
         ordersUnavailable={loaded.ordersUnavailable}
-        signOutNext={accountsOpen ? "/account/login" : null}
+        signOutNext={accountsOpen || isCustomerAccountTester(sessionEmail) ? "/account/login" : null}
       />
     </div>
   );

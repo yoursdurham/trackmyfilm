@@ -2,7 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import type { EmailOtpType } from "@supabase/supabase-js";
 import { NextResponse, type NextRequest } from "next/server";
 import { confirmFailurePath, isAccountFlowPath, PASSWORD_UPDATE_PATH, safeNextPath } from "@/lib/auth-redirect";
-import { customerAccountsEnabled, isListedStaffEmail } from "@/lib/customer-accounts";
+import { customerAccountsEnabled, customerAccountTestAllowed } from "@/lib/customer-accounts";
 
 const OTP_TYPES = new Set<EmailOtpType>([
   "signup",
@@ -76,7 +76,7 @@ export async function GET(request: NextRequest) {
   async function finishVerifiedSession() {
     if (!accountHandoff || accountsOpen) return redirectResponse;
     const { data: { user } } = await supabase.auth.getUser();
-    if (isListedStaffEmail(user?.email)) return redirectResponse;
+    if (customerAccountTestAllowed(user?.email)) return redirectResponse;
     await supabase.auth.signOut();
     return hiddenAccountResponse();
   }

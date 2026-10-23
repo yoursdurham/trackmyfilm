@@ -15,6 +15,18 @@ import { ACCOUNT_SIGN_IN_MESSAGE, POST, resetAccountSignInStateForTests } from "
 const ORIGINAL_STAFF = process.env.STAFF_EMAILS;
 const ORIGINAL_APP_URL = process.env.NEXT_PUBLIC_APP_URL;
 const ORIGINAL_ACCOUNTS = process.env.CUSTOMER_ACCOUNTS_ENABLED;
+const ORIGINAL_TESTERS = process.env.CUSTOMER_ACCOUNT_TESTERS;
+
+function restoreAccountEnv() {
+  if (ORIGINAL_STAFF === undefined) delete process.env.STAFF_EMAILS;
+  else process.env.STAFF_EMAILS = ORIGINAL_STAFF;
+  if (ORIGINAL_APP_URL === undefined) delete process.env.NEXT_PUBLIC_APP_URL;
+  else process.env.NEXT_PUBLIC_APP_URL = ORIGINAL_APP_URL;
+  if (ORIGINAL_ACCOUNTS === undefined) delete process.env.CUSTOMER_ACCOUNTS_ENABLED;
+  else process.env.CUSTOMER_ACCOUNTS_ENABLED = ORIGINAL_ACCOUNTS;
+  if (ORIGINAL_TESTERS === undefined) delete process.env.CUSTOMER_ACCOUNT_TESTERS;
+  else process.env.CUSTOMER_ACCOUNT_TESTERS = ORIGINAL_TESTERS;
+}
 
 function request(email: unknown, ip = "203.0.113.10") {
   return new Request("http://localhost:3000/api/account/sign-in", {
@@ -35,16 +47,12 @@ describe("POST /api/account/sign-in", () => {
     resetAccountSignInStateForTests();
     process.env.STAFF_EMAILS = "owner@shop.test";
     process.env.CUSTOMER_ACCOUNTS_ENABLED = "true";
+    delete process.env.CUSTOMER_ACCOUNT_TESTERS;
     delete process.env.NEXT_PUBLIC_APP_URL;
   });
 
   afterEach(() => {
-    if (ORIGINAL_STAFF === undefined) delete process.env.STAFF_EMAILS;
-    else process.env.STAFF_EMAILS = ORIGINAL_STAFF;
-    if (ORIGINAL_APP_URL === undefined) delete process.env.NEXT_PUBLIC_APP_URL;
-    else process.env.NEXT_PUBLIC_APP_URL = ORIGINAL_APP_URL;
-    if (ORIGINAL_ACCOUNTS === undefined) delete process.env.CUSTOMER_ACCOUNTS_ENABLED;
-    else process.env.CUSTOMER_ACCOUNTS_ENABLED = ORIGINAL_ACCOUNTS;
+    restoreAccountEnv();
   });
 
   it("sends a magic link and the same message for a real address", async () => {
@@ -111,22 +119,19 @@ describe("POST /api/account/sign-in while accounts are hidden", () => {
     signInWithOtp.mockResolvedValue({ error: null });
     resetAccountSignInStateForTests();
     process.env.STAFF_EMAILS = "owner@shop.test";
+    process.env.CUSTOMER_ACCOUNT_TESTERS = "friend@example.com";
     delete process.env.CUSTOMER_ACCOUNTS_ENABLED;
     delete process.env.NEXT_PUBLIC_APP_URL;
   });
 
   afterEach(() => {
-    if (ORIGINAL_STAFF === undefined) delete process.env.STAFF_EMAILS;
-    else process.env.STAFF_EMAILS = ORIGINAL_STAFF;
-    if (ORIGINAL_APP_URL === undefined) delete process.env.NEXT_PUBLIC_APP_URL;
-    else process.env.NEXT_PUBLIC_APP_URL = ORIGINAL_APP_URL;
-    if (ORIGINAL_ACCOUNTS === undefined) delete process.env.CUSTOMER_ACCOUNTS_ENABLED;
-    else process.env.CUSTOMER_ACCOUNTS_ENABLED = ORIGINAL_ACCOUNTS;
+    restoreAccountEnv();
   });
 
-  it("returns 404 for an email that is not on STAFF_EMAILS and does not send a link", async () => {
+  it("answers the same way and sends no mail for an email that is not a tester or staff", async () => {
     const res = await POST(request("ada@example.com", "203.0.113.20"));
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ success: true, message: ACCOUNT_SIGN_IN_MESSAGE });
     expect(signInWithOtp).not.toHaveBeenCalled();
   });
 
@@ -143,10 +148,28 @@ describe("POST /api/account/sign-in while accounts are hidden", () => {
     });
   });
 
-  it("stays 404 when STAFF_EMAILS is unset", async () => {
+  it("sends a link for a tester address, ignoring case", async () => {
+    const res = await POST(request(" Friend@Example.com ", "203.0.113.22"));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ success: true, message: ACCOUNT_SIGN_IN_MESSAGE });
+    expect(signInWithOtp).toHaveBeenCalledWith({
+      email: "friend@example.com",
+      options: {
+        emailRedirectTo: "http://localhost:3000/auth/confirm?next=/account",
+        shouldCreateUser: true,
+      },
+    });
+  });
+
+  it("still sends a tester link when STAFF_EMAILS is unset, and stays quiet for everyone else", async () => {
     delete process.env.STAFF_EMAILS;
-    const res = await POST(request("owner@shop.test", "203.0.113.22"));
-    expect(res.status).toBe(404);
+    const stranger = await POST(request("ada@example.com", "203.0.113.23"));
+    expect(stranger.status).toBe(200);
+    expect(await stranger.json()).toEqual({ success: true, message: ACCOUNT_SIGN_IN_MESSAGE });
     expect(signInWithOtp).not.toHaveBeenCalled();
+
+    const tester = await POST(request("friend@example.com", "203.0.113.24"));
+    expect(tester.status).toBe(200);
+    expect(signInWithOtp).toHaveBeenCalledTimes(1);
   });
 });

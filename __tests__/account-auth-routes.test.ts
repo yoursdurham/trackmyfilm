@@ -39,12 +39,14 @@ describe("auth confirm for customer links", () => {
     authState.signOut.mockClear();
     process.env.CUSTOMER_ACCOUNTS_ENABLED = "true";
     process.env.STAFF_EMAILS = "owner@shop.test";
+    process.env.CUSTOMER_ACCOUNT_TESTERS = "friend@example.com";
   });
 
   afterEach(() => {
     if (originalAccounts === undefined) delete process.env.CUSTOMER_ACCOUNTS_ENABLED;
     else process.env.CUSTOMER_ACCOUNTS_ENABLED = originalAccounts;
     delete process.env.STAFF_EMAILS;
+    delete process.env.CUSTOMER_ACCOUNT_TESTERS;
   });
 
   it("sends a failed account link back to account sign-in", async () => {
@@ -91,6 +93,17 @@ describe("auth confirm for customer links", () => {
     expect(res.status).toBe(404);
     expect(res.headers.get("location")).toBeNull();
     expect(authState.signOut).toHaveBeenCalledTimes(1);
+  });
+
+  it("lets a tester finish the customer link while accounts are off", async () => {
+    delete process.env.CUSTOMER_ACCOUNTS_ENABLED;
+    authState.user = { email: "Friend@Example.com" };
+    const res = await confirmGet(new NextRequest(
+      "http://localhost:3000/auth/confirm?token_hash=abc&type=magiclink&next=/account",
+    ));
+    expect(res.status).toBe(307);
+    expect(res.headers.get("location")).toBe("http://localhost:3000/account");
+    expect(authState.signOut).not.toHaveBeenCalled();
   });
 
   it("lets a listed staff email finish the customer link while accounts are off", async () => {
