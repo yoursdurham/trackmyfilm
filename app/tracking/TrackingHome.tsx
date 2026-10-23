@@ -19,6 +19,7 @@ import {
   Search,
 } from "lucide-react";
 import PublicHeader, { TRACKING_HOME_EVENT } from "@/components/PublicHeader";
+import SharePhotosForm from "@/components/photos/SharePhotosForm";
 import WindowFrame from "@/components/WindowFrame";
 import { Input } from "@/components/ui/input";
 import FilmProcessBadge from "@/components/FilmProcessBadge";
@@ -727,6 +728,10 @@ export default function TrackingHome({
         </AnimatePresence>
 
         {hasSearched ? null : milesSaved}
+
+        <div className="mt-12" data-testid="home-share-photos">
+          <SharePhotosForm mode="public" />
+        </div>
 
         <div className="mb-10 mt-12">
           <h2 className="mb-8 text-center font-jetbrains text-2xl font-bold tracking-tight text-neutral-900 sm:text-3xl">

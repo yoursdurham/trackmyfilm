@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { PASSWORD_UPDATE_PATH } from "@/lib/auth-redirect";
+import { isPhotoReviewPreview } from "@/lib/photo-submissions";
 import { isStaffEmail, isStaffPath } from "@/lib/staff-auth";
 
 const NOT_STAFF_ERROR = "not-staff";
@@ -66,10 +67,12 @@ export async function proxy(request: NextRequest) {
 
   const isProtected = isStaffPath(path);
   const staff = user ? isStaffEmail(user.email) : false;
+  // Sample review page for local screenshots. Production still requires staff.
+  const photoPreview = isPhotoReviewPreview(path, request.nextUrl.searchParams.get("preview"));
 
   // Signed-in account that is not on STAFF_EMAILS. Sign them out so the
   // session cannot be reused, and tell them why on the login page.
-  if (user && !staff && (isProtected || path === "/login")) {
+  if (user && !staff && (isProtected || path === "/login") && !photoPreview) {
     await supabase.auth.signOut();
     if (path === "/login" && request.nextUrl.searchParams.get("error") === NOT_STAFF_ERROR) {
       return supabaseResponse;
@@ -82,7 +85,7 @@ export async function proxy(request: NextRequest) {
   }
 
   // Unauthenticated user hitting a protected route → send to login
-  if (isProtected && !user) {
+  if (isProtected && !user && !photoPreview) {
     const loginUrl = request.nextUrl.clone();
     loginUrl.pathname = "/login";
     loginUrl.searchParams.set("redirectTo", path);

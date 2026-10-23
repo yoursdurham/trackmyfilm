@@ -5,7 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { BarChart3, DollarSign, LogOut, Monitor, Plus, Search, Users } from "lucide-react";
+import { BarChart3, DollarSign, Images, LogOut, Monitor, Plus, Search, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import NewDropoffForm from "@/components/NewDropoffForm";
 import type { Customer, IncomingSquarespaceDraft } from "@/lib/types";
@@ -27,6 +27,7 @@ const navItems = [
   { href: "/numbers", label: "Numbers", icon: DollarSign },
   { href: "/customers", label: "Customers", icon: Users },
   { href: "/displays", label: "Displays", icon: Monitor },
+  { href: "/dashboard/photos", label: "Photos", icon: Images },
 ];
 
 export default function InternalHeader({
@@ -38,7 +39,7 @@ export default function InternalHeader({
 }) {
   const [formOpen, setFormOpen] = useState(false);
   const [incomingDraft, setIncomingDraft] = useState<IncomingSquarespaceDraft | null>(null);
-  const pathname = usePathname();
+  const pathname = usePathname() ?? "";
   const queryClient = useQueryClient();
 
   const { data: customers = [] } = useQuery<Customer[]>({
@@ -90,7 +91,9 @@ export default function InternalHeader({
             <div className="flex items-center gap-1 sm:gap-2">
               {navItems.map((item) => {
                 const Icon = item.icon;
-                const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
+                const isActive = item.href === "/dashboard"
+                  ? pathname === "/dashboard"
+                  : pathname === item.href || pathname.startsWith(`${item.href}/`);
                 return (
                   <Link key={item.href} href={item.href}>
                     <Button

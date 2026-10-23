@@ -147,6 +147,7 @@ describe("staff pages", () => {
     expect(isStaffPath("/reports/weekly")).toBe(true);
     expect(isStaffPath("/customers/abc")).toBe(true);
     expect(isStaffPath("/displays")).toBe(true);
+    expect(isStaffPath("/dashboard/photos")).toBe(true);
     expect(isStaffPath("/display/studio-vertical")).toBe(false);
     expect(isStaffPath("/tracking")).toBe(false);
     expect(isStaffPath("/account")).toBe(false);
@@ -209,5 +210,19 @@ describe("staff pages", () => {
     expect(authState.signOut).toHaveBeenCalledTimes(1);
     expect(dashboard.headers.get("location")).toContain("/login");
     expect(dashboard.headers.get("location")).toContain("error=not-staff");
+  });
+
+  it("allows the photo review sample only outside production", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    const production = await proxy(new NextRequest("http://localhost/dashboard/photos?preview=1"));
+    expect(production.headers.get("location")).toContain("/login");
+
+    vi.stubEnv("NODE_ENV", "development");
+    const sample = await proxy(new NextRequest("http://localhost/dashboard/photos?preview=1"));
+    expect(sample.headers.get("location")).toBeNull();
+
+    const dashboard = await proxy(new NextRequest("http://localhost/dashboard?preview=1"));
+    expect(dashboard.headers.get("location")).toContain("/login");
+    vi.unstubAllEnvs();
   });
 });
