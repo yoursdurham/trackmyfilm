@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { ACCOUNT_SIGN_IN_MESSAGE } from "@/lib/account-email-otp";
 import { sendAccountSignInEmail } from "@/lib/account-sign-in-email";
 import { customerAccountsEnabled, customerAccountTestAllowed } from "@/lib/customer-accounts";
 import { staffEmailAllowlist } from "@/lib/staff-auth";
@@ -7,8 +8,7 @@ import { isValidEmail, normalizeEmail } from "@/lib/validation";
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const MAX_REQUESTS_PER_WINDOW = 3;
 
-export const ACCOUNT_SIGN_IN_MESSAGE =
-  "Check your email for a sign-in link. It may take a minute to arrive.";
+export { ACCOUNT_SIGN_IN_MESSAGE };
 
 type RateLimitEntry = {
   count: number;
@@ -68,9 +68,10 @@ async function readEmail(req: Request) {
 }
 
 /**
- * Sends a magic link and nothing else. The response is the same when the
- * address is unknown, has no orders, is rate-limited, or the link cannot be
- * mailed. This route does not read film_orders.
+ * Sends a magic link and a 6-digit code in the same email. The response is
+ * the same when the address is unknown, has no orders, is rate-limited, or
+ * the message cannot be mailed. The code is never included in this response.
+ * This route does not read film_orders.
  *
  * The link is created with the service-role admin API and the message is sent
  * by this app. signInWithOtp is not used: that asks Supabase Auth to send the

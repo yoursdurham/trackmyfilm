@@ -1,12 +1,15 @@
 import { createClient } from "@supabase/supabase-js";
+import { isAccountEmailOtp } from "@/lib/account-email-otp";
 
 export const ACCOUNT_SIGN_IN_SUBJECT = "Your Track My Film sign-in link";
 
 const HEADING = "Sign in to Track My Film";
 const INTRO =
-  "Tap the button below to see your orders, scans and film stats. This link works once and expires in 1 hour.";
+  "Tap the button below, or enter the 6-digit code on the sign-in page. Each works once and expires in 1 hour.";
 const BUTTON_LABEL = "Sign in →";
 const IGNORE = "Didn't ask for this? You can ignore this email.";
+const CODE_CAPTION = "Or enter this code:";
+const LOGO_URL = "https://trackmyfilm.com/logo.png";
 const FONT = "'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
 
 const BUSINESS_LINES = [
@@ -34,20 +37,68 @@ export function accountSignInConfirmUrl(origin: string, tokenHash: string): stri
   return url.toString();
 }
 
-export function accountSignInEmailHtml(confirmUrl: string, logoUrl: string): string {
+export function accountSignInEmailHtml(confirmUrl: string, logoUrl: string, code?: string): string {
+  return accountAuthEmailHtml({
+    heading: HEADING,
+    intro: INTRO,
+    buttonLabel: BUTTON_LABEL,
+    confirmUrl,
+    logoUrl,
+    code,
+  });
+}
+
+/** Dashboard template for Authentication → Emails → Magic link. */
+export function supabaseMagicLinkEmailHtml(): string {
+  return accountSignInEmailHtml("{{ .ConfirmationURL }}", LOGO_URL, "{{ .Token }}");
+}
+
+/** Dashboard template for Authentication → Emails → Confirm signup. */
+export function supabaseConfirmSignupEmailHtml(): string {
+  return accountAuthEmailHtml({
+    heading: "Confirm your Track My Film account",
+    intro: "Tap the button below to confirm your email, or enter the 6-digit code on the sign-in page. Each works once and expires in 1 hour.",
+    buttonLabel: "Confirm email →",
+    confirmUrl: "{{ .ConfirmationURL }}",
+    logoUrl: LOGO_URL,
+    code: "{{ .Token }}",
+  });
+}
+
+function accountAuthEmailHtml({
+  heading,
+  intro,
+  buttonLabel,
+  confirmUrl,
+  logoUrl,
+  code,
+}: {
+  heading: string;
+  intro: string;
+  buttonLabel: string;
+  confirmUrl: string;
+  logoUrl: string;
+  code?: string;
+}): string {
   const safeUrl = escapeHtml(confirmUrl);
   const safeLogo = escapeHtml(logoUrl);
+  const safeHeading = escapeHtml(heading);
+  const safeIntro = escapeHtml(intro);
+  const safeButton = escapeHtml(buttonLabel);
   const hours = "Retail Hours: Thursdays 5-7PM &amp; Saturdays 11-2PM";
+  const codeBlock = code
+    ? `<p style="margin:22px 0 4px;font-family:${FONT};font-size:15px;line-height:1.5;color:#1a1a1a;text-align:center;">${CODE_CAPTION} <strong>${escapeHtml(code)}</strong></p>`
+    : "";
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>${HEADING}</title>
+  <title>${safeHeading}</title>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&amp;display=swap" rel="stylesheet">
 </head>
 <body style="margin:0;padding:0;background:#FFF6D3;">
-  <div style="display:none;font-size:1px;color:#FFF6D3;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;">${INTRO}</div>
+  <div style="display:none;font-size:1px;color:#FFF6D3;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;">${safeIntro}</div>
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#FFF6D3;">
     <tr>
       <td align="center" style="padding:32px 16px;font-family:${FONT};color:#1a1a1a;">
@@ -68,15 +119,16 @@ export function accountSignInEmailHtml(confirmUrl: string, logoUrl: string): str
           <tr>
             <td style="padding:28px 24px 32px;background:#ffffff;font-family:${FONT};color:#1a1a1a;">
               <img src="${safeLogo}" width="56" height="56" alt="Yours, Durham" style="display:block;width:56px;height:56px;border:0;border-radius:12px;outline:none;text-decoration:none;">
-              <h1 style="margin:20px 0 12px;font-family:${FONT};font-size:22px;line-height:1.35;font-weight:700;color:#1a1a1a;">${HEADING}</h1>
-              <p style="margin:0 0 20px;font-family:${FONT};font-size:15px;line-height:1.55;color:#1a1a1a;">${INTRO}</p>
+              <h1 style="margin:20px 0 12px;font-family:${FONT};font-size:22px;line-height:1.35;font-weight:700;color:#1a1a1a;">${safeHeading}</h1>
+              <p style="margin:0 0 20px;font-family:${FONT};font-size:15px;line-height:1.55;color:#1a1a1a;">${safeIntro}</p>
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
                 <tr>
                   <td align="center" bgcolor="#A1CC93" style="background:#A1CC93;border-radius:12px;">
-                    <a href="${safeUrl}" style="display:block;padding:14px 16px;font-family:${FONT};font-size:16px;line-height:1.3;font-weight:700;color:#1a1a1a;text-align:center;text-decoration:none;">${BUTTON_LABEL}</a>
+                    <a href="${safeUrl}" style="display:block;padding:14px 16px;font-family:${FONT};font-size:16px;line-height:1.3;font-weight:700;color:#1a1a1a;text-align:center;text-decoration:none;">${safeButton}</a>
                   </td>
                 </tr>
               </table>
+              ${codeBlock}
               <p style="margin:18px 0 8px;font-family:${FONT};font-size:13px;line-height:1.5;color:#1a1a1a;">Or paste this link into your browser:</p>
               <p style="margin:0 0 18px;font-family:${FONT};font-size:13px;line-height:1.5;word-break:break-all;">
                 <a href="${safeUrl}" style="color:#1a1a1a;text-decoration:underline;">${safeUrl}</a>
@@ -103,13 +155,14 @@ export function accountSignInEmailHtml(confirmUrl: string, logoUrl: string): str
 </html>`;
 }
 
-export function accountSignInEmailText(confirmUrl: string): string {
+export function accountSignInEmailText(confirmUrl: string, code?: string): string {
   return [
     HEADING,
     "",
     INTRO,
     "",
     `Sign in: ${confirmUrl}`,
+    ...(code ? ["", `${CODE_CAPTION} ${code}`] : []),
     "",
     IGNORE,
     "",
@@ -141,9 +194,14 @@ export async function sendAccountSignInEmail(email: string, origin: string): Pro
       options: { redirectTo },
     });
     const tokenHash = data?.properties?.hashed_token;
+    const emailOtp = data?.properties?.email_otp ?? "";
     if (error || !tokenHash) {
       console.error("[account/sign-in]", error?.message ?? "magic link was not created");
       return;
+    }
+    const code = isAccountEmailOtp(emailOtp) ? emailOtp : undefined;
+    if (!code) {
+      console.error("[account/sign-in] No 6-digit email code was returned. Set Authentication → Email → Email OTP length to 6.");
     }
 
     const confirmUrl = accountSignInConfirmUrl(origin, tokenHash);
@@ -158,8 +216,8 @@ export async function sendAccountSignInEmail(email: string, origin: string): Pro
         to: [email],
         reply_to: process.env.REPLY_TO_EMAIL || "hello@yoursdurham.com",
         subject: ACCOUNT_SIGN_IN_SUBJECT,
-        html: accountSignInEmailHtml(confirmUrl, `${origin}/logo.png`),
-        text: accountSignInEmailText(confirmUrl),
+        html: accountSignInEmailHtml(confirmUrl, `${origin}/logo.png`, code),
+        text: accountSignInEmailText(confirmUrl, code),
       }),
     });
     if (!resendRes.ok) {
