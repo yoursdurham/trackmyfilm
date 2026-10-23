@@ -729,11 +729,7 @@ export default function TrackingHome({
 
         {hasSearched ? null : milesSaved}
 
-        <div className="mt-12" data-testid="home-share-photos">
-          <SharePhotosForm mode="public" />
-        </div>
-
-        <div className="mb-10 mt-12">
+        <div className="mt-12">
           <h2 className="mb-8 text-center font-jetbrains text-2xl font-bold tracking-tight text-neutral-900 sm:text-3xl">
             Explore Our Services
           </h2>
@@ -797,6 +793,10 @@ export default function TrackingHome({
               </WindowFrame>
             </a>
           </div>
+        </div>
+
+        <div className="mb-10 mt-12" data-testid="home-share-photos">
+          <SharePhotosForm mode="public" />
         </div>
 
         <div className="mt-8 flex flex-col gap-2 px-1 text-left text-base leading-relaxed text-neutral-900 sm:px-0 sm:text-center">
