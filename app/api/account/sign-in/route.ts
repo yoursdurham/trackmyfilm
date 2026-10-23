@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { customerAccountsEnabled, isListedStaffEmail } from "@/lib/customer-accounts";
+import { customerAccountsEnabled, customerAccountTestAllowed } from "@/lib/customer-accounts";
 import { staffEmailAllowlist } from "@/lib/staff-auth";
 import { createClient } from "@/lib/supabase/server";
 import { isValidEmail, normalizeEmail } from "@/lib/validation";
@@ -68,34 +68,29 @@ async function readEmail(req: Request) {
 }
 
 /**
- * Sends a magic link and nothing else. While accounts are public, the response
- * is the same when the address is unknown, has no orders, is rate-limited, or
- * Supabase rejects it. This route does not read film_orders.
+ * Sends a magic link and nothing else. The response is the same when the
+ * address is unknown, has no orders, is rate-limited, or Supabase rejects it.
+ * This route does not read film_orders.
  *
- * While CUSTOMER_ACCOUNTS_ENABLED is off, any address that is not listed in
- * STAFF_EMAILS gets 404. A listed staff address can still request a link so
- * the shop can open /account as that email.
+ * While CUSTOMER_ACCOUNTS_ENABLED is off, mail goes out only for
+ * CUSTOMER_ACCOUNT_TESTERS and STAFF_EMAILS. Every other address gets the
+ * same sentence and no mail, so the response does not reveal who is allowed.
  */
 export async function POST(req: Request) {
-  if (!customerAccountsEnabled()) {
-    const email = await readEmail(req);
-    if (!isListedStaffEmail(email)) {
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
-    }
-    if (isRateLimited(getClientIp(req))) return genericResponse();
-    return sendMagicLink(req, email);
-  }
-
+  const email = await readEmail(req);
   if (isRateLimited(getClientIp(req))) return genericResponse();
-  return sendMagicLink(req, await readEmail(req));
+  if (!customerAccountsEnabled() && !customerAccountTestAllowed(email)) return genericResponse();
+  return sendMagicLink(req, email);
 }
 
 async function sendMagicLink(req: Request, email: string) {
   if (!isValidEmail(email)) return genericResponse();
 
-  // An unset allowlist treats every signed-in user as staff. Don't mint
-  // customer sessions until the shop has named its staff emails.
-  if (!staffEmailAllowlist()) {
+  // An unset allowlist treats every signed-in user as staff. Don't mint a
+  // public customer session until the shop has named its staff emails.
+  // Hidden testing is already limited to explicit tester and staff addresses,
+  // and tester addresses are never treated as staff.
+  if (customerAccountsEnabled() && !staffEmailAllowlist()) {
     console.error("[account/sign-in] STAFF_EMAILS is not set, so no sign-in link was sent.");
     return genericResponse();
   }

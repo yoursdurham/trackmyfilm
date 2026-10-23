@@ -3,7 +3,7 @@ import WindowFrame from "@/components/WindowFrame";
 import AccountLoginForm from "@/app/account/login/AccountLoginForm";
 import { customerAccountPageAllowed } from "@/lib/customer-accounts";
 import { createClient } from "@/lib/supabase/server";
-import { notFound, redirect } from "next/navigation";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
@@ -15,8 +15,7 @@ export default async function AccountLoginPage({
   const params = await searchParams;
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!customerAccountPageAllowed(user?.email)) notFound();
-  if (user?.email) redirect("/account");
+  if (user?.email && customerAccountPageAllowed(user.email)) redirect("/account");
 
   return (
     <div className="flex min-h-screen flex-col bg-[#FFF6D3] font-jetbrains text-neutral-900">

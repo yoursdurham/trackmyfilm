@@ -35,6 +35,7 @@ const ORIGINAL_ENV = {
   STAFF_EMAILS: process.env.STAFF_EMAILS,
   ADMIN_EMAILS: process.env.ADMIN_EMAILS,
   NEXT_PUBLIC_ADMIN_EMAILS: process.env.NEXT_PUBLIC_ADMIN_EMAILS,
+  CUSTOMER_ACCOUNT_TESTERS: process.env.CUSTOMER_ACCOUNT_TESTERS,
 };
 
 function restoreEnv() {
@@ -50,6 +51,7 @@ describe("requireAuth", () => {
     authState.signOut.mockClear();
     resetStaffAuthWarningsForTests();
     delete process.env.STAFF_EMAILS;
+    delete process.env.CUSTOMER_ACCOUNT_TESTERS;
   });
 
   afterEach(() => {
@@ -133,6 +135,7 @@ describe("staff pages", () => {
     authState.signOut.mockClear();
     resetStaffAuthWarningsForTests();
     delete process.env.STAFF_EMAILS;
+    delete process.env.CUSTOMER_ACCOUNT_TESTERS;
   });
 
   afterEach(() => {
@@ -167,6 +170,31 @@ describe("staff pages", () => {
     expect(authState.signOut).toHaveBeenCalledTimes(1);
     expect(res.headers.get("location")).toContain("/login");
     expect(res.headers.get("location")).toContain("error=not-staff");
+  });
+
+  it("does not give a customer-account tester the dashboard, even if STAFF_EMAILS is unset", async () => {
+    process.env.CUSTOMER_ACCOUNT_TESTERS = "friend@example.com";
+    process.env.STAFF_EMAILS = "owner@shop.test";
+    authState.user = { id: "friend", email: "Friend@Example.com" };
+
+    const listed = await proxy(new NextRequest("http://localhost/dashboard"));
+    expect(authState.signOut).toHaveBeenCalledTimes(1);
+    expect(listed.headers.get("location")).toContain("error=not-staff");
+
+    authState.signOut.mockClear();
+    delete process.env.STAFF_EMAILS;
+    resetStaffAuthWarningsForTests();
+    const unset = await proxy(new NextRequest("http://localhost/dashboard"));
+    expect(authState.signOut).toHaveBeenCalledTimes(1);
+    expect(unset.headers.get("location")).toContain("error=not-staff");
+
+    authState.signOut.mockClear();
+    authState.user = { id: "stranger", email: "stranger@example.com" };
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const other = await proxy(new NextRequest("http://localhost/dashboard"));
+    expect(authState.signOut).not.toHaveBeenCalled();
+    expect(other.headers.get("location")).toBeNull();
+    warn.mockRestore();
   });
 
   it("keeps a customer session on /account and still blocks the dashboard", async () => {
