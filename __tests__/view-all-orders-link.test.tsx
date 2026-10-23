@@ -43,6 +43,7 @@ describe("View all your orders link", () => {
     expect(button).toContain(`>${LOG_IN_TO_VIEW_ORDERS_LABEL}<`);
     expect(button).toContain('href="/account"');
     expect(button).toContain("bg-[#C5AED7]");
+    expect(button).not.toContain("w-full");
     expect(button).not.toContain("target=");
   });
 

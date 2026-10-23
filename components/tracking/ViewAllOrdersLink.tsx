@@ -12,7 +12,7 @@ export function LogInToViewOrdersButton({ href }: { href: "/account" | "/account
   return (
     <Link
       href={href}
-      className="flex h-12 w-full items-center justify-center rounded-xl bg-[#C5AED7] px-4 font-jetbrains text-sm font-bold text-neutral-900 transition-colors hover:bg-[#b79dce] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900 focus-visible:ring-offset-2 focus-visible:ring-offset-[#FFF6D3] active:scale-[0.99]"
+      className="inline-flex h-9 shrink-0 items-center justify-center whitespace-nowrap rounded-xl bg-[#C5AED7] px-3 font-jetbrains text-xs font-bold text-neutral-900 transition-colors hover:bg-[#b79dce] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900 focus-visible:ring-offset-2 focus-visible:ring-offset-[#FFF6D3] active:scale-[0.99] sm:h-10 sm:px-3.5 sm:text-sm"
     >
       {LOG_IN_TO_VIEW_ORDERS_LABEL}
     </Link>
