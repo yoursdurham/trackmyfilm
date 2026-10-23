@@ -195,6 +195,28 @@ export default function AccountProfile({
         </section>
       ) : null}
 
+      {!ordersUnavailable && profile.recommendations.length ? (
+        <section data-testid="try-something-new">
+          <WindowFrame title="Try something new" titleAs="h2" bodyClassName="space-y-5 p-4 sm:p-5">
+            <ul className="space-y-5">
+              {profile.recommendations.map((film) => (
+                <li key={film.stock}>
+                  <a
+                    href={film.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-jetbrains text-sm font-bold text-neutral-900 underline decoration-[#C5AED7] decoration-2 underline-offset-4 transition-colors hover:decoration-[#A1CC93] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900 focus-visible:ring-offset-2"
+                  >
+                    {film.stock}
+                  </a>
+                  <p className="mt-1 font-jetbrains text-sm font-normal leading-relaxed text-neutral-900">{film.blurb}</p>
+                </li>
+              ))}
+            </ul>
+          </WindowFrame>
+        </section>
+      ) : null}
+
       <section data-testid="contact">
         <WindowFrame title="Contact" titleAs="h2" bodyClassName="space-y-4 p-4 sm:p-5">
           <dl className="space-y-3 font-jetbrains text-sm leading-relaxed text-neutral-900">

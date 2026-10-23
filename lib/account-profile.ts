@@ -3,6 +3,7 @@ import { formatMiles, MILES_PER_DROPOFF } from "@/lib/miles-saved";
 import { computeCustomerEmailStats, type CustomerEmailStats } from "@/lib/customer-email-stats";
 import { ORDER_STATUS, KNOWN_ORDER_STATUSES } from "@/lib/constants";
 import { filmProductUrl } from "@/lib/film-product-links";
+import { recommendNewFilms, type FilmRecommendation } from "@/lib/film-recommendations";
 import { correctFilmStockSpelling } from "@/lib/film-stocks";
 import { PUBLIC_ON_HOLD_MESSAGE, publicTimelineStatus } from "@/lib/tracking-public";
 import type { FilmOrder, FilmType, OrderStatus, RollDetail } from "@/lib/types";
@@ -77,6 +78,7 @@ export type AccountProfileData = {
   current: AccountOrderView[];
   history: AccountOrderView[];
   favorites: AccountFavorite[];
+  recommendations: FilmRecommendation[];
 };
 
 /**
@@ -369,6 +371,7 @@ export function buildAccountProfile(input: {
     current: views.filter((entry) => entry.phase === "current").map((entry) => entry.view),
     history: views.filter((entry) => entry.phase === "history").map((entry) => entry.view),
     favorites: accountFavorites(orders),
+    recommendations: recommendNewFilms(orders.flatMap((order) => countedPills(order).map(({ stock, format }) => ({ stock, format })))),
   };
 }
 
