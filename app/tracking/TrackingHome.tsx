@@ -225,7 +225,15 @@ async function fetchTrackedOrders(search: CommittedSearch): Promise<TrackingResu
   };
 }
 
-export default function TrackingHome({ milesSaved }: { milesSaved: ReactNode }) {
+export default function TrackingHome({
+  milesSaved,
+  lookupAccountLink,
+  resultAccountLink,
+}: {
+  milesSaved: ReactNode;
+  lookupAccountLink: ReactNode;
+  resultAccountLink: ReactNode;
+}) {
   const searchParams = useSearchParams();
   const urlOrder = (searchParams.get("order") || searchParams.get("order_number") || "").trim();
   const urlEmail = (searchParams.get("email") || "").trim();
@@ -417,6 +425,9 @@ export default function TrackingHome({ milesSaved }: { milesSaved: ReactNode }) 
                 <span className="flex-1 sm:flex-none">Track by Email</span>
               </button>
             </div>
+            <div className="mt-5 text-center">
+              {lookupAccountLink}
+            </div>
         </WindowFrame>
 
         <AnimatePresence mode="wait">
@@ -469,11 +480,14 @@ export default function TrackingHome({ milesSaved }: { milesSaved: ReactNode }) 
               exit={{ opacity: 0, y: -20 }}
               className="flex w-full min-w-0 max-w-full flex-col gap-6"
             >
-              {customerName ? (
-                <p className="font-jetbrains text-base font-bold text-neutral-900">
-                  Showing orders for <strong>{customerName}</strong>
-                </p>
-              ) : null}
+              <div className={`flex flex-col gap-2 ${customerName ? "sm:flex-row sm:items-baseline sm:justify-between" : "items-start"}`}>
+                {customerName ? (
+                  <p className="font-jetbrains text-base font-bold text-neutral-900">
+                    Showing orders for <strong>{customerName}</strong>
+                  </p>
+                ) : null}
+                {resultAccountLink}
+              </div>
 
               <div className="flex w-full min-w-0 max-w-full flex-col gap-12">
               {orders.map((order) => {
