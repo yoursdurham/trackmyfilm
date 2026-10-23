@@ -1,7 +1,8 @@
 import { createServerClient } from "@supabase/ssr";
 import type { EmailOtpType } from "@supabase/supabase-js";
 import { NextResponse, type NextRequest } from "next/server";
-import { confirmFailurePath, PASSWORD_UPDATE_PATH, safeNextPath } from "@/lib/auth-redirect";
+import { confirmFailurePath, isAccountFlowPath, PASSWORD_UPDATE_PATH, safeNextPath } from "@/lib/auth-redirect";
+import { customerAccountsEnabled, isListedStaffEmail } from "@/lib/customer-accounts";
 
 const OTP_TYPES = new Set<EmailOtpType>([
   "signup",
@@ -34,6 +35,20 @@ export async function GET(request: NextRequest) {
     ?? (type === "recovery" || code ? PASSWORD_UPDATE_PATH : "/dashboard");
 
   let redirectResponse = NextResponse.redirect(new URL(next, url.origin));
+  const authCookies: { name: string; value: string; options?: Parameters<NextResponse["cookies"]["set"]>[2] }[] = [];
+  const accountHandoff = isAccountFlowPath(requestedNext);
+  const accountsOpen = customerAccountsEnabled();
+
+  function withAuthCookies(response: NextResponse) {
+    authCookies.forEach(({ name, value, options }) => {
+      response.cookies.set(name, value, options);
+    });
+    return response;
+  }
+
+  function hiddenAccountResponse() {
+    return withAuthCookies(new NextResponse(null, { status: 404 }));
+  }
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -44,9 +59,13 @@ export async function GET(request: NextRequest) {
           return request.cookies.getAll();
         },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
-          redirectResponse = NextResponse.redirect(new URL(next, url.origin));
+          authCookies.length = 0;
           cookiesToSet.forEach(({ name, value, options }) => {
+            request.cookies.set(name, value);
+            authCookies.push({ name, value, options });
+          });
+          redirectResponse = NextResponse.redirect(new URL(next, url.origin));
+          authCookies.forEach(({ name, value, options }) => {
             redirectResponse.cookies.set(name, value, options);
           });
         },
@@ -54,19 +73,32 @@ export async function GET(request: NextRequest) {
     },
   );
 
+  async function finishVerifiedSession() {
+    if (!accountHandoff || accountsOpen) return redirectResponse;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (isListedStaffEmail(user?.email)) return redirectResponse;
+    await supabase.auth.signOut();
+    return hiddenAccountResponse();
+  }
+
+  function failed(logLabel: string, message: string) {
+    console.error(logLabel, message);
+    if (accountHandoff && !accountsOpen) return hiddenAccountResponse();
+    return failureRedirect(url.origin, requestedNext);
+  }
+
   if (tokenHash && type) {
     const { error } = await supabase.auth.verifyOtp({ type, token_hash: tokenHash });
-    if (!error) return redirectResponse;
-    console.error("[GET /auth/confirm] verifyOtp", error.message);
-    return failureRedirect(url.origin, requestedNext);
+    if (!error) return finishVerifiedSession();
+    return failed("[GET /auth/confirm] verifyOtp", error.message);
   }
 
   if (code) {
     const { error } = await supabase.auth.exchangeCodeForSession(code);
-    if (!error) return redirectResponse;
-    console.error("[GET /auth/confirm] exchangeCodeForSession", error.message);
-    return failureRedirect(url.origin, requestedNext);
+    if (!error) return finishVerifiedSession();
+    return failed("[GET /auth/confirm] exchangeCodeForSession", error.message);
   }
 
+  if (accountHandoff && !accountsOpen) return hiddenAccountResponse();
   return failureRedirect(url.origin, requestedNext);
 }

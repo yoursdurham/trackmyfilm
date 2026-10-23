@@ -105,9 +105,12 @@ function StatCard({ label, value, testId }: { label: string; value: string; test
 export default function AccountProfile({
   profile,
   ordersUnavailable = false,
+  signOutNext = "/account/login",
 }: {
   profile: AccountProfileData;
   ordersUnavailable?: boolean;
+  /** Where sign-out lands. Null keeps the staff login, which is the default of that route. */
+  signOutNext?: string | null;
 }) {
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-8 px-4 pb-16 sm:px-6">
@@ -186,7 +189,7 @@ export default function AccountProfile({
             </div>
           </dl>
           <form action="/api/auth/logout" method="post">
-            <input type="hidden" name="next" value="/account/login" />
+            {signOutNext ? <input type="hidden" name="next" value={signOutNext} /> : null}
             <button type="submit" data-testid="sign-out" className={signOutClass}>Sign out</button>
           </form>
         </WindowFrame>

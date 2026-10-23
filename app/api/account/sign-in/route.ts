@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { customerAccountsEnabled, isListedStaffEmail } from "@/lib/customer-accounts";
 import { staffEmailAllowlist } from "@/lib/staff-auth";
 import { createClient } from "@/lib/supabase/server";
 import { isValidEmail, normalizeEmail } from "@/lib/validation";
@@ -57,22 +58,39 @@ function appOrigin(req: Request) {
   return new URL(req.url).origin;
 }
 
-/**
- * Sends a magic link and nothing else. The response is the same when the
- * address is unknown, has no orders, is rate-limited, or Supabase rejects it.
- * This route does not read film_orders.
- */
-export async function POST(req: Request) {
-  if (isRateLimited(getClientIp(req))) return genericResponse();
-
-  let email = "";
+async function readEmail(req: Request) {
   try {
     const body = await req.json() as { email?: unknown };
-    email = typeof body.email === "string" ? normalizeEmail(body.email) : "";
+    return typeof body.email === "string" ? normalizeEmail(body.email) : "";
   } catch {
-    return genericResponse();
+    return "";
+  }
+}
+
+/**
+ * Sends a magic link and nothing else. While accounts are public, the response
+ * is the same when the address is unknown, has no orders, is rate-limited, or
+ * Supabase rejects it. This route does not read film_orders.
+ *
+ * While CUSTOMER_ACCOUNTS_ENABLED is off, any address that is not listed in
+ * STAFF_EMAILS gets 404. A listed staff address can still request a link so
+ * the shop can open /account as that email.
+ */
+export async function POST(req: Request) {
+  if (!customerAccountsEnabled()) {
+    const email = await readEmail(req);
+    if (!isListedStaffEmail(email)) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+    if (isRateLimited(getClientIp(req))) return genericResponse();
+    return sendMagicLink(req, email);
   }
 
+  if (isRateLimited(getClientIp(req))) return genericResponse();
+  return sendMagicLink(req, await readEmail(req));
+}
+
+async function sendMagicLink(req: Request, email: string) {
   if (!isValidEmail(email)) return genericResponse();
 
   // An unset allowlist treats every signed-in user as staff. Don't mint

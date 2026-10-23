@@ -14,6 +14,7 @@ import { ACCOUNT_SIGN_IN_MESSAGE, POST, resetAccountSignInStateForTests } from "
 
 const ORIGINAL_STAFF = process.env.STAFF_EMAILS;
 const ORIGINAL_APP_URL = process.env.NEXT_PUBLIC_APP_URL;
+const ORIGINAL_ACCOUNTS = process.env.CUSTOMER_ACCOUNTS_ENABLED;
 
 function request(email: unknown, ip = "203.0.113.10") {
   return new Request("http://localhost:3000/api/account/sign-in", {
@@ -33,6 +34,7 @@ describe("POST /api/account/sign-in", () => {
     from.mockClear();
     resetAccountSignInStateForTests();
     process.env.STAFF_EMAILS = "owner@shop.test";
+    process.env.CUSTOMER_ACCOUNTS_ENABLED = "true";
     delete process.env.NEXT_PUBLIC_APP_URL;
   });
 
@@ -41,6 +43,8 @@ describe("POST /api/account/sign-in", () => {
     else process.env.STAFF_EMAILS = ORIGINAL_STAFF;
     if (ORIGINAL_APP_URL === undefined) delete process.env.NEXT_PUBLIC_APP_URL;
     else process.env.NEXT_PUBLIC_APP_URL = ORIGINAL_APP_URL;
+    if (ORIGINAL_ACCOUNTS === undefined) delete process.env.CUSTOMER_ACCOUNTS_ENABLED;
+    else process.env.CUSTOMER_ACCOUNTS_ENABLED = ORIGINAL_ACCOUNTS;
   });
 
   it("sends a magic link and the same message for a real address", async () => {
@@ -98,5 +102,51 @@ describe("POST /api/account/sign-in", () => {
         shouldCreateUser: true,
       },
     });
+  });
+});
+
+describe("POST /api/account/sign-in while accounts are hidden", () => {
+  beforeEach(() => {
+    signInWithOtp.mockClear();
+    signInWithOtp.mockResolvedValue({ error: null });
+    resetAccountSignInStateForTests();
+    process.env.STAFF_EMAILS = "owner@shop.test";
+    delete process.env.CUSTOMER_ACCOUNTS_ENABLED;
+    delete process.env.NEXT_PUBLIC_APP_URL;
+  });
+
+  afterEach(() => {
+    if (ORIGINAL_STAFF === undefined) delete process.env.STAFF_EMAILS;
+    else process.env.STAFF_EMAILS = ORIGINAL_STAFF;
+    if (ORIGINAL_APP_URL === undefined) delete process.env.NEXT_PUBLIC_APP_URL;
+    else process.env.NEXT_PUBLIC_APP_URL = ORIGINAL_APP_URL;
+    if (ORIGINAL_ACCOUNTS === undefined) delete process.env.CUSTOMER_ACCOUNTS_ENABLED;
+    else process.env.CUSTOMER_ACCOUNTS_ENABLED = ORIGINAL_ACCOUNTS;
+  });
+
+  it("returns 404 for an email that is not on STAFF_EMAILS and does not send a link", async () => {
+    const res = await POST(request("ada@example.com", "203.0.113.20"));
+    expect(res.status).toBe(404);
+    expect(signInWithOtp).not.toHaveBeenCalled();
+  });
+
+  it("sends a link when the address is listed in STAFF_EMAILS", async () => {
+    const res = await POST(request(" Owner@Shop.test ", "203.0.113.21"));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ success: true, message: ACCOUNT_SIGN_IN_MESSAGE });
+    expect(signInWithOtp).toHaveBeenCalledWith({
+      email: "owner@shop.test",
+      options: {
+        emailRedirectTo: "http://localhost:3000/auth/confirm?next=/account",
+        shouldCreateUser: true,
+      },
+    });
+  });
+
+  it("stays 404 when STAFF_EMAILS is unset", async () => {
+    delete process.env.STAFF_EMAILS;
+    const res = await POST(request("owner@shop.test", "203.0.113.22"));
+    expect(res.status).toBe(404);
+    expect(signInWithOtp).not.toHaveBeenCalled();
   });
 });
