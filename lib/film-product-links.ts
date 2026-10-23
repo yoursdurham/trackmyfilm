@@ -2,7 +2,7 @@
  * Product pages for the drop-off catalog in lib/film-stocks.ts.
  * Collected from the public Squarespace shop (shopping?format=json).
  * Each entry is one catalog stock in one format. Lookup ignores case, spacing,
- * and punctuation, and a leading Kodak / Fujifilm / Ilford / Cinestill / Lomography
+ * and punctuation, and a leading Kodak / Fujifilm / Ilford / Cinestill / Lomography / Harman
  * prefix. A roll links only when that stock is sold in that roll's format.
  * Format comes from the product title or URL, except Kodak 400 TMax, which the
  * shop confirmed is the 120 T-Max 400 page. A multipack is used only when it is
@@ -57,6 +57,12 @@ export const FILM_PRODUCT_LINKS: readonly FilmProductLink[] = [
   { stock: "Fujifilm Superia 400", format: "35mm", url: FUJI_400_35 },
   { stock: "Candido 400", format: "35mm", url: CANDIDO_400_35 },
   { stock: "Candido 800", format: "35mm", url: CANDIDO_800_35 },
+  { stock: "Phoenix 125", format: "35mm", url: "https://www.yoursdurham.com/shopping/p/harman-phoenix-125-35mm" },
+  { stock: "Phoenix 125", format: "120", url: "https://www.yoursdurham.com/shopping/p/harman-phoenix-125-120" },
+  { stock: "Phoenix 200 - Blue", format: "35mm", url: "https://www.yoursdurham.com/shopping/p/harman-phoenix-ii-200" },
+  { stock: "Phoenix 200 - Blue", format: "120", url: "https://www.yoursdurham.com/shopping/p/harman-phoenix-ii-200-color-120" },
+  { stock: "Harman Azure 125", format: "35mm", url: "https://www.yoursdurham.com/shopping/p/harman-switch-azure-125-35mm" },
+  { stock: "Harman Azure 125", format: "120", url: "https://www.yoursdurham.com/shopping/p/harman-switch-azure-125" },
 ];
 
 function compactFilmStock(value: string): string {
@@ -64,7 +70,7 @@ function compactFilmStock(value: string): string {
 }
 
 function stripFilmBrand(compacted: string): string {
-  return compacted.replace(/^(kodak|fujifilm|fuji|ilford|cinestill|lomography)/, "");
+  return compacted.replace(/^(kodak|fujifilm|fuji|ilford|cinestill|lomography|harman)/, "");
 }
 
 function normalizeFormat(format: string | null | undefined): FilmShopFormat | null {
@@ -129,6 +135,14 @@ const EXTRA_COMPACT_KEYS: readonly { format: FilmShopFormat; compact: string; ur
   { format: "35mm", compact: "p3200", url: TMAX_P3200_35 },
   { format: "35mm", compact: "candido400colourfilm", url: CANDIDO_400_35 },
   { format: "35mm", compact: "candido800colourfilm", url: CANDIDO_800_35 },
+  { format: "35mm", compact: "harmanazure", url: "https://www.yoursdurham.com/shopping/p/harman-switch-azure-125-35mm" },
+  { format: "120", compact: "harmanazure", url: "https://www.yoursdurham.com/shopping/p/harman-switch-azure-125" },
+  { format: "35mm", compact: "switchazure", url: "https://www.yoursdurham.com/shopping/p/harman-switch-azure-125-35mm" },
+  { format: "120", compact: "switchazure", url: "https://www.yoursdurham.com/shopping/p/harman-switch-azure-125" },
+  { format: "35mm", compact: "harmanswitchazure", url: "https://www.yoursdurham.com/shopping/p/harman-switch-azure-125-35mm" },
+  { format: "120", compact: "harmanswitchazure", url: "https://www.yoursdurham.com/shopping/p/harman-switch-azure-125" },
+  { format: "35mm", compact: "switchazure125", url: "https://www.yoursdurham.com/shopping/p/harman-switch-azure-125-35mm" },
+  { format: "120", compact: "switchazure125", url: "https://www.yoursdurham.com/shopping/p/harman-switch-azure-125" },
 ];
 
 for (const extra of EXTRA_COMPACT_KEYS) {
