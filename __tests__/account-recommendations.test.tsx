@@ -9,10 +9,12 @@ describe("Try something new card", () => {
     const html = renderToStaticMarkup(<AccountProfile profile={profile} />);
     const favorites = html.indexOf('data-testid="favorites"');
     const card = html.indexOf('data-testid="try-something-new"');
+    const share = html.indexOf('data-testid="share-photos-section"');
     const contact = html.indexOf('data-testid="contact"');
     expect(favorites).toBeGreaterThan(-1);
     expect(card).toBeGreaterThan(favorites);
-    expect(contact).toBeGreaterThan(card);
+    expect(share).toBeGreaterThan(card);
+    expect(contact).toBeGreaterThan(share);
     expect(html).toContain("Try something new");
     expect(html).toContain("bg-[#DDB1B1]");
     for (const film of profile.recommendations) {
