@@ -1,10 +1,13 @@
 "use client";
 
+import type { ReactNode } from "react";
 import Link from "next/link";
 
 type PublicHeaderProps = {
   /** The tracking page uses this title as its h1. Other public pages keep their own. */
   heading?: "h1" | "p";
+  /** Compact control in the top-right of the header, above the wordmark. */
+  corner?: ReactNode;
 };
 
 const COLORS = ["#DDB1B1", "#C5AED7", "#A1CC93"] as const;
@@ -47,12 +50,13 @@ export function WordmarkLetters({ className = WORDMARK_CLASS }: { className?: st
   );
 }
 
-export default function PublicHeader({ heading = "h1" }: PublicHeaderProps) {
+export default function PublicHeader({ heading = "h1", corner }: PublicHeaderProps) {
   const Tag = heading;
 
   return (
     <header className="bg-[#FFF6D3]">
-      <div className="mx-auto flex max-w-5xl flex-col items-center px-4 pb-8 pt-8 text-center sm:px-6 lg:px-8 lg:pb-10 lg:pt-10">
+      <div className={`mx-auto flex max-w-5xl flex-col items-center px-4 text-center sm:px-6 lg:px-8 ${corner ? "pb-8 pt-4 lg:pb-10" : "pb-8 pt-8 lg:pb-10 lg:pt-10"}`}>
+        {corner ? <div className="mb-4 flex w-full justify-end">{corner}</div> : null}
         <Tag className="m-0 max-w-full">
           <Link
             href="/"

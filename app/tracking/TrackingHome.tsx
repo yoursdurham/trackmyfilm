@@ -225,7 +225,15 @@ async function fetchTrackedOrders(search: CommittedSearch): Promise<TrackingResu
   };
 }
 
-export default function TrackingHome({ milesSaved }: { milesSaved: ReactNode }) {
+export default function TrackingHome({
+  milesSaved,
+  logInToViewOrders,
+  resultAccountLink,
+}: {
+  milesSaved: ReactNode;
+  logInToViewOrders: ReactNode;
+  resultAccountLink: ReactNode;
+}) {
   const searchParams = useSearchParams();
   const urlOrder = (searchParams.get("order") || searchParams.get("order_number") || "").trim();
   const urlEmail = (searchParams.get("email") || "").trim();
@@ -355,7 +363,7 @@ export default function TrackingHome({ milesSaved }: { milesSaved: ReactNode }) 
 
   return (
     <div className="min-h-screen bg-[#FFF6D3] font-jetbrains text-neutral-900">
-      <PublicHeader />
+      <PublicHeader corner={logInToViewOrders} />
       <main className="mx-auto w-full min-w-0 max-w-5xl overflow-x-clip px-4 pb-10 sm:px-6 lg:px-8">
         <WindowFrame
           title="Enter an order number or the email on the order."
@@ -469,11 +477,14 @@ export default function TrackingHome({ milesSaved }: { milesSaved: ReactNode }) 
               exit={{ opacity: 0, y: -20 }}
               className="flex w-full min-w-0 max-w-full flex-col gap-6"
             >
-              {customerName ? (
-                <p className="font-jetbrains text-base font-bold text-neutral-900">
-                  Showing orders for <strong>{customerName}</strong>
-                </p>
-              ) : null}
+              <div className={`flex flex-col gap-2 ${customerName ? "sm:flex-row sm:items-baseline sm:justify-between" : "items-start"}`}>
+                {customerName ? (
+                  <p className="font-jetbrains text-base font-bold text-neutral-900">
+                    Showing orders for <strong>{customerName}</strong>
+                  </p>
+                ) : null}
+                {resultAccountLink}
+              </div>
 
               <div className="flex w-full min-w-0 max-w-full flex-col gap-12">
               {orders.map((order) => {
