@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
+import { sendAccountSignInEmail } from "@/lib/account-sign-in-email";
 import { customerAccountsEnabled, customerAccountTestAllowed } from "@/lib/customer-accounts";
 import { staffEmailAllowlist } from "@/lib/staff-auth";
-import { createClient } from "@/lib/supabase/server";
 import { isValidEmail, normalizeEmail } from "@/lib/validation";
 
 const RATE_LIMIT_WINDOW_MS = 60_000;
@@ -69,8 +69,12 @@ async function readEmail(req: Request) {
 
 /**
  * Sends a magic link and nothing else. The response is the same when the
- * address is unknown, has no orders, is rate-limited, or Supabase rejects it.
- * This route does not read film_orders.
+ * address is unknown, has no orders, is rate-limited, or the link cannot be
+ * mailed. This route does not read film_orders.
+ *
+ * The link is created with the service-role admin API and the message is sent
+ * by this app. signInWithOtp is not used: that asks Supabase Auth to send the
+ * mail, which was arriving as the old scans message.
  *
  * While CUSTOMER_ACCOUNTS_ENABLED is off, mail goes out only for
  * CUSTOMER_ACCOUNT_TESTERS and STAFF_EMAILS. Every other address gets the
@@ -95,19 +99,6 @@ async function sendMagicLink(req: Request, email: string) {
     return genericResponse();
   }
 
-  try {
-    const supabase = await createClient();
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: {
-        emailRedirectTo: `${appOrigin(req)}/auth/confirm?next=/account`,
-        shouldCreateUser: true,
-      },
-    });
-    if (error) console.error("[account/sign-in]", error.message);
-  } catch (error) {
-    console.error("[account/sign-in]", error instanceof Error ? error.message : "sign-in failed");
-  }
-
+  await sendAccountSignInEmail(email, appOrigin(req));
   return genericResponse();
 }
