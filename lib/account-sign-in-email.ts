@@ -8,7 +8,7 @@ const INTRO =
   "Tap the button below, or enter the 6-digit code on the sign-in page. Each works once and expires in 1 hour.";
 const BUTTON_LABEL = "Sign in →";
 const IGNORE = "Didn't ask for this? You can ignore this email.";
-const CODE_CAPTION = "Or enter this code on the sign-in page:";
+const CODE_CAPTION = "Or enter this code:";
 const LOGO_URL = "https://trackmyfilm.com/logo.png";
 const FONT = "'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
 
@@ -87,8 +87,7 @@ function accountAuthEmailHtml({
   const safeButton = escapeHtml(buttonLabel);
   const hours = "Retail Hours: Thursdays 5-7PM &amp; Saturdays 11-2PM";
   const codeBlock = code
-    ? `<p style="margin:22px 0 8px;font-family:${FONT};font-size:13px;line-height:1.5;color:#1a1a1a;text-align:center;">${CODE_CAPTION}</p>
-              <p style="margin:0 0 22px;padding-left:0.28em;font-family:${FONT};font-size:32px;line-height:1.2;font-weight:700;letter-spacing:0.28em;text-align:center;color:#1a1a1a;">${escapeHtml(code)}</p>`
+    ? `<p style="margin:22px 0 4px;font-family:${FONT};font-size:15px;line-height:1.5;color:#1a1a1a;text-align:center;">${CODE_CAPTION} <strong>${escapeHtml(code)}</strong></p>`
     : "";
   return `<!DOCTYPE html>
 <html lang="en">

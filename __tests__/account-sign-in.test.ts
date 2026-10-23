@@ -132,7 +132,8 @@ describe("POST /api/account/sign-in", () => {
     expect(body.html).not.toContain("WeTransfer");
     expect(body.html).not.toContain("access your scans");
     expect(body.text).toContain("Sign in: http://localhost:3000/auth/confirm?token_hash=hashed-token&type=magiclink&next=%2Faccount");
-    expect(body.text).toContain("Or enter this code on the sign-in page: 482913");
+    expect(body.text).toContain("Or enter this code: 482913");
+    expect(body.html).toContain("Or enter this code: <strong>482913</strong>");
     expect(from).not.toHaveBeenCalled();
   });
 

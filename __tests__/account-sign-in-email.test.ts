@@ -31,8 +31,7 @@ describe("account sign-in email", () => {
     expect(html).toContain("Sign in to Track My Film");
     expect(html).toContain("Tap the button below, or enter the 6-digit code on the sign-in page. Each works once and expires in 1 hour.");
     expect(html).toContain("Sign in →");
-    expect(html).toContain("Or enter this code on the sign-in page:");
-    expect(html).toContain("font-size:32px");
+    expect(html).toContain("Or enter this code: <strong>482913</strong>");
     expect(html).toContain("482913");
     expect(html.indexOf("Sign in →")).toBeLessThan(html.indexOf("482913"));
     expect(html.indexOf("482913")).toBeLessThan(html.indexOf("Or paste this link into your browser:"));
@@ -59,7 +58,7 @@ describe("account sign-in email", () => {
     const text = accountSignInEmailText(CONFIRM_URL, "482913");
     expect(text).toContain("Sign in to Track My Film");
     expect(text).toContain(`Sign in: ${CONFIRM_URL}`);
-    expect(text).toContain("Or enter this code on the sign-in page: 482913");
+    expect(text).toContain("Or enter this code: 482913");
     expect(text).toContain("Didn't ask for this? You can ignore this email.");
     expect(text).toContain("209 N. Gregson St. Durham, NC 27701");
     expect(text).not.toContain("&amp;");
@@ -81,7 +80,7 @@ describe("account sign-in email", () => {
       expect(html).toContain("background:#DDB1B1");
       expect(html).toContain("background:#A1CC93");
       expect(html).toContain("https://trackmyfilm.com/logo.png");
-      expect(html).toContain("Or enter this code on the sign-in page:");
+      expect(html).toContain("Or enter this code: <strong>{{ .Token }}</strong>");
       expect(html.indexOf("{{ .Token }}")).toBeGreaterThan(html.indexOf("background:#A1CC93"));
     }
     expect(magic).toContain("Sign in to Track My Film");

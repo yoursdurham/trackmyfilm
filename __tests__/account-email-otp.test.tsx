@@ -62,18 +62,27 @@ describe("account email code", () => {
         email="avery.sample@example.com"
         code="482913"
         loading={false}
+        resending={false}
         error={null}
         onCodeChange={() => {}}
         onSubmit={() => {}}
         onUseDifferentEmail={() => {}}
+        onResend={() => {}}
       />,
     );
-    expect(step).toContain(ACCOUNT_EMAIL_OTP_LABEL);
+    expect(step).toContain("Check your email");
+    expect(step).toContain("We sent a sign-in link to");
     expect(step).toContain("avery.sample@example.com");
+    expect(step).toContain("Tap the link, or enter the 6-digit code below.");
+    expect(step).toContain(ACCOUNT_EMAIL_OTP_LABEL);
     expect(step).toContain('value="482913"');
     expect(step).toContain('autoComplete="one-time-code"');
     expect(step).toContain('maxLength="6"');
     expect(step).toContain(">Sign in<");
-    expect(step).toContain("The link in that email signs you in too.");
+    expect(step).toContain("Use a different email");
+    expect(step).toContain("Resend");
+    expect(step).not.toContain("The link in that email");
+    expect(step).not.toContain("browser");
+    expect(step).not.toContain("token");
   });
 });
