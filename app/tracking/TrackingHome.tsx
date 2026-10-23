@@ -227,11 +227,11 @@ async function fetchTrackedOrders(search: CommittedSearch): Promise<TrackingResu
 
 export default function TrackingHome({
   milesSaved,
-  lookupAccountLink,
+  logInToViewOrders,
   resultAccountLink,
 }: {
   milesSaved: ReactNode;
-  lookupAccountLink: ReactNode;
+  logInToViewOrders: ReactNode;
   resultAccountLink: ReactNode;
 }) {
   const searchParams = useSearchParams();
@@ -365,6 +365,9 @@ export default function TrackingHome({
     <div className="min-h-screen bg-[#FFF6D3] font-jetbrains text-neutral-900">
       <PublicHeader />
       <main className="mx-auto w-full min-w-0 max-w-5xl overflow-x-clip px-4 pb-10 sm:px-6 lg:px-8">
+        <div className="mb-6">
+          {logInToViewOrders}
+        </div>
         <WindowFrame
           title="Enter an order number or the email on the order."
           className="mb-14"
@@ -424,9 +427,6 @@ export default function TrackingHome({
                 )}
                 <span className="flex-1 sm:flex-none">Track by Email</span>
               </button>
-            </div>
-            <div className="mt-5 text-center">
-              {lookupAccountLink}
             </div>
         </WindowFrame>
 

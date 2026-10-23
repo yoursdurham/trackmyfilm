@@ -1,15 +1,25 @@
-import { ViewAllOrdersLink, trackingAccountHref } from "@/components/tracking/ViewAllOrdersLink";
+import {
+  LogInToViewOrdersButton,
+  ViewAllOrdersLink,
+  trackingAccountHref,
+} from "@/components/tracking/ViewAllOrdersLink";
 import { createClient } from "@/lib/supabase/server";
 
-/** Reads the session only. A missing session, or a failed lookup, stays on the login link. */
-export async function ViewAllOrdersLinkForSession() {
-  let signedIn = false;
+/** A missing session, or a failed lookup, stays on the login page. */
+async function trackingVisitorIsSignedIn() {
   try {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
-    signedIn = Boolean(user);
+    return Boolean(user);
   } catch {
-    signedIn = false;
+    return false;
   }
-  return <ViewAllOrdersLink href={trackingAccountHref(signedIn)} />;
+}
+
+export async function ViewAllOrdersLinkForSession() {
+  return <ViewAllOrdersLink href={trackingAccountHref(await trackingVisitorIsSignedIn())} />;
+}
+
+export async function LogInToViewOrdersButtonForSession() {
+  return <LogInToViewOrdersButton href={trackingAccountHref(await trackingVisitorIsSignedIn())} />;
 }
