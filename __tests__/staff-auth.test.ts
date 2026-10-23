@@ -146,6 +146,8 @@ describe("staff pages", () => {
     expect(isStaffPath("/displays")).toBe(true);
     expect(isStaffPath("/display/studio-vertical")).toBe(false);
     expect(isStaffPath("/tracking")).toBe(false);
+    expect(isStaffPath("/account")).toBe(false);
+    expect(isStaffPath("/account/login")).toBe(false);
   });
 
   it("sends anonymous visitors on /reports to login and leaves /display open", async () => {
@@ -165,5 +167,19 @@ describe("staff pages", () => {
     expect(authState.signOut).toHaveBeenCalledTimes(1);
     expect(res.headers.get("location")).toContain("/login");
     expect(res.headers.get("location")).toContain("error=not-staff");
+  });
+
+  it("keeps a customer session on /account and still blocks the dashboard", async () => {
+    process.env.STAFF_EMAILS = "owner@shop.test";
+    authState.user = { id: "ada", email: "ada@example.com" };
+
+    const account = await proxy(new NextRequest("http://localhost/account"));
+    expect(authState.signOut).not.toHaveBeenCalled();
+    expect(account.headers.get("location")).toBeNull();
+
+    const dashboard = await proxy(new NextRequest("http://localhost/dashboard"));
+    expect(authState.signOut).toHaveBeenCalledTimes(1);
+    expect(dashboard.headers.get("location")).toContain("/login");
+    expect(dashboard.headers.get("location")).toContain("error=not-staff");
   });
 });
