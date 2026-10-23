@@ -23,7 +23,7 @@ export default async function AccountLoginPage({
       <main className="mx-auto flex w-full max-w-lg flex-1 flex-col justify-center px-4 pb-12">
         <WindowFrame title="Your account" titleAs="h1" bodyClassName="p-6 sm:p-8">
           <p className="mb-6 font-jetbrains text-base leading-relaxed text-neutral-900">
-            We&apos;ll email you a link. No password to remember.
+            We&apos;ll email you a link and a 6-digit code. No password to remember.
           </p>
           <AccountLoginForm linkError={params.error === "link"} />
         </WindowFrame>

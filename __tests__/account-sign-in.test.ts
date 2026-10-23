@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const generateLink = vi.hoisted(() => vi.fn(async (): Promise<{
-  data: { properties: { hashed_token: string } } | null;
+  data: { properties: { hashed_token: string; email_otp?: string } } | null;
   error: { message: string } | null;
 }> => ({
-  data: { properties: { hashed_token: "hashed-token" } },
+  data: { properties: { hashed_token: "hashed-token", email_otp: "482913" } },
   error: null,
 })));
 const from = vi.hoisted(() => vi.fn());
@@ -76,7 +76,7 @@ describe("POST /api/account/sign-in", () => {
   beforeEach(() => {
     generateLink.mockClear();
     generateLink.mockResolvedValue({
-      data: { properties: { hashed_token: "hashed-token" } },
+      data: { properties: { hashed_token: "hashed-token", email_otp: "482913" } },
       error: null,
     });
     createClient.mockClear();
@@ -125,11 +125,14 @@ describe("POST /api/account/sign-in", () => {
     expect(body.template).toBeUndefined();
     expect(body.html).toContain("Sign in to Track My Film");
     expect(body.html).toContain("Sign in →");
+    expect(body.html).toContain("482913");
+    expect(body.html.indexOf("Sign in →")).toBeLessThan(body.html.indexOf("482913"));
     expect(body.html).toContain("http://localhost:3000/auth/confirm?token_hash=hashed-token&amp;type=magiclink&amp;next=%2Faccount");
     expect(body.html).toContain("http://localhost:3000/logo.png");
     expect(body.html).not.toContain("WeTransfer");
     expect(body.html).not.toContain("access your scans");
     expect(body.text).toContain("Sign in: http://localhost:3000/auth/confirm?token_hash=hashed-token&type=magiclink&next=%2Faccount");
+    expect(body.text).toContain("Or enter this code on the sign-in page: 482913");
     expect(from).not.toHaveBeenCalled();
   });
 
@@ -217,13 +220,27 @@ describe("POST /api/account/sign-in", () => {
     expect(body.text).toContain("token_hash=a%3Cb%3E%26%22c");
     expect(body.text).not.toContain("&amp;");
   });
+
+  it("keeps the magic link and omits a code that is not 6 digits", async () => {
+    generateLink.mockResolvedValueOnce({
+      data: { properties: { hashed_token: "hashed-token", email_otp: "12345678" } },
+      error: null,
+    });
+    const res = await POST(request("ada@example.com", "203.0.113.19"));
+    expect(await res.json()).toEqual({ success: true, message: ACCOUNT_SIGN_IN_MESSAGE });
+    const body = sentEmail();
+    expect(body.html).toContain("token_hash=hashed-token");
+    expect(body.html).not.toContain("12345678");
+    expect(body.html).not.toContain("Or enter this code");
+    expect(body.text).not.toContain("12345678");
+  });
 });
 
 describe("POST /api/account/sign-in while accounts are hidden", () => {
   beforeEach(() => {
     generateLink.mockClear();
     generateLink.mockResolvedValue({
-      data: { properties: { hashed_token: "hashed-token" } },
+      data: { properties: { hashed_token: "hashed-token", email_otp: "482913" } },
       error: null,
     });
     fetchMock.mockClear();
