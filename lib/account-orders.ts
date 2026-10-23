@@ -34,7 +34,6 @@ export const ACCOUNT_CUSTOMER_COLUMNS = [
   "first_name",
   "last_name",
   "email",
-  "phone",
 ] as const;
 
 export type LoadedAccount =
@@ -71,7 +70,6 @@ export async function loadAccountProfile(): Promise<LoadedAccount> {
     first_name?: string | null;
     last_name?: string | null;
     email?: string | null;
-    phone?: string | null;
   }[]).filter((row) => row.email?.trim());
   const contact = customers.find((row) => row.email?.trim().toLowerCase() === email.toLowerCase()) ?? customers[0];
 
@@ -82,7 +80,6 @@ export async function loadAccountProfile(): Promise<LoadedAccount> {
       email,
       firstName: contact?.first_name,
       lastName: contact?.last_name,
-      phone: contact?.phone,
       orders,
     }),
   };

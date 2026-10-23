@@ -184,10 +184,6 @@ export default function AccountProfile({
               <dt className="font-bold">Email</dt>
               <dd>{profile.email}</dd>
             </div>
-            <div>
-              <dt className="font-bold">Phone</dt>
-              <dd>{profile.phone || "Not on file"}</dd>
-            </div>
           </dl>
           <form action="/api/auth/logout" method="post">
             <input type="hidden" name="next" value="/account/login" />

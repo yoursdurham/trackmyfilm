@@ -52,12 +52,13 @@ grant select (
   created_at
 ) on table public.film_orders to authenticated;
 
+-- customers.phone was created in 001 and dropped in 007. Migration 010
+-- adds it again, but the live table does not have it, so it is not granted.
 grant select (
   id,
   first_name,
   last_name,
-  email,
-  phone
+  email
 ) on table public.customers to authenticated;
 
 alter table public.film_orders enable row level security;

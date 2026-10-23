@@ -100,6 +100,7 @@ describe("customer isolation in the profile builder", () => {
       .toBe("We're checking on this order");
     expect(JSON.stringify(profile)).not.toContain("hold_reason");
     expect(JSON.stringify(profile)).not.toContain("YM-9999");
+    expect(profile).not.toHaveProperty("phone");
   });
 
   it("leaves a favorite unlinked when two formats are tied", () => {

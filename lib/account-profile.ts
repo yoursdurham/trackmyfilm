@@ -70,7 +70,6 @@ export type AccountFavorite = {
 export type AccountProfileData = {
   greetingName: string;
   email: string;
-  phone: string | null;
   contactName: string | null;
   stats: CustomerEmailStats;
   current: AccountOrderView[];
@@ -328,7 +327,6 @@ export function buildAccountProfile(input: {
   email: string;
   firstName?: string | null;
   lastName?: string | null;
-  phone?: string | null;
   orders: AccountOrderInput[];
   now?: Date;
 }): AccountProfileData {
@@ -346,7 +344,6 @@ export function buildAccountProfile(input: {
       fullName: latestName,
     }),
     email: input.email.trim(),
-    phone: input.phone?.trim() || null,
     contactName,
     stats: computeCustomerEmailStats(orders.map(asFilmOrder), input.now),
     current: views.filter((entry) => entry.phase === "current").map((entry) => entry.view),
@@ -361,7 +358,6 @@ export function previewAccountProfile(now = new Date()): AccountProfileData {
     email: "jane@example.com",
     firstName: "Jane",
     lastName: "Doe",
-    phone: "(919) 555-0148",
     now,
     orders: [
       {
