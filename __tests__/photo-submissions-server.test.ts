@@ -9,8 +9,11 @@ import {
   listApprovedPhotoSubmissions,
   listPhotoSubmissionsForReview,
   PhotoUploadError,
+  readPhotoClaim,
   readPhotoSubmissionFile,
+  signPhotoClaim,
   type PhotoSubmissionRow,
+  type PhotoUploadClaim,
 } from "@/lib/photo-submissions-server";
 
 const JPEG: AcceptedPhoto = {
@@ -30,6 +33,8 @@ function row(status: PhotoSubmissionStatus, id: string): PhotoSubmissionRow {
     created_at: "2026-10-20T15:04:00.000Z",
     reviewed_at: null,
     reviewed_by: null,
+    instagram_handle: "avery.sample",
+    film_stock: "Kodak Portra 400",
   };
 }
 
@@ -247,6 +252,8 @@ describe("photo submission storage", () => {
     expect(items[0]?.thumbnailUrl).toContain("https://signed.example/");
     expect(items[0]).not.toHaveProperty("storage_path");
     expect(JSON.stringify(items)).not.toContain("storage_path");
+    expect(items[0]?.instagramHandle).toBe("avery.sample");
+    expect(items[0]?.filmStock).toBe("Kodak Portra 400");
   });
 
   it("lists approved rows only for a future gallery", async () => {
@@ -256,6 +263,56 @@ describe("photo submission storage", () => {
     const rows = await listApprovedPhotoSubmissions(fixture.client);
     expect(fixture.state.eqs).toContainEqual(["status", "approved"]);
     expect(rows.map((item) => item.status)).toEqual(["approved"]);
+  });
+
+  it("stores the same instagram handle and film stock on every photo in the batch", async () => {
+    const secret = "super-secret-service-role";
+    const slots = await createPhotoUploadSlots({
+      email: "jane@example.com",
+      customerId: null,
+      photos: [
+        { ext: "jpg", contentType: "image/jpeg", size: JPEG.bytes.byteLength },
+        { ext: "jpg", contentType: "image/jpeg", size: JPEG.bytes.byteLength },
+      ],
+      instagramHandle: "@Jane.Doe",
+      filmStock: "  Kodak Pheonix 200  ",
+    }, fixture.client, secret);
+    for (const upload of slots.uploads) {
+      fixture.state.objects.set(upload.path, { bytes: JPEG.bytes, contentType: "image/jpeg" });
+    }
+
+    const saved = await finalizePhotoUploads(slots.claim, {}, fixture.client, secret);
+    expect(saved.count).toBe(2);
+    expect(fixture.state.inserts).toHaveLength(2);
+    expect(fixture.state.inserts.map((item) => item.instagram_handle)).toEqual(["Jane.Doe", "Jane.Doe"]);
+    expect(fixture.state.inserts.map((item) => item.film_stock)).toEqual(["Kodak Phoenix 200", "Kodak Phoenix 200"]);
+  });
+
+  it("rejects a signed claim whose instagram handle is not allowed", () => {
+    const secret = "super-secret-service-role";
+    const claim: PhotoUploadClaim = {
+      v: 1,
+      email: "jane@example.com",
+      customerId: null,
+      permissionGivenAt: "2026-10-20T15:00:00.000Z",
+      exp: Date.now() + 60_000,
+      instagramHandle: "not a handle",
+      filmStock: null,
+      photos: [{
+        path: "11111111-1111-4111-8111-111111111111.jpg",
+        ext: "jpg",
+        contentType: "image/jpeg",
+        size: 4,
+      }],
+    };
+    expect(readPhotoClaim(signPhotoClaim(claim, secret), secret)).toBeNull();
+
+    const omitted = { ...claim, instagramHandle: "jane.doe" };
+    delete (omitted as { instagramHandle?: string }).instagramHandle;
+    delete (omitted as { filmStock?: string | null }).filmStock;
+    const read = readPhotoClaim(signPhotoClaim(omitted as PhotoUploadClaim, secret), secret);
+    expect(read?.instagramHandle).toBeNull();
+    expect(read?.filmStock).toBeNull();
   });
 
   it("downloads by id, not by a caller-supplied path", async () => {

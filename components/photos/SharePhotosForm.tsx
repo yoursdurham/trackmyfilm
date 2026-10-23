@@ -2,10 +2,12 @@
 
 import { useState, type FormEvent } from "react";
 import WindowFrame from "@/components/WindowFrame";
+import { FILM_STOCKS } from "@/lib/film-stocks";
 import {
   formPermissionGranted,
   MAX_PHOTO_BYTES,
   MAX_PHOTO_FILES,
+  optionalSubmissionDetails,
   PHOTO_HONEYPOT_FIELD,
   PHOTO_PERMISSION_ERROR,
   PHOTO_PERMISSION_LABEL,
@@ -51,6 +53,14 @@ export default function SharePhotosForm({ mode }: { mode: "account" | "public" }
       setError(PHOTO_PERMISSION_ERROR);
       return;
     }
+    const details = optionalSubmissionDetails({
+      instagram: String(data.get("instagram") ?? ""),
+      filmStock: String(data.get("film_stock") ?? ""),
+    });
+    if ("error" in details) {
+      setError(details.error);
+      return;
+    }
     const chosen = await chosenPhotos(data);
     if ("error" in chosen) {
       setError(chosen.error);
@@ -67,6 +77,8 @@ export default function SharePhotosForm({ mode }: { mode: "account" | "public" }
         body: JSON.stringify({
           email: mode === "public" ? normalizeEmail(String(data.get("email") ?? "")) : undefined,
           permission: true,
+          instagram: String(data.get("instagram") ?? ""),
+          filmStock: String(data.get("film_stock") ?? ""),
           [PHOTO_HONEYPOT_FIELD]: String(data.get(PHOTO_HONEYPOT_FIELD) ?? ""),
           photos: chosen.photos.map((photo) => ({ size: photo.file.size, contentType: photo.contentType })),
         }),
@@ -160,6 +172,42 @@ export default function SharePhotosForm({ mode }: { mode: "account" | "public" }
             />
           </div>
         ) : null}
+
+        <div>
+          <label htmlFor="share-photos-instagram" className="font-jetbrains text-sm font-bold text-neutral-900">
+            Instagram (optional)
+          </label>
+          <input
+            id="share-photos-instagram"
+            name="instagram"
+            type="text"
+            inputMode="text"
+            autoComplete="off"
+            maxLength={31}
+            spellCheck={false}
+            className={fieldClass}
+          />
+        </div>
+
+        <div>
+          <label htmlFor="share-photos-film" className="font-jetbrains text-sm font-bold text-neutral-900">
+            Film stock (optional)
+          </label>
+          <input
+            id="share-photos-film"
+            name="film_stock"
+            type="text"
+            list="share-photos-film-stocks"
+            maxLength={60}
+            autoComplete="off"
+            className={fieldClass}
+          />
+          <datalist id="share-photos-film-stocks">
+            {FILM_STOCKS.map((stock) => (
+              <option key={stock} value={stock} />
+            ))}
+          </datalist>
+        </div>
 
         <div>
           <label

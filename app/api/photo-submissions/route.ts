@@ -5,6 +5,7 @@ import {
   jsonEmail,
   jsonHoneypotFilled,
   jsonPermissionGranted,
+  optionalSubmissionDetails,
   PHOTO_EMAIL_ERROR,
   PHOTO_PERMISSION_ERROR,
   PHOTO_RATE_LIMIT_MESSAGE,
@@ -50,9 +51,19 @@ export async function POST(request: Request) {
   if ("error" in photos) {
     return NextResponse.json({ error: photos.error }, { status: 400, headers: noStore });
   }
+  const details = optionalSubmissionDetails(body);
+  if ("error" in details) {
+    return NextResponse.json({ error: details.error }, { status: 400, headers: noStore });
+  }
 
   try {
-    const slots = await createPhotoUploadSlots({ email, customerId: null, photos: photos.photos });
+    const slots = await createPhotoUploadSlots({
+      email,
+      customerId: null,
+      photos: photos.photos,
+      instagramHandle: details.instagramHandle,
+      filmStock: details.filmStock,
+    });
     await deleteOrphanPhotoObjects().catch((error) => {
       console.error("[photo-submissions]", error instanceof Error ? error.message : "cleanup failed");
     });

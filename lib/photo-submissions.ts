@@ -8,6 +8,7 @@
  * photos stay private.
  */
 
+import { correctFilmStockSpelling } from "@/lib/film-stocks";
 import { normalizeEmail } from "@/lib/validation";
 
 export const PHOTO_SUBMISSIONS_BUCKET = "photo-submissions";
@@ -29,6 +30,10 @@ export const PHOTO_TYPE_ERROR = "Use a JPG, PNG, or HEIC photo.";
 export const PHOTO_REQUIRED_ERROR = "Choose at least one photo.";
 export const PHOTO_PERMISSION_ERROR = "Permission is required.";
 export const PHOTO_EMAIL_ERROR = "Enter an email address.";
+export const INSTAGRAM_HANDLE_MAX = 30;
+export const FILM_STOCK_MAX = 60;
+export const INSTAGRAM_ERROR = "Use letters, numbers, periods, or underscores, up to 30 characters.";
+export const FILM_STOCK_ERROR = "Film stock must be 60 characters or fewer.";
 export const PHOTO_UPLOAD_INCOMPLETE = "Those photos didn't finish uploading. Try again.";
 export const PHOTO_UPLOAD_EXPIRED = "Those photos expired. Choose them again.";
 export const PHOTO_CLAIM_TTL_MS = 2 * 60 * 60 * 1000;
@@ -70,11 +75,14 @@ export type PhotoReviewItem = {
   reviewedBy: string | null;
   thumbnailUrl: string | null;
   extension: PhotoExtension | "other";
+  instagramHandle: string | null;
+  filmStock: string | null;
 };
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const SAFE_STORAGE_PATH = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(jpg|png|heic)$/i;
 const HEIC_BRANDS = new Set(["heic", "heix", "hevc", "hevx", "heim", "heis", "heif", "mif1", "msf1"]);
+const INSTAGRAM_HANDLE = /^[A-Za-z0-9._]{1,30}$/;
 
 type RateLimitEntry = { count: number; resetAt: number };
 const rateLimit = new Map<string, RateLimitEntry>();
@@ -100,6 +108,8 @@ export function previewPhotoReviewItems(): PhotoReviewItem[] {
       reviewedBy: null,
       thumbnailUrl: "/logo.png",
       extension: "jpg",
+      instagramHandle: "avery.sample",
+      filmStock: "Kodak Portra 400",
     },
     {
       id: "22222222-2222-4222-8222-222222222222",
@@ -111,6 +121,8 @@ export function previewPhotoReviewItems(): PhotoReviewItem[] {
       reviewedBy: null,
       thumbnailUrl: "/icon.png",
       extension: "png",
+      instagramHandle: "avery.sample",
+      filmStock: "Kodak Portra 400",
     },
   ];
 }
@@ -175,6 +187,35 @@ export function formEmail(form: FormData): string {
 
 export function photoByteSizeAllowed(size: number): boolean {
   return size > 0 && size <= MAX_PHOTO_BYTES;
+}
+
+/** Blank is omitted. A leading @ is removed. The saved handle has no @. */
+export function normalizeInstagramHandle(value: unknown): { handle: string | null } | { error: string } {
+  if (value == null) return { handle: null };
+  if (typeof value !== "string") return { error: INSTAGRAM_ERROR };
+  const handle = value.trim().replace(/^@+/, "");
+  if (!handle) return { handle: null };
+  if (!INSTAGRAM_HANDLE.test(handle)) return { error: INSTAGRAM_ERROR };
+  return { handle };
+}
+
+/** Blank is omitted. Any other text is kept, up to 60 characters. */
+export function normalizeFilmStock(value: unknown): { stock: string | null } | { error: string } {
+  if (value == null) return { stock: null };
+  if (typeof value !== "string") return { error: FILM_STOCK_ERROR };
+  const stock = correctFilmStockSpelling(value.trim().replace(/\s+/g, " "));
+  if (!stock) return { stock: null };
+  if (stock.length > FILM_STOCK_MAX) return { error: FILM_STOCK_ERROR };
+  return { stock };
+}
+
+export function optionalSubmissionDetails(body: unknown): { instagramHandle: string | null; filmStock: string | null } | { error: string } {
+  const record = body && typeof body === "object" ? body as Record<string, unknown> : {};
+  const instagram = normalizeInstagramHandle(record.instagram);
+  if ("error" in instagram) return instagram;
+  const film = normalizeFilmStock(record.filmStock);
+  if ("error" in film) return film;
+  return { instagramHandle: instagram.handle, filmStock: film.stock };
 }
 
 export function jsonHoneypotFilled(body: unknown): boolean {

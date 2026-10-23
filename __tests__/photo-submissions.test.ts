@@ -7,6 +7,11 @@ import {
   PHOTO_TYPE_ERROR,
   acceptedPhotos,
   approvedPhotoSubmissions,
+  FILM_STOCK_ERROR,
+  INSTAGRAM_ERROR,
+  normalizeFilmStock,
+  normalizeInstagramHandle,
+  optionalSubmissionDetails,
   slotPhotosFromMetadata,
   detectPhotoFile,
   isPhotoReviewPreview,
@@ -112,8 +117,33 @@ describe("photo review preview", () => {
   });
 });
 
+describe("optional instagram and film stock", () => {
+  it("keeps a handle with or without @ and rejects anything else", () => {
+    expect(normalizeInstagramHandle("@avery.sample")).toEqual({ handle: "avery.sample" });
+    expect(normalizeInstagramHandle("  @@@Avery_Sample  ")).toEqual({ handle: "Avery_Sample" });
+    expect(normalizeInstagramHandle("")).toEqual({ handle: null });
+    expect(normalizeInstagramHandle("   ")).toEqual({ handle: null });
+    expect(normalizeInstagramHandle(null)).toEqual({ handle: null });
+    expect(normalizeInstagramHandle("avery sample")).toEqual({ error: INSTAGRAM_ERROR });
+    expect(normalizeInstagramHandle("a".repeat(31))).toEqual({ error: INSTAGRAM_ERROR });
+    expect(normalizeInstagramHandle(`@${"a".repeat(30)}`)).toEqual({ handle: "a".repeat(30) });
+  });
+
+  it("keeps free-text film stock up to 60 characters and corrects Phoenix", () => {
+    expect(normalizeFilmStock("  Kodak   Pheonix 200  ")).toEqual({ stock: "Kodak Phoenix 200" });
+    expect(normalizeFilmStock("")).toEqual({ stock: null });
+    expect(normalizeFilmStock("x".repeat(60))).toEqual({ stock: "x".repeat(60) });
+    expect(normalizeFilmStock("x".repeat(61))).toEqual({ error: FILM_STOCK_ERROR });
+    expect(optionalSubmissionDetails({
+      instagram: "@avery.sample",
+      filmStock: "Kodak Portra 400",
+    })).toEqual({ instagramHandle: "avery.sample", filmStock: "Kodak Portra 400" });
+  });
+});
+
 describe("photo submission migration", () => {
   const sql = readFileSync("supabase/migrations/024_photo_submissions.sql", "utf8");
+  const details = readFileSync("supabase/migrations/025_photo_submission_details.sql", "utf8");
 
   it("creates the private table and bucket the owner runs by hand", () => {
     expect(sql).toContain("create table if not exists public.photo_submissions");
@@ -140,5 +170,15 @@ describe("photo submission migration", () => {
     expect(sql).toContain("false");
     expect(sql).toContain("15728640");
     expect(sql).toContain("Public bucket: off");
+    expect(sql).not.toContain("instagram_handle");
+    expect(sql).not.toContain("film_stock");
+  });
+
+  it("adds nullable instagram and film stock columns in a new file", () => {
+    expect(details).toContain("add column if not exists instagram_handle text");
+    expect(details).toContain("add column if not exists film_stock text");
+    expect(details).toContain("instagram_handle is null or instagram_handle ~ '^[A-Za-z0-9._]{1,30}$'");
+    expect(details).toContain("char_length(film_stock) <= 60");
+    expect(details).not.toContain("create table");
   });
 });

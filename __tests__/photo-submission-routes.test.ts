@@ -9,6 +9,8 @@ const createPhotoUploadSlots = vi.hoisted(() => vi.fn(async (_input: {
   email: string;
   customerId: string | null;
   photos: { ext: string; size?: number }[];
+  instagramHandle?: string | null;
+  filmStock?: string | null;
 }) => ({
   uploads: [{ path: "11111111-1111-4111-8111-111111111111.jpg", token: "upload-token", contentType: "image/jpeg" as const }],
   claim: "signed-claim",
@@ -68,7 +70,7 @@ import { GET, POST as publicPost } from "@/app/api/photo-submissions/route";
 import { POST as publicFinalize } from "@/app/api/photo-submissions/finalize/route";
 import { PATCH } from "@/app/api/photo-submissions/[id]/route";
 import { GET as download } from "@/app/api/photo-submissions/[id]/download/route";
-import { PHOTO_HONEYPOT_FIELD, resetPhotoSubmissionRateLimitForTests } from "@/lib/photo-submissions";
+import { FILM_STOCK_ERROR, INSTAGRAM_ERROR, PHOTO_HONEYPOT_FIELD, resetPhotoSubmissionRateLimitForTests } from "@/lib/photo-submissions";
 import { resetStaffAuthWarningsForTests } from "@/lib/staff-auth";
 
 function postJson(path: string, body: unknown, ip = "203.0.113.20") {
@@ -125,10 +127,14 @@ describe("photo submission routes", () => {
       email: string;
       customerId: string | null;
       photos: { ext: string }[];
+      instagramHandle: string | null;
+      filmStock: string | null;
     };
     expect(saved.email).toBe("jane@example.com");
     expect(saved.customerId).toBe("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb");
     expect(saved.photos[0]?.ext).toBe("jpg");
+    expect(saved.instagramHandle).toBeNull();
+    expect(saved.filmStock).toBeNull();
     expect(deleteOrphanPhotoObjects).toHaveBeenCalled();
   });
 
@@ -171,10 +177,51 @@ describe("photo submission routes", () => {
       email: string;
       customerId: string | null;
       photos: { ext: string; size: number }[];
+      instagramHandle: string | null;
+      filmStock: string | null;
     };
     expect(saved.email).toBe("avery.sample@example.com");
     expect(saved.customerId).toBeNull();
     expect(saved.photos[0]).toMatchObject({ ext: "png", size: 8 });
+    expect(saved.instagramHandle).toBeNull();
+    expect(saved.filmStock).toBeNull();
+  });
+
+  it("normalizes optional instagram and film stock and refuses a bad handle before reserving slots", async () => {
+    authState.user = { id: "user-1", email: "jane@example.com" };
+    const account = await accountPost(postJson("/api/account/photo-submissions", {
+      permission: true,
+      instagram: "@jane.doe",
+      filmStock: "Kodak Pheonix 200",
+      photos: [{ size: 4, contentType: "image/jpeg" }],
+    }));
+    expect(account.status).toBe(200);
+    expect(createPhotoUploadSlots.mock.calls[0]?.[0]).toMatchObject({
+      instagramHandle: "jane.doe",
+      filmStock: "Kodak Phoenix 200",
+    });
+
+    const bad = await publicPost(postJson("/api/photo-submissions", {
+      email: "avery.sample@example.com",
+      permission: true,
+      instagram: "not a handle",
+      filmStock: "Kodak Portra 400",
+      photos: [{ size: 4, contentType: "image/jpeg" }],
+    }, "203.0.113.70"));
+    expect(bad.status).toBe(400);
+    expect(await bad.json()).toEqual({ error: INSTAGRAM_ERROR });
+    expect(createPhotoUploadSlots).toHaveBeenCalledTimes(1);
+
+    const longStock = await publicPost(postJson("/api/photo-submissions", {
+      email: "avery.sample@example.com",
+      permission: true,
+      instagram: "@avery.sample",
+      filmStock: "x".repeat(61),
+      photos: [{ size: 4, contentType: "image/jpeg" }],
+    }, "203.0.113.71"));
+    expect(longStock.status).toBe(400);
+    expect(await longStock.json()).toEqual({ error: FILM_STOCK_ERROR });
+    expect(createPhotoUploadSlots).toHaveBeenCalledTimes(1);
   });
 
   it("drops honeypot posts and rate limits an IP", async () => {

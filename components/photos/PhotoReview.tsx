@@ -146,6 +146,12 @@ function PhotoReviewFrame({
                       {" · "}
                       <span className="capitalize">{item.status}</span>
                     </p>
+                    <p className="mt-1 text-xs text-stone-600">
+                      Instagram {item.instagramHandle ? `@${item.instagramHandle}` : "—"}
+                    </p>
+                    <p className="text-xs text-stone-600">
+                      Film stock {item.filmStock || "—"}
+                    </p>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     <Button

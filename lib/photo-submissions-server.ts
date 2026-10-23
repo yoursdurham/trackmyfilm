@@ -15,6 +15,8 @@ import {
   isUuid,
   MAX_PHOTO_BYTES,
   mimeAgreesWithPhoto,
+  normalizeFilmStock,
+  normalizeInstagramHandle,
   PHOTO_CLAIM_TTL_MS,
   PHOTO_ORPHAN_GRACE_MS,
   PHOTO_SAVE_ERROR,
@@ -31,7 +33,7 @@ import {
 } from "@/lib/photo-submissions";
 
 const PHOTO_COLUMNS =
-  "id, customer_id, email, storage_path, status, permission_given_at, created_at, reviewed_at, reviewed_by";
+  "id, customer_id, email, storage_path, status, permission_given_at, created_at, reviewed_at, reviewed_by, instagram_handle, film_stock";
 const SIGNED_URL_SECONDS = 60 * 60;
 
 export type PhotoSubmissionRow = {
@@ -44,6 +46,8 @@ export type PhotoSubmissionRow = {
   created_at: string;
   reviewed_at: string | null;
   reviewed_by: string | null;
+  instagram_handle: string | null;
+  film_stock: string | null;
 };
 
 let service: SupabaseClient | null = null;
@@ -90,6 +94,8 @@ export type PhotoUploadClaim = {
   customerId: string | null;
   permissionGivenAt: string;
   exp: number;
+  instagramHandle: string | null;
+  filmStock: string | null;
   photos: { path: string; ext: PhotoExtension; contentType: PhotoContentType; size: number }[];
 };
 
@@ -127,6 +133,9 @@ export function readPhotoClaim(token: string, secret?: string, now = Date.now())
     if (claim.customerId !== null && (typeof claim.customerId !== "string" || !isUuid(claim.customerId))) return null;
     if (typeof claim.permissionGivenAt !== "string" || !claim.permissionGivenAt) return null;
     if (!Array.isArray(claim.photos) || claim.photos.length < 1 || claim.photos.length > 10) return null;
+    const instagramHandle = claimDetail(claim.instagramHandle, normalizeInstagramHandle, "handle");
+    const filmStock = claimDetail(claim.filmStock, normalizeFilmStock, "stock");
+    if (instagramHandle === undefined || filmStock === undefined) return null;
     for (const photo of claim.photos) {
       if (!photo || !isSafePhotoPath(photo.path)) return null;
       if (!photo.path.endsWith(`.${photo.ext}`)) return null;
@@ -135,7 +144,13 @@ export function readPhotoClaim(token: string, secret?: string, now = Date.now())
       if (photo.ext === "heic" && photo.contentType !== "image/heic") return null;
       if (typeof photo.size !== "number" || photo.size <= 0 || photo.size > MAX_PHOTO_BYTES) return null;
     }
-    return { ...claim, email: claim.email.trim(), customerId: asCustomerId(claim.customerId) };
+    return {
+      ...claim,
+      email: claim.email.trim(),
+      customerId: asCustomerId(claim.customerId),
+      instagramHandle,
+      filmStock,
+    };
   } catch {
     return null;
   }
@@ -147,7 +162,13 @@ export function readPhotoClaim(token: string, secret?: string, now = Date.now())
  * to this email so a later request cannot submit someone else's file.
  */
 export async function createPhotoUploadSlots(
-  input: { email: string; customerId: string | null; photos: SlotPhoto[] },
+  input: {
+    email: string;
+    customerId: string | null;
+    photos: SlotPhoto[];
+    instagramHandle?: string | null;
+    filmStock?: string | null;
+  },
   client: SupabaseClient = serviceClient(),
   secret?: string,
   now = Date.now(),
@@ -155,6 +176,10 @@ export async function createPhotoUploadSlots(
   const email = input.email.trim();
   if (!email) throw new PhotoUploadError(PHOTO_SAVE_ERROR, 500);
   if (input.photos.length < 1 || input.photos.length > 10) throw new PhotoUploadError(PHOTO_SAVE_ERROR, 500);
+  const instagram = normalizeInstagramHandle(input.instagramHandle ?? null);
+  if ("error" in instagram) throw new PhotoUploadError(instagram.error, 400);
+  const film = normalizeFilmStock(input.filmStock ?? null);
+  if ("error" in film) throw new PhotoUploadError(film.error, 400);
 
   const reserved: PhotoUploadClaim["photos"] = [];
   const uploads: PhotoUploadSlot[] = [];
@@ -173,6 +198,8 @@ export async function createPhotoUploadSlots(
     customerId: asCustomerId(input.customerId),
     permissionGivenAt: new Date(now).toISOString(),
     exp: now + PHOTO_CLAIM_TTL_MS,
+    instagramHandle: instagram.handle,
+    filmStock: film.stock,
     photos: reserved,
   }, secret);
   return { uploads, claim };
@@ -227,6 +254,8 @@ export async function finalizePhotoUploads(
         storage_path: photo.path,
         status: "pending",
         permission_given_at: claim.permissionGivenAt,
+        instagram_handle: claim.instagramHandle,
+        film_stock: claim.filmStock,
       })
       .select("id")
       .single();
@@ -377,5 +406,19 @@ function toReviewItem(row: PhotoSubmissionRow, thumbnailUrl: string | null): Pho
     reviewedBy: row.reviewed_by,
     thumbnailUrl,
     extension: extensionOf(row.storage_path),
+    instagramHandle: row.instagram_handle,
+    filmStock: row.film_stock,
   };
+}
+
+/** Undefined means the claim omitted the field. An invalid value rejects the claim. */
+function claimDetail<T extends "handle" | "stock">(
+  value: unknown,
+  normalize: (input: unknown) => { [key in T]: string | null } | { error: string },
+  key: T,
+): string | null | undefined {
+  if (value === undefined) return null;
+  const parsed = normalize(value);
+  if ("error" in parsed) return undefined;
+  return parsed[key];
 }
