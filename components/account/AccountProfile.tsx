@@ -1,4 +1,5 @@
 import FilmStockPill from "@/components/FilmStockPill";
+import SharePhotosForm from "@/components/photos/SharePhotosForm";
 import WindowFrame from "@/components/WindowFrame";
 import type { AccountOrderView, AccountProfileData, AccountProgressStep } from "@/lib/account-profile";
 
@@ -234,6 +235,10 @@ export default function AccountProfile({
             <button type="submit" data-testid="sign-out" className={signOutClass}>Sign out</button>
           </form>
         </WindowFrame>
+      </section>
+
+      <section data-testid="share-photos-section">
+        <SharePhotosForm mode="account" />
       </section>
     </main>
   );
