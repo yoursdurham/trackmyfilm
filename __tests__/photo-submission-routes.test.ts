@@ -5,11 +5,16 @@ const authState = vi.hoisted(() => ({
   customers: [] as { id: string; email: string }[],
 }));
 
-const savePhotoFiles = vi.hoisted(() => vi.fn(async (_input: {
+const createPhotoUploadSlots = vi.hoisted(() => vi.fn(async (_input: {
   email: string;
   customerId: string | null;
-  photos: { ext: string }[];
-}) => ({ count: 1 })));
+  photos: { ext: string; size?: number }[];
+}) => ({
+  uploads: [{ path: "11111111-1111-4111-8111-111111111111.jpg", token: "upload-token", contentType: "image/jpeg" as const }],
+  claim: "signed-claim",
+})));
+const finalizePhotoUploads = vi.hoisted(() => vi.fn(async () => ({ count: 1 })));
+const deleteOrphanPhotoObjects = vi.hoisted(() => vi.fn(async () => ({ removed: [] as string[] })));
 const listPhotoSubmissionsForReview = vi.hoisted(() => vi.fn(async () => [{
   id: "11111111-1111-4111-8111-111111111111",
   email: "avery.sample@example.com",
@@ -42,131 +47,162 @@ vi.mock("@/lib/supabase/server", () => ({
 }));
 
 vi.mock("@/lib/photo-submissions-server", () => ({
-  savePhotoFiles,
+  createPhotoUploadSlots,
+  finalizePhotoUploads,
+  deleteOrphanPhotoObjects,
   listPhotoSubmissionsForReview,
   reviewPhotoSubmission,
   readPhotoSubmissionFile,
+  PhotoUploadError: class PhotoUploadError extends Error {
+    status: number;
+    constructor(message: string, status: number) {
+      super(message);
+      this.status = status;
+    }
+  },
 }));
 
 import { POST as accountPost } from "@/app/api/account/photo-submissions/route";
+import { POST as accountFinalize } from "@/app/api/account/photo-submissions/finalize/route";
 import { GET, POST as publicPost } from "@/app/api/photo-submissions/route";
+import { POST as publicFinalize } from "@/app/api/photo-submissions/finalize/route";
 import { PATCH } from "@/app/api/photo-submissions/[id]/route";
 import { GET as download } from "@/app/api/photo-submissions/[id]/download/route";
 import { PHOTO_HONEYPOT_FIELD, resetPhotoSubmissionRateLimitForTests } from "@/lib/photo-submissions";
 import { resetStaffAuthWarningsForTests } from "@/lib/staff-auth";
 
-const JPEG = Uint8Array.from([0xff, 0xd8, 0xff, 0xd9]);
-const PNG = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
-
-function photo(bytes: Uint8Array, name: string, type: string) {
-  const copy = new ArrayBuffer(bytes.byteLength);
-  new Uint8Array(copy).set(bytes);
-  return new File([copy], name, { type });
-}
-
-function requestFor(path: string, form: FormData, ip = "203.0.113.20") {
+function postJson(path: string, body: unknown, ip = "203.0.113.20") {
   return new Request(`http://localhost${path}`, {
     method: "POST",
-    body: form,
-    headers: { "x-forwarded-for": ip },
+    headers: { "content-type": "application/json", "x-forwarded-for": ip },
+    body: JSON.stringify(body),
   });
 }
 
 describe("photo submission routes", () => {
   const originalStaff = process.env.STAFF_EMAILS;
+  const originalServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   beforeEach(() => {
     authState.user = null;
     authState.customers = [];
-    savePhotoFiles.mockClear();
+    createPhotoUploadSlots.mockClear();
+    finalizePhotoUploads.mockClear();
+    deleteOrphanPhotoObjects.mockClear();
     listPhotoSubmissionsForReview.mockClear();
     reviewPhotoSubmission.mockClear();
     readPhotoSubmissionFile.mockClear();
     resetPhotoSubmissionRateLimitForTests();
     resetStaffAuthWarningsForTests();
     delete process.env.STAFF_EMAILS;
+    process.env.SUPABASE_SERVICE_ROLE_KEY = "service-role-secret-value";
   });
 
   afterEach(() => {
     if (originalStaff === undefined) delete process.env.STAFF_EMAILS;
     else process.env.STAFF_EMAILS = originalStaff;
+    if (originalServiceKey === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+    else process.env.SUPABASE_SERVICE_ROLE_KEY = originalServiceKey;
   });
 
-  it("ties an account upload to the signed-in customer and ignores a posted email", async () => {
+  it("ties an account slot to the signed-in customer and ignores a posted email", async () => {
     authState.user = { id: "user-1", email: "jane@example.com" };
     authState.customers = [
       { id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", email: "other@example.com" },
       { id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", email: "Jane@Example.com" },
     ];
-    const form = new FormData();
-    form.set("email", "someone.else@example.com");
-    form.set("permission", "on");
-    form.append("photos", photo(JPEG, "../../etc/passwd.jpg", "image/jpeg"));
-
-    const response = await accountPost(requestFor("/api/account/photo-submissions", form));
+    const response = await accountPost(postJson("/api/account/photo-submissions", {
+      email: "someone.else@example.com",
+      permission: true,
+      photos: [{ size: 4, contentType: "image/jpeg", name: "../../etc/passwd.jpg" }],
+    }));
     expect(response.status).toBe(200);
-    expect(savePhotoFiles).toHaveBeenCalledTimes(1);
-    const saved = savePhotoFiles.mock.calls[0]?.[0];
-    if (!saved) throw new Error("expected a saved photo");
+    const body = await response.json();
+    expect(body.uploads[0].token).toBe("upload-token");
+    expect(JSON.stringify(body)).not.toContain("service-role-secret-value");
+    expect(JSON.stringify(body)).not.toContain("passwd");
+    const saved = createPhotoUploadSlots.mock.calls[0]?.[0] as {
+      email: string;
+      customerId: string | null;
+      photos: { ext: string }[];
+    };
     expect(saved.email).toBe("jane@example.com");
     expect(saved.customerId).toBe("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb");
     expect(saved.photos[0]?.ext).toBe("jpg");
-    expect(JSON.stringify(saved)).not.toContain("passwd");
+    expect(deleteOrphanPhotoObjects).toHaveBeenCalled();
   });
 
-  it("refuses an account upload without a session or permission", async () => {
-    const form = new FormData();
-    form.set("permission", "on");
-    form.append("photos", photo(JPEG, "roll.jpg", "image/jpeg"));
-    const signedOut = await accountPost(requestFor("/api/account/photo-submissions", form));
+  it("refuses an account slot without a session or permission", async () => {
+    const signedOut = await accountPost(postJson("/api/account/photo-submissions", {
+      permission: true,
+      photos: [{ size: 4, contentType: "image/jpeg" }],
+    }));
     expect(signedOut.status).toBe(401);
 
     authState.user = { id: "user-1", email: "jane@example.com" };
-    const missingPermission = new FormData();
-    missingPermission.append("photos", photo(JPEG, "roll.jpg", "image/jpeg"));
-    const denied = await accountPost(requestFor("/api/account/photo-submissions", missingPermission));
+    const denied = await accountPost(postJson("/api/account/photo-submissions", {
+      photos: [{ size: 4, contentType: "image/jpeg" }],
+    }));
     expect(denied.status).toBe(400);
-    expect(savePhotoFiles).not.toHaveBeenCalled();
+    expect(createPhotoUploadSlots).not.toHaveBeenCalled();
+
+    authState.user = null;
+    const finalize = await accountFinalize(postJson("/api/account/photo-submissions/finalize", { claim: "signed-claim" }));
+    expect(finalize.status).toBe(401);
+    expect(finalizePhotoUploads).not.toHaveBeenCalled();
   });
 
-  it("rejects a renamed gif and accepts a renamed png on the public form", async () => {
-    const gif = new FormData();
-    gif.set("email", "avery.sample@example.com");
-    gif.set("permission", "on");
-    gif.append("photos", photo(Uint8Array.from([0x47, 0x49, 0x46, 0x38, 0x39, 0x61]), "cat.jpg", "image/jpeg"));
-    const rejected = await publicPost(requestFor("/api/photo-submissions", gif, "203.0.113.30"));
-    expect(rejected.status).toBe(400);
-    expect(savePhotoFiles).not.toHaveBeenCalled();
+  it("rejects a gif declaration and reserves a png without taking the file bytes", async () => {
+    const gif = await publicPost(postJson("/api/photo-submissions", {
+      email: "avery.sample@example.com",
+      permission: true,
+      photos: [{ size: 6, contentType: "image/gif" }],
+    }, "203.0.113.30"));
+    expect(gif.status).toBe(400);
+    expect(createPhotoUploadSlots).not.toHaveBeenCalled();
 
-    const png = new FormData();
-    png.set("email", "Avery.Sample@Example.com");
-    png.set("permission", "on");
-    png.append("photos", photo(PNG, "notes.jpg", "image/jpeg"));
-    const accepted = await publicPost(requestFor("/api/photo-submissions", png, "203.0.113.31"));
-    expect(accepted.status).toBe(200);
-    const saved = savePhotoFiles.mock.calls[0]?.[0];
-    if (!saved) throw new Error("expected a saved photo");
+    const png = await publicPost(postJson("/api/photo-submissions", {
+      email: "Avery.Sample@Example.com",
+      permission: true,
+      photos: [{ size: 8, contentType: "image/png" }],
+    }, "203.0.113.31"));
+    expect(png.status).toBe(200);
+    const saved = createPhotoUploadSlots.mock.calls[0]?.[0] as {
+      email: string;
+      customerId: string | null;
+      photos: { ext: string; size: number }[];
+    };
     expect(saved.email).toBe("avery.sample@example.com");
     expect(saved.customerId).toBeNull();
-    expect(saved.photos[0]?.ext).toBe("png");
+    expect(saved.photos[0]).toMatchObject({ ext: "png", size: 8 });
   });
 
   it("drops honeypot posts and rate limits an IP", async () => {
-    const trap = new FormData();
-    trap.set(PHOTO_HONEYPOT_FIELD, "https://spam.example");
-    trap.set("email", "avery.sample@example.com");
-    trap.set("permission", "on");
-    const trapped = await publicPost(requestFor("/api/photo-submissions", trap, "203.0.113.40"));
+    const trapped = await publicPost(postJson("/api/photo-submissions", {
+      [PHOTO_HONEYPOT_FIELD]: "https://spam.example",
+      email: "avery.sample@example.com",
+      permission: true,
+      photos: [{ size: 4, contentType: "image/jpeg" }],
+    }, "203.0.113.40"));
     expect(trapped.status).toBe(200);
-    expect(savePhotoFiles).not.toHaveBeenCalled();
+    const trapBody = await trapped.json();
+    expect(trapBody.uploads).toBeUndefined();
+    expect(createPhotoUploadSlots).not.toHaveBeenCalled();
 
     for (let attempt = 0; attempt < 5; attempt += 1) {
-      const response = await publicPost(requestFor("/api/photo-submissions", new FormData(), "203.0.113.41"));
+      const response = await publicPost(postJson("/api/photo-submissions", {}, "203.0.113.41"));
       expect(response.status).toBe(400);
     }
-    const limited = await publicPost(requestFor("/api/photo-submissions", new FormData(), "203.0.113.41"));
+    const limited = await publicPost(postJson("/api/photo-submissions", {}, "203.0.113.41"));
     expect(limited.status).toBe(429);
-    expect(savePhotoFiles).not.toHaveBeenCalled();
+    expect(createPhotoUploadSlots).not.toHaveBeenCalled();
+  });
+
+  it("finalizes a public claim without reading a photo body", async () => {
+    const response = await publicFinalize(postJson("/api/photo-submissions/finalize", { claim: "signed-claim" }));
+    expect(response.status).toBe(200);
+    expect(finalizePhotoUploads).toHaveBeenCalledWith("signed-claim");
+    expect(deleteOrphanPhotoObjects).toHaveBeenCalled();
   });
 
   it("keeps the staff list and download behind staff auth", async () => {

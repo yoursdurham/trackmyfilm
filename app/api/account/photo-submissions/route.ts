@@ -1,13 +1,12 @@
 import { NextResponse } from "next/server";
 import {
-  acceptedPhotos,
-  formPermissionGranted,
+  jsonPermissionGranted,
   PHOTO_PERMISSION_ERROR,
   PHOTO_SAVE_ERROR,
   PHOTO_SIGN_IN_ERROR,
-  PHOTO_SUBMITTED_MESSAGE,
+  slotPhotosFromMetadata,
 } from "@/lib/photo-submissions";
-import { savePhotoFiles } from "@/lib/photo-submissions-server";
+import { createPhotoUploadSlots, deleteOrphanPhotoObjects, PhotoUploadError } from "@/lib/photo-submissions-server";
 import { createClient } from "@/lib/supabase/server";
 import { emailsMatchExact } from "@/lib/validation";
 
@@ -15,8 +14,8 @@ export const maxDuration = 60;
 
 /**
  * Signed-in customers only. The email and customer id come from the session,
- * never from the form. The customer lookup uses the user-scoped client so
- * RLS applies. The service role is used only inside savePhotoFiles.
+ * never from the JSON body. The customer lookup uses the user-scoped client
+ * so RLS applies. Signed upload tokens are created with the service role.
  */
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -26,32 +25,33 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: PHOTO_SIGN_IN_ERROR }, { status: 401 });
   }
 
-  let form: FormData;
-  try {
-    form = await request.formData();
-  } catch {
+  const body = await request.json().catch(() => null);
+  if (!jsonPermissionGranted(body)) {
     return NextResponse.json({ error: PHOTO_PERMISSION_ERROR }, { status: 400 });
   }
-  if (!formPermissionGranted(form)) {
-    return NextResponse.json({ error: PHOTO_PERMISSION_ERROR }, { status: 400 });
-  }
-  const photos = await acceptedPhotos(form);
+  const photos = slotPhotosFromMetadata(body && typeof body === "object" ? (body as { photos?: unknown }).photos : null);
   if ("error" in photos) {
     return NextResponse.json({ error: photos.error }, { status: 400 });
   }
 
   try {
-    await savePhotoFiles({
+    const slots = await createPhotoUploadSlots({
       email,
       customerId: await customerIdForSession(supabase, email),
       photos: photos.photos,
     });
+    await deleteOrphanPhotoObjects().catch((error) => {
+      console.error("[photo-submissions]", error instanceof Error ? error.message : "cleanup failed");
+    });
+    return NextResponse.json({ uploads: slots.uploads, claim: slots.claim });
   } catch (error) {
-    console.error("[photo-submissions]", error instanceof Error ? error.message : "save failed");
-    return NextResponse.json({ error: PHOTO_SAVE_ERROR }, { status: 500 });
+    const message = error instanceof PhotoUploadError ? error.message : PHOTO_SAVE_ERROR;
+    const status = error instanceof PhotoUploadError ? error.status : 500;
+    if (!(error instanceof PhotoUploadError)) {
+      console.error("[photo-submissions]", error instanceof Error ? error.message : "slot failed");
+    }
+    return NextResponse.json({ error: message }, { status });
   }
-
-  return NextResponse.json({ ok: true, message: PHOTO_SUBMITTED_MESSAGE });
 }
 
 async function customerIdForSession(

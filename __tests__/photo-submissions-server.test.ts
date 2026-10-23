@@ -1,11 +1,15 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AcceptedPhoto, PhotoSubmissionStatus } from "@/lib/photo-submissions";
+import { MAX_PHOTO_BYTES } from "@/lib/photo-submissions";
 import {
+  createPhotoUploadSlots,
+  deleteOrphanPhotoObjects,
+  finalizePhotoUploads,
   listApprovedPhotoSubmissions,
   listPhotoSubmissionsForReview,
+  PhotoUploadError,
   readPhotoSubmissionFile,
-  savePhotoFiles,
   type PhotoSubmissionRow,
 } from "@/lib/photo-submissions-server";
 
@@ -32,12 +36,15 @@ function row(status: PhotoSubmissionStatus, id: string): PhotoSubmissionRow {
 function fakeClient(rows: PhotoSubmissionRow[] = []) {
   const state = {
     uploads: [] as { bucket: string; path: string; contentType: string }[],
+    signed: [] as { bucket: string; path: string; upsert: boolean }[],
     removed: [] as string[],
     inserts: [] as Record<string, unknown>[],
     deletedIds: [] as string[],
     eqs: [] as [string, string][],
     failOnUpload: 0,
     uploadCount: 0,
+    objects: new Map<string, { bytes: Uint8Array; contentType: string; size?: number }>(),
+    files: [] as { name: string; created_at: string | null }[],
   };
 
   const client = {
@@ -52,15 +59,20 @@ function fakeClient(rows: PhotoSubmissionRow[] = []) {
             order: async () => ({ data: rows, error: null }),
             eq(column: string, value: string) {
               state.eqs.push([column, value]);
-              const matched = rows.filter((item) => item[column as "status"] === value);
+              const matched = rows.filter((item) => String((item as unknown as Record<string, unknown>)[column] ?? "") === value);
               return {
                 order: async () => ({ data: matched, error: null }),
                 single: async () => ({
                   data: matched[0] ?? null,
                   error: matched[0] ? null : { message: "missing" },
                 }),
+                maybeSingle: async () => ({ data: matched[0] ?? null, error: null }),
               };
             },
+            in: async (column: string, values: string[]) => ({
+              data: rows.filter((item) => values.includes(String((item as unknown as Record<string, unknown>)[column] ?? ""))),
+              error: null,
+            }),
           };
         },
         update(patch: Record<string, unknown>) {
@@ -108,7 +120,23 @@ function fakeClient(rows: PhotoSubmissionRow[] = []) {
             data: { signedUrl: `https://signed.example/${path}?exp=${expires}` },
             error: null,
           }),
-          download: async () => ({ data: new Blob([Uint8Array.from([9, 9])]), error: null }),
+          createSignedUploadUrl: async (path: string, options: { upsert: boolean }) => {
+            state.signed.push({ bucket, path, upsert: options.upsert });
+            return { data: { signedUrl: `https://upload.example/${path}`, token: `token-${path}`, path }, error: null };
+          },
+          info: async (path: string) => {
+            const object = state.objects.get(path);
+            if (!object) return { data: null, error: { message: "missing" } };
+            return { data: { size: object.size ?? object.bytes.byteLength, contentType: object.contentType }, error: null };
+          },
+          list: async () => ({ data: state.files, error: null }),
+          download: async (path: string) => {
+            const object = state.objects.get(path);
+            const bytes = object?.bytes ?? Uint8Array.from([9, 9]);
+            const copy = new ArrayBuffer(bytes.byteLength);
+            new Uint8Array(copy).set(bytes);
+            return { data: new Blob([copy]), error: null };
+          },
         };
       },
     },
@@ -124,38 +152,92 @@ describe("photo submission storage", () => {
     fixture = fakeClient();
   });
 
-  it("uploads into the private bucket under a generated name", async () => {
-    const saved = await savePhotoFiles({
+  it("reserves a signed upload URL and does not store the file or a row yet", async () => {
+    const secret = "super-secret-service-role";
+    const slots = await createPhotoUploadSlots({
       email: "jane@example.com",
       customerId: "not-a-uuid",
-      photos: [JPEG],
-    }, fixture.client);
+      photos: [{ ...JPEG, size: JPEG.bytes.byteLength }],
+    }, fixture.client, secret);
 
-    expect(saved.count).toBe(1);
-    expect(fixture.state.uploads).toHaveLength(1);
-    expect(fixture.state.uploads[0]?.bucket).toBe("photo-submissions");
-    expect(fixture.state.uploads[0]?.path).toMatch(
+    expect(fixture.state.uploads).toHaveLength(0);
+    expect(fixture.state.inserts).toHaveLength(0);
+    expect(fixture.state.signed).toHaveLength(1);
+    expect(fixture.state.signed[0]?.bucket).toBe("photo-submissions");
+    expect(fixture.state.signed[0]?.upsert).toBe(false);
+    expect(fixture.state.signed[0]?.path).toMatch(
       /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.jpg$/,
     );
-    expect(fixture.state.uploads[0]?.contentType).toBe("image/jpeg");
+    expect(slots.uploads[0]?.token).toBe(`token-${slots.uploads[0]?.path}`);
+    expect(JSON.stringify(slots)).not.toContain(secret);
+  });
+
+  it("inserts a pending row only after the stored object matches", async () => {
+    const secret = "super-secret-service-role";
+    const slots = await createPhotoUploadSlots({
+      email: "jane@example.com",
+      customerId: null,
+      photos: [{ ...JPEG, size: JPEG.bytes.byteLength }],
+    }, fixture.client, secret);
+    const path = slots.uploads[0]?.path ?? "";
+    fixture.state.objects.set(path, { bytes: JPEG.bytes, contentType: "image/jpeg" });
+
+    const saved = await finalizePhotoUploads(slots.claim, {}, fixture.client, secret);
+    expect(saved.count).toBe(1);
     expect(fixture.state.inserts[0]).toMatchObject({
       email: "jane@example.com",
       customer_id: null,
       status: "pending",
-      storage_path: fixture.state.uploads[0]?.path,
+      storage_path: path,
     });
-    expect(JSON.stringify(fixture.state.inserts[0])).not.toContain("passwd");
   });
 
-  it("removes earlier photos when a later upload fails", async () => {
-    fixture.state.failOnUpload = 2;
-    await expect(savePhotoFiles({
+  it("removes an object whose bytes are not the reserved photo type", async () => {
+    const secret = "super-secret-service-role";
+    const slots = await createPhotoUploadSlots({
       email: "jane@example.com",
       customerId: null,
-      photos: [JPEG, { ...JPEG }],
-    }, fixture.client)).rejects.toThrow(/disk full/);
-    expect(fixture.state.deletedIds).toHaveLength(1);
-    expect(fixture.state.removed).toHaveLength(1);
+      photos: [{ ...JPEG, size: 6 }],
+    }, fixture.client, secret);
+    const path = slots.uploads[0]?.path ?? "";
+    fixture.state.objects.set(path, {
+      bytes: Uint8Array.from([0x47, 0x49, 0x46, 0x38, 0x39, 0x61]),
+      contentType: "image/jpeg",
+    });
+
+    await expect(finalizePhotoUploads(slots.claim, {}, fixture.client, secret)).rejects.toBeInstanceOf(PhotoUploadError);
+    expect(fixture.state.inserts).toHaveLength(0);
+    expect(fixture.state.removed).toContain(path);
+  });
+
+  it("rejects an object over 15 MB before keeping it", async () => {
+    const secret = "super-secret-service-role";
+    const slots = await createPhotoUploadSlots({
+      email: "jane@example.com",
+      customerId: null,
+      photos: [{ ...JPEG, size: JPEG.bytes.byteLength }],
+    }, fixture.client, secret);
+    const path = slots.uploads[0]?.path ?? "";
+    fixture.state.objects.set(path, { bytes: JPEG.bytes, contentType: "image/jpeg", size: MAX_PHOTO_BYTES + 1 });
+
+    await expect(finalizePhotoUploads(slots.claim, {}, fixture.client, secret)).rejects.toMatchObject({ status: 400 });
+    expect(fixture.state.inserts).toHaveLength(0);
+    expect(fixture.state.removed).toContain(path);
+  });
+
+  it("deletes stale objects that never became a row", async () => {
+    const kept = "22222222-2222-4222-8222-222222222222";
+    const orphan = "11111111-1111-4111-8111-111111111111";
+    const fresh = "33333333-3333-4333-8333-333333333333";
+    fixture = fakeClient([row("pending", kept)]);
+    fixture.state.files = [
+      { name: `${orphan}.jpg`, created_at: "2020-01-01T00:00:00.000Z" },
+      { name: `${kept}.jpg`, created_at: "2020-01-01T00:00:00.000Z" },
+      { name: `${fresh}.jpg`, created_at: new Date().toISOString() },
+    ];
+
+    const cleaned = await deleteOrphanPhotoObjects(fixture.client, Date.now());
+    expect(cleaned.removed).toEqual([`${orphan}.jpg`]);
   });
 
   it("signs thumbnails without handing the storage path to the review page", async () => {

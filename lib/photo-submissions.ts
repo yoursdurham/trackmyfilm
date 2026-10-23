@@ -29,6 +29,10 @@ export const PHOTO_TYPE_ERROR = "Use a JPG, PNG, or HEIC photo.";
 export const PHOTO_REQUIRED_ERROR = "Choose at least one photo.";
 export const PHOTO_PERMISSION_ERROR = "Permission is required.";
 export const PHOTO_EMAIL_ERROR = "Enter an email address.";
+export const PHOTO_UPLOAD_INCOMPLETE = "Those photos didn't finish uploading. Try again.";
+export const PHOTO_UPLOAD_EXPIRED = "Those photos expired. Choose them again.";
+export const PHOTO_CLAIM_TTL_MS = 2 * 60 * 60 * 1000;
+export const PHOTO_ORPHAN_GRACE_MS = 2 * 60 * 60 * 1000;
 
 export const PHOTO_STATUSES = ["pending", "approved", "rejected"] as const;
 export type PhotoSubmissionStatus = (typeof PHOTO_STATUSES)[number];
@@ -39,6 +43,21 @@ export type AcceptedPhoto = {
   bytes: Uint8Array;
   ext: PhotoExtension;
   contentType: PhotoContentType;
+};
+
+export type SlotPhoto = {
+  size: number;
+  ext: PhotoExtension;
+  contentType: PhotoContentType;
+};
+
+const DECLARED_PHOTO_TYPES: Record<string, { ext: PhotoExtension; contentType: PhotoContentType }> = {
+  "image/jpeg": { ext: "jpg", contentType: "image/jpeg" },
+  "image/jpg": { ext: "jpg", contentType: "image/jpeg" },
+  "image/pjpeg": { ext: "jpg", contentType: "image/jpeg" },
+  "image/png": { ext: "png", contentType: "image/png" },
+  "image/heic": { ext: "heic", contentType: "image/heic" },
+  "image/heif": { ext: "heic", contentType: "image/heic" },
 };
 
 export type PhotoReviewItem = {
@@ -156,6 +175,53 @@ export function formEmail(form: FormData): string {
 
 export function photoByteSizeAllowed(size: number): boolean {
   return size > 0 && size <= MAX_PHOTO_BYTES;
+}
+
+export function jsonHoneypotFilled(body: unknown): boolean {
+  if (!body || typeof body !== "object") return false;
+  const value = (body as Record<string, unknown>)[PHOTO_HONEYPOT_FIELD];
+  if (typeof value === "string") return value.trim() !== "";
+  return value != null && value !== false;
+}
+
+export function jsonPermissionGranted(body: unknown): boolean {
+  if (!body || typeof body !== "object") return false;
+  const value = (body as { permission?: unknown }).permission;
+  return value === true || value === "on" || value === "true";
+}
+
+export function jsonEmail(body: unknown): string {
+  if (!body || typeof body !== "object") return "";
+  const value = (body as { email?: unknown }).email;
+  return typeof value === "string" ? normalizeEmail(value) : "";
+}
+
+/** Declared size and type for a signed upload. The file bytes are checked again after upload. */
+export function slotPhotosFromMetadata(value: unknown): { photos: SlotPhoto[] } | { error: string } {
+  if (!Array.isArray(value) || value.length === 0) return { error: PHOTO_REQUIRED_ERROR };
+  if (value.length > MAX_PHOTO_FILES) return { error: PHOTO_TOO_MANY_ERROR };
+  const photos: SlotPhoto[] = [];
+  for (const entry of value) {
+    if (!entry || typeof entry !== "object") return { error: PHOTO_TYPE_ERROR };
+    const size = (entry as { size?: unknown }).size;
+    const contentType = (entry as { contentType?: unknown }).contentType;
+    if (typeof size !== "number" || !Number.isFinite(size)) return { error: PHOTO_TYPE_ERROR };
+    if (size > MAX_PHOTO_BYTES) return { error: PHOTO_TOO_LARGE_ERROR };
+    if (!photoByteSizeAllowed(size)) return { error: PHOTO_TYPE_ERROR };
+    if (typeof contentType !== "string") return { error: PHOTO_TYPE_ERROR };
+    const mapped = DECLARED_PHOTO_TYPES[contentType.trim().toLowerCase()];
+    if (!mapped) return { error: PHOTO_TYPE_ERROR };
+    photos.push({ size, ext: mapped.ext, contentType: mapped.contentType });
+  }
+  return { photos };
+}
+
+export function mimeAgreesWithPhoto(mime: string, ext: PhotoExtension): boolean {
+  const normalized = mime.toLowerCase().split(";")[0]?.trim() ?? "";
+  if (!normalized || normalized === "application/octet-stream") return true;
+  if (ext === "jpg") return normalized === "image/jpeg" || normalized === "image/jpg" || normalized === "image/pjpeg";
+  if (ext === "png") return normalized === "image/png";
+  return normalized === "image/heic" || normalized === "image/heif";
 }
 
 export function detectPhotoFile(bytes: Uint8Array):

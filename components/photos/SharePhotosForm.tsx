@@ -10,10 +10,12 @@ import {
   PHOTO_PERMISSION_ERROR,
   PHOTO_PERMISSION_LABEL,
   PHOTO_SAVE_ERROR,
+  PHOTO_SUBMISSIONS_BUCKET,
   PHOTO_SUBMITTED_MESSAGE,
   detectPhotoFile,
   photoByteSizeAllowed,
 } from "@/lib/photo-submissions";
+import { createClient } from "@/lib/supabase/client";
 import { isValidEmail, normalizeEmail } from "@/lib/validation";
 
 const fieldClass =
@@ -49,24 +51,79 @@ export default function SharePhotosForm({ mode }: { mode: "account" | "public" }
       setError(PHOTO_PERMISSION_ERROR);
       return;
     }
-    const localError = await clientFileError(data);
-    if (localError) {
-      setError(localError);
+    const chosen = await chosenPhotos(data);
+    if ("error" in chosen) {
+      setError(chosen.error);
       return;
     }
 
     setSubmitting(true);
     try {
-      const response = await fetch(mode === "account" ? "/api/account/photo-submissions" : "/api/photo-submissions", {
+      const slotUrl = mode === "account" ? "/api/account/photo-submissions" : "/api/photo-submissions";
+      const finalizeUrl = `${slotUrl}/finalize`;
+      const response = await fetch(slotUrl, {
         method: "POST",
-        body: data,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: mode === "public" ? normalizeEmail(String(data.get("email") ?? "")) : undefined,
+          permission: true,
+          [PHOTO_HONEYPOT_FIELD]: String(data.get(PHOTO_HONEYPOT_FIELD) ?? ""),
+          photos: chosen.photos.map((photo) => ({ size: photo.file.size, contentType: photo.contentType })),
+        }),
       });
-      const body = await response.json().catch(() => null) as { message?: string; error?: string } | null;
+      const body = await response.json().catch(() => null) as {
+        uploads?: { path: string; token: string; contentType: string }[];
+        claim?: string;
+        message?: string;
+        error?: string;
+        ok?: boolean;
+      } | null;
       if (!response.ok) {
         setError(body?.error || PHOTO_SAVE_ERROR);
         return;
       }
-      setMessage(body?.message || PHOTO_SUBMITTED_MESSAGE);
+      if (!body?.uploads?.length || !body.claim) {
+        setMessage(body?.message || PHOTO_SUBMITTED_MESSAGE);
+        form.reset();
+        setNames([]);
+        return;
+      }
+      if (body.uploads.length !== chosen.photos.length) {
+        setError(PHOTO_SAVE_ERROR);
+        return;
+      }
+
+      const supabase = createClient();
+      for (let index = 0; index < chosen.photos.length; index += 1) {
+        const slot = body.uploads[index];
+        const photo = chosen.photos[index];
+        if (!slot || !photo) {
+          setError(PHOTO_SAVE_ERROR);
+          return;
+        }
+        const uploaded = await supabase.storage.from(PHOTO_SUBMISSIONS_BUCKET).uploadToSignedUrl(
+          slot.path,
+          slot.token,
+          photo.file,
+          { contentType: slot.contentType },
+        );
+        if (uploaded.error) {
+          setError(PHOTO_SAVE_ERROR);
+          return;
+        }
+      }
+
+      const finalized = await fetch(finalizeUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ claim: body.claim }),
+      });
+      const done = await finalized.json().catch(() => null) as { message?: string; error?: string } | null;
+      if (!finalized.ok) {
+        setError(done?.error || PHOTO_SAVE_ERROR);
+        return;
+      }
+      setMessage(done?.message || PHOTO_SUBMITTED_MESSAGE);
       form.reset();
       setNames([]);
     } catch {
@@ -174,15 +231,17 @@ export default function SharePhotosForm({ mode }: { mode: "account" | "public" }
   );
 }
 
-async function clientFileError(form: FormData): Promise<string | null> {
+async function chosenPhotos(form: FormData): Promise<{ photos: { file: File; contentType: string }[] } | { error: string }> {
   const files = form.getAll("photos").filter((entry): entry is File => entry instanceof File && (entry.size > 0 || entry.name.trim() !== ""));
-  if (files.length === 0) return "Choose at least one photo.";
-  if (files.length > MAX_PHOTO_FILES) return "You can send up to 10 photos at a time.";
+  if (files.length === 0) return { error: "Choose at least one photo." };
+  if (files.length > MAX_PHOTO_FILES) return { error: "You can send up to 10 photos at a time." };
+  const photos: { file: File; contentType: string }[] = [];
   for (const file of files) {
-    if (file.size > MAX_PHOTO_BYTES) return "Each photo must be 15 MB or smaller.";
-    if (!photoByteSizeAllowed(file.size)) return "Use a JPG, PNG, or HEIC photo.";
+    if (file.size > MAX_PHOTO_BYTES) return { error: "Each photo must be 15 MB or smaller." };
+    if (!photoByteSizeAllowed(file.size)) return { error: "Use a JPG, PNG, or HEIC photo." };
     const detected = detectPhotoFile(new Uint8Array(await file.arrayBuffer()));
-    if (!detected.ok) return detected.error;
+    if (!detected.ok) return { error: detected.error };
+    photos.push({ file, contentType: detected.contentType });
   }
-  return null;
+  return { photos };
 }

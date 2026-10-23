@@ -1,64 +1,70 @@
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/api-auth";
 import {
-  acceptedPhotos,
   clientIp,
-  formEmail,
-  formHoneypotFilled,
-  formPermissionGranted,
+  jsonEmail,
+  jsonHoneypotFilled,
+  jsonPermissionGranted,
   PHOTO_EMAIL_ERROR,
   PHOTO_PERMISSION_ERROR,
   PHOTO_RATE_LIMIT_MESSAGE,
   PHOTO_SAVE_ERROR,
   PHOTO_SUBMITTED_MESSAGE,
   photoSubmissionIsRateLimited,
+  slotPhotosFromMetadata,
 } from "@/lib/photo-submissions";
-import { listPhotoSubmissionsForReview, savePhotoFiles } from "@/lib/photo-submissions-server";
+import {
+  createPhotoUploadSlots,
+  deleteOrphanPhotoObjects,
+  listPhotoSubmissionsForReview,
+  PhotoUploadError,
+} from "@/lib/photo-submissions-server";
 import { isValidEmail } from "@/lib/validation";
 
 export const maxDuration = 60;
 
 const noStore = { "Cache-Control": "no-store" };
 
-/** Public homepage uploads. customer_id stays null. Email comes from the form. */
+/**
+ * Public homepage: reserve signed upload URLs. The photo bytes go straight
+ * to Storage. customer_id stays null. Email comes from this JSON body.
+ */
 export async function POST(request: Request) {
   if (photoSubmissionIsRateLimited(clientIp(request))) {
     return NextResponse.json({ error: PHOTO_RATE_LIMIT_MESSAGE }, { status: 429, headers: noStore });
   }
 
-  let form: FormData;
-  try {
-    form = await request.formData();
-  } catch {
-    return NextResponse.json({ error: PHOTO_PERMISSION_ERROR }, { status: 400, headers: noStore });
-  }
-
-  // Same success shape as a real save, so a bot cannot tell the trap worked.
-  if (formHoneypotFilled(form)) {
+  const body = await request.json().catch(() => null);
+  if (jsonHoneypotFilled(body)) {
     return NextResponse.json({ ok: true, message: PHOTO_SUBMITTED_MESSAGE }, { headers: noStore });
   }
 
-  const email = formEmail(form);
+  const email = jsonEmail(body);
   if (!isValidEmail(email)) {
     return NextResponse.json({ error: PHOTO_EMAIL_ERROR }, { status: 400, headers: noStore });
   }
-  if (!formPermissionGranted(form)) {
+  if (!jsonPermissionGranted(body)) {
     return NextResponse.json({ error: PHOTO_PERMISSION_ERROR }, { status: 400, headers: noStore });
   }
-
-  const photos = await acceptedPhotos(form);
+  const photos = slotPhotosFromMetadata(body && typeof body === "object" ? (body as { photos?: unknown }).photos : null);
   if ("error" in photos) {
     return NextResponse.json({ error: photos.error }, { status: 400, headers: noStore });
   }
 
   try {
-    await savePhotoFiles({ email, customerId: null, photos: photos.photos });
+    const slots = await createPhotoUploadSlots({ email, customerId: null, photos: photos.photos });
+    await deleteOrphanPhotoObjects().catch((error) => {
+      console.error("[photo-submissions]", error instanceof Error ? error.message : "cleanup failed");
+    });
+    return NextResponse.json({ uploads: slots.uploads, claim: slots.claim }, { headers: noStore });
   } catch (error) {
-    console.error("[photo-submissions]", error instanceof Error ? error.message : "save failed");
-    return NextResponse.json({ error: PHOTO_SAVE_ERROR }, { status: 500, headers: noStore });
+    const message = error instanceof PhotoUploadError ? error.message : PHOTO_SAVE_ERROR;
+    const status = error instanceof PhotoUploadError ? error.status : 500;
+    if (!(error instanceof PhotoUploadError)) {
+      console.error("[photo-submissions]", error instanceof Error ? error.message : "slot failed");
+    }
+    return NextResponse.json({ error: message }, { status, headers: noStore });
   }
-
-  return NextResponse.json({ ok: true, message: PHOTO_SUBMITTED_MESSAGE }, { headers: noStore });
 }
 
 /** Staff review list. Thumbnail URLs are signed. storage_path stays on the server. */

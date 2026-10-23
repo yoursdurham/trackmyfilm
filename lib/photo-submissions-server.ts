@@ -7,16 +7,27 @@
  * this module still does not publish them anywhere.
  */
 
+import { createHmac, timingSafeEqual } from "node:crypto";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import {
+  detectPhotoFile,
   isSafePhotoPath,
   isUuid,
+  MAX_PHOTO_BYTES,
+  mimeAgreesWithPhoto,
+  PHOTO_CLAIM_TTL_MS,
+  PHOTO_ORPHAN_GRACE_MS,
+  PHOTO_SAVE_ERROR,
+  PHOTO_TOO_LARGE_ERROR,
+  PHOTO_TYPE_ERROR,
+  PHOTO_UPLOAD_EXPIRED,
+  PHOTO_UPLOAD_INCOMPLETE,
   PHOTO_SUBMISSIONS_BUCKET,
-  type AcceptedPhoto,
   type PhotoContentType,
   type PhotoExtension,
   type PhotoReviewItem,
   type PhotoSubmissionStatus,
+  type SlotPhoto,
 } from "@/lib/photo-submissions";
 
 const PHOTO_COLUMNS =
@@ -67,57 +78,208 @@ function contentTypeForExtension(ext: string): PhotoContentType | "application/o
   return "application/octet-stream";
 }
 
-export async function savePhotoFiles(
-  input: { email: string; customerId: string | null; photos: AcceptedPhoto[] },
-  client: SupabaseClient = serviceClient(),
-): Promise<{ count: number }> {
-  const email = input.email.trim();
-  if (!email) throw new Error("email required");
-  if (input.photos.length < 1 || input.photos.length > 10) throw new Error("photo count");
+export class PhotoUploadError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message);
+  }
+}
 
-  const saved: { id: string; path: string }[] = [];
-  const permissionGivenAt = new Date().toISOString();
-  const customerId = asCustomerId(input.customerId);
+export type PhotoUploadClaim = {
+  v: 1;
+  email: string;
+  customerId: string | null;
+  permissionGivenAt: string;
+  exp: number;
+  photos: { path: string; ext: PhotoExtension; contentType: PhotoContentType; size: number }[];
+};
 
+export type PhotoUploadSlot = {
+  path: string;
+  token: string;
+  contentType: PhotoContentType;
+};
+
+function claimSecret(secret?: string): string {
+  const value = secret ?? process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!value) throw new Error("Supabase env vars not configured");
+  return value;
+}
+
+export function signPhotoClaim(claim: PhotoUploadClaim, secret?: string): string {
+  const payload = Buffer.from(JSON.stringify(claim)).toString("base64url");
+  const signature = createHmac("sha256", claimSecret(secret)).update(payload).digest("base64url");
+  return `${payload}.${signature}`;
+}
+
+export function readPhotoClaim(token: string, secret?: string, now = Date.now()): PhotoUploadClaim | null {
+  const parts = token.split(".");
+  if (parts.length !== 2) return null;
+  const [payload, signature] = parts;
+  if (!payload || !signature) return null;
+  const expected = createHmac("sha256", claimSecret(secret)).update(payload).digest("base64url");
+  const actualBytes = Buffer.from(signature);
+  const expectedBytes = Buffer.from(expected);
+  if (actualBytes.length !== expectedBytes.length || !timingSafeEqual(actualBytes, expectedBytes)) return null;
   try {
-    for (const photo of input.photos) {
-      const id = crypto.randomUUID();
-      const storagePath = `${id}.${photo.ext}`;
-      if (!isSafePhotoPath(storagePath)) throw new Error("unsafe path");
-      const uploaded = await client.storage.from(PHOTO_SUBMISSIONS_BUCKET).upload(
-        storagePath,
-        new Blob([new Uint8Array(photo.bytes)], { type: photo.contentType }),
-        { contentType: photo.contentType, upsert: false },
-      );
-      if (uploaded.error) throw new Error(uploaded.error.message);
+    const claim = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as PhotoUploadClaim;
+    if (claim.v !== 1 || claim.exp <= now) return null;
+    if (typeof claim.email !== "string" || !claim.email.trim()) return null;
+    if (claim.customerId !== null && (typeof claim.customerId !== "string" || !isUuid(claim.customerId))) return null;
+    if (typeof claim.permissionGivenAt !== "string" || !claim.permissionGivenAt) return null;
+    if (!Array.isArray(claim.photos) || claim.photos.length < 1 || claim.photos.length > 10) return null;
+    for (const photo of claim.photos) {
+      if (!photo || !isSafePhotoPath(photo.path)) return null;
+      if (!photo.path.endsWith(`.${photo.ext}`)) return null;
+      if (photo.ext === "jpg" && photo.contentType !== "image/jpeg") return null;
+      if (photo.ext === "png" && photo.contentType !== "image/png") return null;
+      if (photo.ext === "heic" && photo.contentType !== "image/heic") return null;
+      if (typeof photo.size !== "number" || photo.size <= 0 || photo.size > MAX_PHOTO_BYTES) return null;
+    }
+    return { ...claim, email: claim.email.trim(), customerId: asCustomerId(claim.customerId) };
+  } catch {
+    return null;
+  }
+}
 
-      const inserted = await client
-        .from("photo_submissions")
-        .insert({
-          id,
-          customer_id: customerId,
-          email,
-          storage_path: storagePath,
-          status: "pending",
-          permission_given_at: permissionGivenAt,
-        })
-        .select("id")
-        .single();
-      if (inserted.error) {
-        await client.storage.from(PHOTO_SUBMISSIONS_BUCKET).remove([storagePath]);
-        throw new Error(inserted.error.message);
-      }
-      saved.push({ id, path: storagePath });
-    }
-  } catch (error) {
-    if (saved.length) {
-      await client.from("photo_submissions").delete().in("id", saved.map((row) => row.id));
-      await client.storage.from(PHOTO_SUBMISSIONS_BUCKET).remove(saved.map((row) => row.path));
-    }
-    throw error;
+/**
+ * Reserves generated paths and signed upload tokens. Rows are not inserted
+ * until finalizePhotoUploads has seen the objects. The claim binds the path
+ * to this email so a later request cannot submit someone else's file.
+ */
+export async function createPhotoUploadSlots(
+  input: { email: string; customerId: string | null; photos: SlotPhoto[] },
+  client: SupabaseClient = serviceClient(),
+  secret?: string,
+  now = Date.now(),
+): Promise<{ uploads: PhotoUploadSlot[]; claim: string }> {
+  const email = input.email.trim();
+  if (!email) throw new PhotoUploadError(PHOTO_SAVE_ERROR, 500);
+  if (input.photos.length < 1 || input.photos.length > 10) throw new PhotoUploadError(PHOTO_SAVE_ERROR, 500);
+
+  const reserved: PhotoUploadClaim["photos"] = [];
+  const uploads: PhotoUploadSlot[] = [];
+  for (const photo of input.photos) {
+    const path = `${crypto.randomUUID()}.${photo.ext}`;
+    if (!isSafePhotoPath(path)) throw new PhotoUploadError(PHOTO_SAVE_ERROR, 500);
+    const signed = await client.storage.from(PHOTO_SUBMISSIONS_BUCKET).createSignedUploadUrl(path, { upsert: false });
+    if (signed.error || !signed.data?.token) throw new PhotoUploadError(PHOTO_SAVE_ERROR, 500);
+    reserved.push({ path, ext: photo.ext, contentType: photo.contentType, size: photo.size });
+    uploads.push({ path, token: signed.data.token, contentType: photo.contentType });
   }
 
-  return { count: saved.length };
+  const claim = signPhotoClaim({
+    v: 1,
+    email,
+    customerId: asCustomerId(input.customerId),
+    permissionGivenAt: new Date(now).toISOString(),
+    exp: now + PHOTO_CLAIM_TTL_MS,
+    photos: reserved,
+  }, secret);
+  return { uploads, claim };
+}
+
+/**
+ * Inserts pending rows only after each object exists and its size and bytes
+ * match a photo. A bad object is removed. Retrying the same claim is safe.
+ */
+export async function finalizePhotoUploads(
+  token: string,
+  options: { mustEmail?: string } = {},
+  client: SupabaseClient = serviceClient(),
+  secret?: string,
+  now = Date.now(),
+): Promise<{ count: number }> {
+  const claim = readPhotoClaim(token, secret, now);
+  if (!claim) throw new PhotoUploadError(PHOTO_UPLOAD_EXPIRED, 400);
+  if (options.mustEmail && claim.email.toLowerCase() !== options.mustEmail.trim().toLowerCase()) {
+    throw new PhotoUploadError(PHOTO_UPLOAD_EXPIRED, 400);
+  }
+
+  const pending: PhotoUploadClaim["photos"] = [];
+  const alreadyStored = new Set<string>();
+  for (const photo of claim.photos) {
+    const existing = await client
+      .from("photo_submissions")
+      .select("id")
+      .eq("storage_path", photo.path)
+      .maybeSingle();
+    if (!existing.error && existing.data) {
+      alreadyStored.add(photo.path);
+      continue;
+    }
+    const verified = await verifyStoredPhoto(client, photo);
+    if (!verified.ok) {
+      const unused = claim.photos.map((item) => item.path).filter((path) => !alreadyStored.has(path));
+      await client.storage.from(PHOTO_SUBMISSIONS_BUCKET).remove(unused);
+      throw new PhotoUploadError(verified.error, 400);
+    }
+    pending.push(photo);
+  }
+
+  for (const photo of pending) {
+    const id = photo.path.slice(0, photo.path.lastIndexOf("."));
+    const inserted = await client
+      .from("photo_submissions")
+      .insert({
+        id,
+        customer_id: claim.customerId,
+        email: claim.email,
+        storage_path: photo.path,
+        status: "pending",
+        permission_given_at: claim.permissionGivenAt,
+      })
+      .select("id")
+      .single();
+    if (inserted.error) throw new PhotoUploadError(PHOTO_SAVE_ERROR, 500);
+  }
+
+  return { count: claim.photos.length };
+}
+
+async function verifyStoredPhoto(
+  client: SupabaseClient,
+  photo: PhotoUploadClaim["photos"][number],
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const info = await client.storage.from(PHOTO_SUBMISSIONS_BUCKET).info(photo.path);
+  if (info.error || !info.data) return { ok: false, error: PHOTO_UPLOAD_INCOMPLETE };
+  const infoRecord = info.data as { size?: number; contentType?: string; content_type?: string; metadata?: { mimetype?: string } };
+  const infoSize = typeof infoRecord.size === "number" ? infoRecord.size : null;
+  if (infoSize !== null && infoSize > MAX_PHOTO_BYTES) return { ok: false, error: PHOTO_TOO_LARGE_ERROR };
+  if (infoSize !== null && infoSize <= 0) return { ok: false, error: PHOTO_TYPE_ERROR };
+  const mime = infoRecord.contentType || infoRecord.content_type || infoRecord.metadata?.mimetype || "";
+  if (!mimeAgreesWithPhoto(mime, photo.ext)) return { ok: false, error: PHOTO_TYPE_ERROR };
+
+  const downloaded = await client.storage.from(PHOTO_SUBMISSIONS_BUCKET).download(photo.path);
+  if (downloaded.error || !downloaded.data) return { ok: false, error: PHOTO_UPLOAD_INCOMPLETE };
+  const bytes = new Uint8Array(await downloaded.data.arrayBuffer());
+  if (bytes.byteLength > MAX_PHOTO_BYTES) return { ok: false, error: PHOTO_TOO_LARGE_ERROR };
+  const detected = detectPhotoFile(bytes);
+  if (!detected.ok || detected.ext !== photo.ext) return { ok: false, error: PHOTO_TYPE_ERROR };
+  return { ok: true };
+}
+
+/** Deletes stored files that never became a row. Fresh uploads are left alone. */
+export async function deleteOrphanPhotoObjects(
+  client: SupabaseClient = serviceClient(),
+  now = Date.now(),
+): Promise<{ removed: string[] }> {
+  const listed = await client.storage.from(PHOTO_SUBMISSIONS_BUCKET).list("", { limit: 1000 });
+  if (listed.error || !listed.data) return { removed: [] };
+  const stale = listed.data.filter((file) => {
+    if (!file?.name || !isSafePhotoPath(file.name)) return false;
+    const created = file.created_at ? Date.parse(file.created_at) : Number.NaN;
+    return Number.isFinite(created) && now - created >= PHOTO_ORPHAN_GRACE_MS;
+  });
+  if (!stale.length) return { removed: [] };
+  const names = stale.map((file) => file.name);
+  const existing = await client.from("photo_submissions").select("storage_path").in("storage_path", names);
+  if (existing.error) return { removed: [] };
+  const kept = new Set((existing.data ?? []).map((row) => String((row as { storage_path?: string }).storage_path ?? "")));
+  const orphans = names.filter((name) => !kept.has(name));
+  if (!orphans.length) return { removed: [] };
+  const removed = await client.storage.from(PHOTO_SUBMISSIONS_BUCKET).remove(orphans);
+  if (removed.error) return { removed: [] };
+  return { removed: orphans };
 }
 
 export async function listPhotoSubmissionsForReview(

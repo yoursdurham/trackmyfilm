@@ -7,6 +7,7 @@ import {
   PHOTO_TYPE_ERROR,
   acceptedPhotos,
   approvedPhotoSubmissions,
+  slotPhotosFromMetadata,
   detectPhotoFile,
   isPhotoReviewPreview,
   isSafePhotoPath,
@@ -63,6 +64,19 @@ describe("photo file checks", () => {
     const gif = new FormData();
     gif.append("photos", file(GIF, "cat.jpg", "image/jpeg"));
     expect(await acceptedPhotos(gif)).toEqual({ error: PHOTO_TYPE_ERROR });
+  });
+
+  it("accepts declared jpeg, png, and heic sizes and rejects a gif or a huge file", () => {
+    expect(slotPhotosFromMetadata([{ size: 12, contentType: "image/jpeg" }])).toEqual({
+      photos: [{ size: 12, ext: "jpg", contentType: "image/jpeg" }],
+    });
+    expect(slotPhotosFromMetadata([{ size: 12, contentType: "image/heif" }])).toMatchObject({
+      photos: [{ ext: "heic" }],
+    });
+    expect(slotPhotosFromMetadata([{ size: 12, contentType: "image/gif" }])).toEqual({ error: PHOTO_TYPE_ERROR });
+    expect(slotPhotosFromMetadata([{ size: MAX_PHOTO_BYTES + 1, contentType: "image/png" }])).toEqual({
+      error: PHOTO_TOO_LARGE_ERROR,
+    });
   });
 
   it("rejects traversal paths and keeps only approved rows for a future gallery", () => {
