@@ -5,6 +5,7 @@ import { ORDER_STATUS, KNOWN_ORDER_STATUSES } from "@/lib/constants";
 import { filmProductUrl } from "@/lib/film-product-links";
 import { recommendNewFilms, type FilmRecommendation } from "@/lib/film-recommendations";
 import { correctFilmStockSpelling } from "@/lib/film-stocks";
+import { isScansOnlyOrder } from "@/lib/order-service";
 import { PUBLIC_ON_HOLD_MESSAGE, publicTimelineStatus } from "@/lib/tracking-public";
 import type { FilmOrder, FilmType, OrderStatus, RollDetail } from "@/lib/types";
 import { emailsMatchExact } from "@/lib/validation";
@@ -141,6 +142,7 @@ function knownStatus(value: string | null | undefined): OrderStatus | null {
 export function accountProgress(
   status: string | null | undefined,
   history: AccountOrderInput["status_history"],
+  options?: { scansOnly?: boolean },
 ): { phase: "current" | "history"; onHold: boolean; steps: AccountProgressStep[] } {
   const stored = knownStatus(status);
   const onHold = stored === ORDER_STATUS.ON_HOLD;
@@ -163,6 +165,16 @@ export function accountProgress(
     || pipeline === ORDER_STATUS.READY_FOR_PICKUP
     || pipeline === ORDER_STATUS.SCANS_SENT;
   const scans = pipeline === ORDER_STATUS.SCANS_SENT;
+  if (options?.scansOnly) {
+    return {
+      phase: scans ? "history" : "current",
+      onHold,
+      steps: [
+        { label: "Dropped off", reached: dropped },
+        { label: "Scans sent", reached: scans },
+      ],
+    };
+  }
   return {
     phase: scans ? "history" : "current",
     onHold,
@@ -325,7 +337,9 @@ function asFilmOrder(order: AccountOrderInput): FilmOrder {
 }
 
 function toView(order: AccountOrderInput): { phase: "current" | "history"; view: AccountOrderView; at: number } {
-  const progress = accountProgress(order.status, order.status_history);
+  const progress = accountProgress(order.status, order.status_history, {
+    scansOnly: isScansOnlyOrder(asFilmOrder(order)),
+  });
   const note = order.scan_notes?.trim() || null;
   return {
     phase: progress.phase,

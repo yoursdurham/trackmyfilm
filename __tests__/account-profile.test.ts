@@ -53,6 +53,16 @@ describe("account progress", () => {
     expect(sent.steps.every((step) => step.reached)).toBe(true);
   });
 
+  it("skips the lab step for scans-only orders", () => {
+    const waiting = accountProgress("Received by Yours", [], { scansOnly: true });
+    expect(waiting.phase).toBe("current");
+    expect(waiting.steps.map((step) => step.label)).toEqual(["Dropped off", "Scans sent"]);
+    expect(waiting.steps.map((step) => step.reached)).toEqual([true, false]);
+    const sent = accountProgress("Scans Sent", [], { scansOnly: true });
+    expect(sent.phase).toBe("history");
+    expect(sent.steps.map((step) => step.reached)).toEqual([true, true]);
+  });
+
   it("parks on hold on the last pipeline step and hides the staff reason", () => {
     const parked = accountProgress("On Hold", [
       { status: "Received by Yours", changed_at: "2026-09-12T15:00:00.000Z" },
@@ -65,6 +75,26 @@ describe("account progress", () => {
 });
 
 describe("customer isolation in the profile builder", () => {
+  it("uses two progress steps when the order is scans only", () => {
+    const profile = buildAccountProfile({
+      email: "avery.sample@example.com",
+      firstName: "Avery",
+      lastName: "Sample",
+      orders: [
+        order({
+          customer_email: "avery.sample@example.com",
+          customer_name: "Avery Sample",
+          status: "Received by Yours",
+          roll_details: [
+            { film_type: "35mm", film_process: "Color", scan_size: "Scans Only" },
+          ],
+        }),
+      ],
+      now: NOW,
+    });
+    expect(profile.current[0]?.steps.map((step) => step.label)).toEqual(["Dropped off", "Scans sent"]);
+  });
+
   it("drops another customer's rows even if they were returned", () => {
     const profile = buildAccountProfile({
       email: "Ada@Example.com",

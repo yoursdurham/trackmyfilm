@@ -114,6 +114,29 @@ describe("calculateReportMetrics", () => {
     expect(metrics.onHoldRolls).toBe(0);
   });
 
+  it("lists Scans Only in the scan resolution export", () => {
+    const metrics = calculateReportMetrics([
+      order({
+        id: "scans-only",
+        roll_count: 2,
+        roll_details: [
+          { film_type: "35mm", film_process: "Color", scan_size: "Scans Only" },
+          { film_type: "120", film_process: "Black & White", scan_size: "Scans Only" },
+        ],
+      }),
+    ]);
+    expect(metrics.scanResolutionUsage).toEqual([{ resolution: "Scans Only", count: 2 }]);
+    const csv = buildReportCsv({
+      generatedAt: "Oct 25, 2026",
+      timeFrameLabel: "October 2026",
+      metrics,
+      averageTurnaroundDays: null,
+      completedOrders: 1,
+    });
+    expect(csv).toContain("SCAN RESOLUTION USAGE");
+    expect(csv).toContain("Scans Only,2");
+  });
+
   it("keeps On Hold rolls in the volume totals and labels them as not completed", () => {
     const metrics = calculateReportMetrics([
       order({

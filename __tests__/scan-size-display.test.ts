@@ -11,6 +11,9 @@ describe("formatScanSizeLabel", () => {
   it("maps legacy/snake_case values", () => {
     expect(formatScanSizeLabel("high_res")).toBe("High-Res");
     expect(formatScanSizeLabel("process_only")).toBe("Process Only");
+    expect(formatScanSizeLabel("Scans Only")).toBe("Scans Only");
+    expect(formatScanSizeLabel("scanning only")).toBe("Scans Only");
+    expect(formatScanSizeLabel("scan_only")).toBe("Scans Only");
     expect(formatScanSizeLabel("tiff")).toBe("TIFF");
   });
 

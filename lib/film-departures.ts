@@ -10,9 +10,11 @@
  * DEPARTURES is film still at the studio (Received by Yours), waiting for
  * the next Tue/Fri noon lab run. ARRIVALS is film at the lab, plus orders
  * whose scans were sent today (LANDED). Those landed rows are today only.
+ * Scans Only orders never go to the lab, so they stay off both lists.
  */
 
 import { ORDER_STATUS } from "@/lib/constants";
+import { isScansOnlyOrder } from "@/lib/order-service";
 import { FILM_METRICS_CONFIG } from "@/lib/film-metrics-config";
 import {
   nextLabRunAt,
@@ -393,6 +395,7 @@ export function computeFilmDepartures(
 
   orders.forEach((order, index) => {
     if (order.status === ORDER_STATUS.ON_HOLD) return;
+    if (isScansOnlyOrder(order)) return;
     const key = personKey(order, index);
     const name = boardName(order.customer_name);
     const rolls = rollsOnOrder(order);

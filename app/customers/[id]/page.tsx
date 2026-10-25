@@ -21,7 +21,7 @@ import type { ContactMethod, CustomerOrderStats, DeliveryPreference } from "@/li
 
 const FILM_TYPES: FilmType[] = ["35mm", "120", "110", "Disposable Camera"];
 const FILM_PROCESSES: Array<Exclude<FilmProcess, "Both">> = ["Color", "Black & White"];
-const SCAN_SIZES = ["Standard", "High-Res", "TIFF", "Process Only"] as const;
+const SCAN_SIZES = ["Standard", "High-Res", "TIFF", "Process Only", "Scans Only"] as const;
 const CONTACT_METHODS: ContactMethod[] = ["email", "phone", "text"];
 const DELIVERY_OPTIONS: DeliveryPreference[] = ["pickup", "ship", "email"];
 

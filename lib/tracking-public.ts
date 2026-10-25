@@ -1,5 +1,5 @@
 import type { FilmOrder, FilmProcess, FilmType, OrderStatus, RollDetail } from "@/lib/types";
-import { isProcessOnlyOrder } from "@/lib/order-service";
+import { isProcessOnlyOrder, isScansOnlyOrder } from "@/lib/order-service";
 import {
   batchDeliveredAt,
   isBatchDelivered,
@@ -52,6 +52,8 @@ export type PublicTrackingOrder = {
   roll_details?: PublicRollDetail[];
   notes?: string;
   process_only: boolean;
+  /** Already-developed film. The timeline skips the lab step. */
+  scans_only: boolean;
   scan_progress: PublicScanProgress[];
 };
 
@@ -106,6 +108,7 @@ export function serializeOrderForPublicTracking(order: FilmOrder): PublicTrackin
     film_type: order.film_type,
     film_process: order.film_process,
     process_only: isProcessOnlyOrder(order),
+    scans_only: isScansOnlyOrder(order),
     scan_progress: publicScanProgress(order),
   };
 

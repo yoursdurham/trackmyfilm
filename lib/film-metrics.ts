@@ -283,6 +283,8 @@ export function rollsOnOrder(order: RollCountSource): number {
 /**
  * Scanned rolls only. A Process Only order contributes nothing.
  * Mixed orders count the rolls that are not Process Only.
+ * Scans Only rolls count: they are scans, and they stay in process while
+ * the order is still Received by Yours.
  * Orders with no roll details use the existing roll count unless the order is Process Only.
  */
 function scannedRollsOnOrder(order: FilmOrder): number {

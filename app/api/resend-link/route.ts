@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getOrderByNumber, updateOrder } from "@/lib/db";
 import { isWithinDedupWindow, normalizeEmail, normalizeOrderNumber } from "@/lib/validation";
+import { isScansOnlyOrder } from "@/lib/order-service";
 import { scanNotesForEmail, scanNotesHtml } from "@/lib/scan-notes";
 
 const RATE_LIMIT_WINDOW_MS = 60_000;
@@ -89,10 +90,16 @@ export async function POST(req: Request) {
       return genericResponse();
     }
 
+    const scansOnly = isScansOnlyOrder(order);
     const apiKey = process.env.RESEND_API_KEY;
-    const templateId = process.env.RESEND_TEMPLATE_SCANS_SENT;
+    const templateId = scansOnly
+      ? process.env.RESEND_TEMPLATE_SCANS_ONLY_READY
+      : process.env.RESEND_TEMPLATE_SCANS_SENT;
     if (!apiKey || !templateId) {
-      console.error("[resend-link] Missing Resend configuration");
+      console.error("[resend-link] Missing Resend configuration", {
+        template: scansOnly ? "scans_only_ready" : "scans_sent",
+        envVar: scansOnly ? "RESEND_TEMPLATE_SCANS_ONLY_READY" : "RESEND_TEMPLATE_SCANS_SENT",
+      });
       return genericResponse();
     }
 
@@ -103,6 +110,12 @@ export async function POST(req: Request) {
       wetransfer_link: order.wetransfer_link,
       scan_notes: scanNotesForEmail(order.scan_notes),
       scan_notes_html: scanNotesHtml(order.scan_notes),
+      ...(scansOnly
+        ? {
+          scans_ready_message:
+            "Your scans are ready. This order was already developed, so there was no lab processing.",
+        }
+        : {}),
     };
 
     const payload = {
@@ -146,7 +159,9 @@ export async function POST(req: Request) {
     orderCooldownFallback.set(order.id, now.getTime());
 
     await updateOrder(order.id, {
-      scans_sent_email_sent_at: now.toISOString(),
+      ...(scansOnly
+        ? { scans_only_ready_emailed_at: now.toISOString() }
+        : { scans_sent_email_sent_at: now.toISOString() }),
       last_emailed_at: now.toISOString(),
       email_status: "sent",
       email_error: null,

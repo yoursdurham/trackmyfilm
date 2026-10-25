@@ -102,7 +102,7 @@ There are exactly 3 customer emails, one per pipeline status. **On Hold does not
 
 ## Customizing Email Templates
 
-All 3 email templates are managed entirely in your **Resend dashboard** at resend.com. Log in → Templates. You can change anything about them without touching any code.
+Email templates are managed in your **Resend dashboard** at resend.com. Log in → Templates. You can change anything about them without touching any code. A starter for the Scans Only email is in `docs/resend-email-templates/scans-only-ready.html`. Paste it into a new Resend template, publish it, and set `RESEND_TEMPLATE_SCANS_ONLY_READY`.
 
 ### What you can freely change
 - Subject line
@@ -120,9 +120,10 @@ The system automatically fills in these placeholders when sending. The names mus
 | `{{order_number}}` | The order number (e.g. "JE1234") |
 | `{{roll_count}}` | Number of rolls (e.g. "3") |
 | `{{notes}}` | Drop-off notes from the New Film Drop-off form (film_drop_received only; empty if none) |
-| `{{wetransfer_link}}` | The WeTransfer download URL (scans_sent email only) |
-| `{{scan_notes}}` | Plain-text note from the lab (scans_sent only; empty if none) |
-| `{{scan_notes_html}}` | Same note as HTML paragraph (scans_sent only; empty if none — paste this in HTML templates) |
+| `{{wetransfer_link}}` | The WeTransfer download URL (`scans_sent` and `scans_only_ready`) |
+| `{{scan_notes}}` | Plain-text scan note (`scans_sent` and `scans_only_ready`; empty if none) |
+| `{{scan_notes_html}}` | Same note as HTML (`scans_sent` and `scans_only_ready`; empty if none) |
+| `{{scans_ready_message}}` | Scans Only completion line. No developing or lab-hold wording. |
 
 > If you rename a variable — for example changing `{{first_name}}` to `{{name}}` — the email will send with the literal text `{{name}}` showing instead of the customer's actual name. Don't rename them; only change the text around them.
 
@@ -168,6 +169,9 @@ Feel free to change the wording completely. Just keep `{{wetransfer_link}}` in t
 | `film_drop_received` | We've got your film! |
 | `film_at_lab` | Your film is at the lab |
 | `scans_sent` | Your scans are ready — download here! |
+| `scans_only_ready` | Your scans are ready |
+
+`scans_only_ready` is sent instead of `scans_sent` when every roll is Scans Only and the status becomes Scans Sent. It uses the same download link and scan note. Do not mention developing, the lab, or negatives being held after processing. There is no account link. The HTML to paste is `docs/resend-email-templates/scans-only-ready.html`. Run `supabase/migrations/026_scans_only_ready_email.sql` so the send can be recorded.
 
 ---
 

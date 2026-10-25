@@ -7,7 +7,7 @@
 import { NextResponse } from "next/server";
 import { getOrderById } from "@/lib/db";
 import { KNOWN_ORDER_STATUSES } from "@/lib/constants";
-import { isProcessOnlyOrder } from "@/lib/order-service";
+import { isProcessOnlyOrder, isScansOnlyOrder } from "@/lib/order-service";
 import { isKnownStatus } from "@/lib/validation";
 import { requireAuth } from "@/lib/api-auth";
 import { updateOrderStatus } from "@/lib/status-update-service";
@@ -45,6 +45,7 @@ export async function POST(req: Request) {
     }
 
     const processOnlyOrder = isProcessOnlyOrder(order);
+    const scansOnlyOrder = isScansOnlyOrder(order);
     const detectedScanOptions = order.roll_details?.length
       ? order.roll_details.map((roll) => roll.scan_size ?? "(missing)")
       : [
@@ -61,6 +62,7 @@ export async function POST(req: Request) {
       newStatus: new_status,
       detectedScanOptions,
       processOnlyOrder,
+      scansOnlyOrder,
       sendEmail: send_email,
       hasWetransferLink: Boolean(wetransfer_link || order.wetransfer_link),
     });

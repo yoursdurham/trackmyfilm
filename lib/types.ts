@@ -13,7 +13,7 @@ export interface RollDetail {
   film_process: FilmProcess;
   film_stock?: string;
   prints_4x6?: boolean;
-  scan_size?: "Standard" | "High-Res" | "TIFF" | "Process Only";
+  scan_size?: "Standard" | "High-Res" | "TIFF" | "Process Only" | "Scans Only";
   /** Lab returned this individual roll blank. Omitted when the roll is not blank. */
   blank?: boolean;
 }
@@ -115,6 +115,8 @@ export interface FilmOrder {
   received_email_sent_at?: string;
   at_lab_email_sent_at?: string;
   process_only_finished_emailed_at?: string;
+  /** Set when the Scans Only completion email has been sent. */
+  scans_only_ready_emailed_at?: string;
   scans_sent_email_sent_at?: string;
   film_delay_email_sent_at?: string;
   last_emailed_at?: string;

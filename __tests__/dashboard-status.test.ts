@@ -4,6 +4,7 @@ import {
   countDashboardStatuses,
   isDashboardSentStatus,
   orderMatchesDashboardFilter,
+  SCANS_ONLY_FILTER,
 } from "@/lib/dashboard-status";
 
 const orders = [
@@ -48,6 +49,17 @@ describe("dashboard sent grouping", () => {
   it("leaves urgency to the caller, including finished pickup orders", () => {
     expect(orderMatchesDashboardFilter(orders[2], "urgent", false)).toBe(false);
     expect(orderMatchesDashboardFilter(orders[0], "urgent", true)).toBe(true);
+  });
+
+  it("filters scans-only orders without moving them out of Received or Sent", () => {
+    const scansOnly = {
+      id: "scans",
+      status: ORDER_STATUS.RECEIVED_BY_YOURS,
+      roll_details: [{ scan_size: "Scans Only" }],
+    };
+    expect(orderMatchesDashboardFilter(scansOnly, SCANS_ONLY_FILTER, false)).toBe(true);
+    expect(orderMatchesDashboardFilter(scansOnly, ORDER_STATUS.RECEIVED_BY_YOURS, false)).toBe(true);
+    expect(orderMatchesDashboardFilter(orders[0], SCANS_ONLY_FILTER, false)).toBe(false);
   });
 
   it("parks On Hold on its own tab and keeps it out of the working lists", () => {

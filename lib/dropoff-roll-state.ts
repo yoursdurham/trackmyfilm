@@ -1,6 +1,6 @@
 import type { Customer, FilmProcess, FilmType } from "@/lib/types";
 
-export const DROP_OFF_SCAN_SIZES = ["Standard", "High-Res", "TIFF", "Process Only"] as const;
+export const DROP_OFF_SCAN_SIZES = ["Standard", "High-Res", "TIFF", "Process Only", "Scans Only"] as const;
 export type DropoffScanSize = (typeof DROP_OFF_SCAN_SIZES)[number];
 
 export interface DropoffRollState {

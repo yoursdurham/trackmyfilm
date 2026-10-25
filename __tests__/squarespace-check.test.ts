@@ -45,6 +45,7 @@ import {
   fetchRecentSquarespaceOrders,
   filmTypeFromProductName,
   isFilmProcessingProductName,
+  isFilmScanningOnlyProductName,
   isSquarespacePosOrder,
   prints4x6FromSquarespaceVariant,
   SQUARESPACE_API_KEY_ENV,
@@ -98,6 +99,16 @@ describe("film processing product names", () => {
     expect(filmTypeFromProductName("Black and White - 110 Development")).toBe("110");
   });
 
+  it("recognizes 35mm and 120 Scanning Only, and ignores slide, photo, and video scanning", () => {
+    expect(isFilmScanningOnlyProductName("35mm Scanning Only")).toBe(true);
+    expect(isFilmScanningOnlyProductName("120 Scanning Only")).toBe(true);
+    expect(isFilmProcessingProductName("35mm Scanning Only")).toBe(false);
+    expect(isFilmScanningOnlyProductName("Slide Film Scanning")).toBe(false);
+    expect(isFilmScanningOnlyProductName("Photo Scanning")).toBe(false);
+    expect(isFilmScanningOnlyProductName("Video Transfer")).toBe(false);
+    expect(isFilmScanningOnlyProductName("8mm Scanning Only")).toBe(false);
+  });
+
   it("ignores film and camera shop sales", () => {
     expect(isFilmProcessingProductName("Kodak Portra 400 35mm")).toBe(false);
     expect(isFilmProcessingProductName("35mm Film")).toBe(false);
@@ -133,6 +144,39 @@ describe("classifySquarespaceOrder", () => {
   it("imports pending and canceled orders the same way", () => {
     expect(classifySquarespaceOrder(filmOrder({ fulfillmentStatus: "PENDING" })).kind).toBe("import");
     expect(classifySquarespaceOrder(filmOrder({ fulfillmentStatus: "CANCELED" })).kind).toBe("import");
+  });
+
+  it("maps 35mm and 120 Scanning Only products to Scans Only and notes a missing process", () => {
+    const result = classifySquarespaceOrder(filmOrder({
+      orderNumber: "01080",
+      id: "scans-only-order",
+      lineItems: [
+        { productName: "35mm Scanning Only", quantity: 1, variantOptions: [] },
+        { productName: "120 Scanning Only", quantity: 1, variantOptions: [{ optionName: "Process", value: "Black & White" }] },
+        { productName: "Slide Film Scanning", quantity: 1 },
+        { productName: "Photo Scanning", quantity: 1 },
+      ],
+    }));
+    expect(result.kind).toBe("import");
+    if (result.kind !== "import") return;
+    expect(result.draft.roll_details).toEqual([
+      { film_type: "35mm", film_process: "Color", scan_size: "Scans Only", prints_4x6: false },
+      { film_type: "120", film_process: "Black & White", scan_size: "Scans Only", prints_4x6: false },
+    ]);
+    expect(result.draft.notes).toMatch(/Confirm the process/);
+  });
+
+  it("keeps Scans Only when a develop product's option says scanning only", () => {
+    const result = classifySquarespaceOrder(filmOrder({
+      lineItems: [{
+        productName: "C41 (color) - 35mm Development",
+        quantity: 1,
+        variantOptions: [{ optionName: "Processing", value: "Scanning Only" }],
+      }],
+    }));
+    expect(result.kind).toBe("import");
+    if (result.kind !== "import") return;
+    expect(result.draft.roll_details[0]?.scan_size).toBe("Scans Only");
   });
 
   it("maps black and white 120 standard scans with quantity as roll count", () => {

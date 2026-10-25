@@ -108,3 +108,46 @@ describe("sendOrderEmail scans_sent — scan_notes variable", () => {
     expect(body.template.variables.scan_notes).toBe("");
   });
 });
+
+describe("sendOrderEmail scans_only_ready", () => {
+  const originalFetch = global.fetch;
+
+  beforeEach(() => {
+    vi.stubEnv("RESEND_API_KEY", "re_test_key");
+    vi.stubEnv("RESEND_TEMPLATE_SCANS_ONLY_READY", "tmpl_scans_only");
+    vi.stubEnv("RESEND_FROM_EMAIL", "test@example.com");
+    mockUpdateOrder.mockResolvedValue({});
+  });
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+    vi.unstubAllEnvs();
+  });
+
+  it("sends a scans-ready message and the download link, with no account link", async () => {
+    mockGetOrderById.mockResolvedValue(makeOrder({
+      scan_notes: "Frame 4 is blank.",
+      scans_only_ready_emailed_at: undefined,
+      roll_details: [{ film_type: "35mm", film_process: "Color", scan_size: "Scans Only" }],
+    }));
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ id: "email-scans" }),
+    });
+    global.fetch = fetchMock as typeof fetch;
+
+    await sendOrderEmail("order-1", "scans_only_ready");
+
+    const body = JSON.parse(String(fetchMock.mock.calls[0][1]?.body)) as {
+      template: { id: string; variables: Record<string, string> };
+    };
+    expect(body.template.id).toBe("tmpl_scans_only");
+    expect(body.template.variables.scans_ready_message).toMatch(/scans are ready/i);
+    expect(body.template.variables.scans_ready_message).not.toMatch(/developing|thanks for developing|held/i);
+    expect(body.template.variables.wetransfer_link).toBe("https://wetransfer.com/downloads/abc");
+    expect(body.template.variables.scan_notes).toBe("Frame 4 is blank.");
+    expect(JSON.stringify(body.template.variables)).not.toMatch(/\/account/);
+    const patch = mockUpdateOrder.mock.calls.at(-1)?.[1] as Partial<FilmOrder>;
+    expect(patch.scans_only_ready_emailed_at).toBeTruthy();
+  });
+});

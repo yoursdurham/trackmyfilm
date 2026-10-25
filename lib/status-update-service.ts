@@ -1,7 +1,7 @@
 import { getOrderById, updateOrder } from "@/lib/db";
-import { ORDER_STATUS, STATUS_TEMPLATE_MAP } from "@/lib/constants";
+import { ORDER_STATUS } from "@/lib/constants";
 import { normalizeHoldReason } from "@/lib/hold-reason";
-import { isProcessOnlyOrder } from "@/lib/order-service";
+import { emailTemplateForStatus, isProcessOnlyOrder, isScansOnlyOrder } from "@/lib/order-service";
 import { isMixedScanOrder, isPartialScanDeliveryComplete, scansSentBlockedReason } from "@/lib/scan-batch";
 import { isValidTransition, isKnownStatus, isValidUrl, ensureHttps } from "@/lib/validation";
 import { scanNotesForStorage } from "@/lib/scan-notes";
@@ -119,6 +119,14 @@ export async function updateOrderStatus({
     };
   }
 
+  if (new_status === ORDER_STATUS.RECEIVED_AT_LAB && isScansOnlyOrder(order)) {
+    return {
+      success: false,
+      order_id,
+      error: "Scans Only orders skip the lab. Mark them Scans Sent when the scans are ready.",
+    };
+  }
+
   if (order.status === new_status) {
     if (new_status === ORDER_STATUS.ON_HOLD && hold_reason !== undefined) {
       const normalized = normalizeHoldReason(hold_reason);
@@ -224,7 +232,7 @@ export async function updateOrderStatus({
       ? HOLD_REASON_MIGRATION_WARNING
       : undefined;
 
-  const template = STATUS_TEMPLATE_MAP[new_status];
+  const template = emailTemplateForStatus(order, new_status);
   if (!template || !send_email) {
     return { success: true, order_id, new_status, email_sent: false, warning: holdWarning };
   }

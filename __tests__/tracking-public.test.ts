@@ -81,6 +81,7 @@ describe("serializeOrderForPublicTracking", () => {
       ],
       notes: "Please push",
       process_only: false,
+      scans_only: false,
       scan_progress: [
         { batch: "Color", delivered: true, deliveredAt: "2026-09-29T12:00:00.000Z" },
         { batch: "Black & White", delivered: true, deliveredAt: "2026-09-30T12:00:00.000Z" },

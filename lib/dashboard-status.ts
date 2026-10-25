@@ -1,4 +1,8 @@
 import { ORDER_STATUS } from "@/lib/constants";
+import { isScansOnlyOrder, type ServiceTypeOrder } from "@/lib/order-service";
+
+/** Staff filter for already-developed film, any pipeline status. */
+export const SCANS_ONLY_FILTER = "scans-only";
 
 /**
  * The staff dashboard treats Ready for Pickup as the same finished stage as
@@ -35,11 +39,12 @@ export function countDashboardStatuses(orders: { status: string }[]): DashboardS
 
 /** True when an order belongs in the staff dashboard's active filter. */
 export function orderMatchesDashboardFilter(
-  order: { status: string },
+  order: { status: string } & ServiceTypeOrder,
   activeFilter: string,
   urgent: boolean,
 ): boolean {
   if (activeFilter === "all") return true;
+  if (activeFilter === SCANS_ONLY_FILTER) return isScansOnlyOrder(order);
   if (activeFilter === "urgent") return urgent && order.status !== ORDER_STATUS.ON_HOLD;
   if (activeFilter === ORDER_STATUS.SCANS_SENT) return isDashboardSentStatus(order.status);
   return order.status === activeFilter;

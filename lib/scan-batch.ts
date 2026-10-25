@@ -1,5 +1,5 @@
 import type { FilmOrder, RollDetail } from "./types";
-import { isProcessOnlyOrder, isProcessOnlyRoll } from "./order-service";
+import { isProcessOnlyOrder, isProcessOnlyRoll, isScansOnlyOrder } from "./order-service";
 
 /** Scan delivery batch for mixed Color + B&W orders */
 export type ScanDeliveryBatch = "Color" | "Black & White";
@@ -36,7 +36,7 @@ function processesFromRoll(roll: RollDetail): ("color" | "bw")[] {
   return [];
 }
 
-/** Scannable rolls exclude Process Only. */
+/** Scannable rolls exclude Process Only. Scans Only rolls are scanned. */
 export function getScannableRollProcesses(order: FilmOrder): Set<"color" | "bw"> {
   const set = new Set<"color" | "bw">();
 
@@ -60,7 +60,7 @@ export function getScannableRollProcesses(order: FilmOrder): Set<"color" | "bw">
 }
 
 export function isMixedScanOrder(order: FilmOrder): boolean {
-  if (isProcessOnlyOrder(order)) return false;
+  if (isProcessOnlyOrder(order) || isScansOnlyOrder(order)) return false;
   const processes = getScannableRollProcesses(order);
   return processes.has("color") && processes.has("bw");
 }
