@@ -91,6 +91,32 @@ const processOnlyStatusSteps: StatusStep[] = [
   },
 ];
 
+const scansOnlyStatusSteps: StatusStep[] = [
+  statusSteps[0],
+  statusSteps[2],
+];
+
+const SCANS_ONLY_PREVIEW_ORDERS: PublicTrackingOrder[] = [
+  {
+    id: "preview-scans-only",
+    order_number: "YM-4401",
+    first_name: "Avery",
+    status: "Received by Yours",
+    status_history: [{ status: "Received by Yours", changed_at: "2026-10-24T15:00:00.000Z" }],
+    dropoff_date: "2026-10-24",
+    roll_count: 2,
+    film_type: "35mm",
+    film_process: "Color",
+    roll_details: [
+      { film_type: "35mm", film_process: "Color", film_stock: "Kodak Portra 400", scan_size: "Scans Only" },
+      { film_type: "120", film_process: "Black & White", film_stock: "Ilford HP5 Plus", scan_size: "Scans Only" },
+    ],
+    process_only: false,
+    scans_only: true,
+    scan_progress: [],
+  },
+];
+
 function buildTimestampMap(statusHistory?: StatusHistoryEntry[]) {
   if (!statusHistory?.length) return {};
 
@@ -123,18 +149,22 @@ function OrderTimeline({
   currentStatus,
   statusHistory,
   processOnly,
+  scansOnly,
 }: {
   currentStatus: OrderStatus | null;
   statusHistory?: StatusHistoryEntry[];
   processOnly?: boolean;
+  scansOnly?: boolean;
 }) {
-  const steps = processOnly ? processOnlyStatusSteps : statusSteps;
+  const steps = processOnly ? processOnlyStatusSteps : scansOnly ? scansOnlyStatusSteps : statusSteps;
   const currentIndex = steps.findIndex((step) => step.status === currentStatus);
   const timestampMap = buildTimestampMap(statusHistory);
+  const lineInset = steps.length === 2 ? "left-1/4 right-1/4" : "left-[16.666%] right-[16.666%]";
+  const columnClass = steps.length === 2 ? "grid-cols-2" : "grid-cols-3";
 
   return (
     <div className="relative mx-auto mb-8 w-full min-w-0 max-w-2xl px-0 sm:px-6">
-      <div className="absolute left-[16.666%] right-[16.666%] top-[18px] z-0 flex -translate-y-1/2 sm:top-6">
+      <div className={`absolute ${lineInset} top-[18px] z-0 flex -translate-y-1/2 sm:top-6`}>
         {steps.slice(0, -1).map((step, index) => (
           <div
             key={`${step.status}-line`}
@@ -150,7 +180,7 @@ function OrderTimeline({
         ))}
       </div>
 
-      <div className="relative z-10 grid w-full min-w-0 grid-cols-3">
+      <div className={`relative z-10 grid w-full min-w-0 ${columnClass}`}>
         {steps.map((step, index) => {
           const Icon = step.icon;
           const isActive = index <= currentIndex;
@@ -258,6 +288,9 @@ export default function TrackingHome({
   const normalizedEmailTerm = emailTerm.trim();
   const hasSearched = committed !== null;
 
+  const scansOnlyPreview =
+    process.env.NODE_ENV !== "production" && searchParams.get("preview") === "scans-only";
+
   const {
     data,
     isLoading,
@@ -265,11 +298,11 @@ export default function TrackingHome({
   } = useQuery<TrackingResult>({
     queryKey: ["trackOrders", committed],
     queryFn: () => fetchTrackedOrders(committed as CommittedSearch),
-    enabled: committed !== null,
+    enabled: committed !== null && !scansOnlyPreview,
   });
 
-  const orders = data?.orders ?? [];
-  const customerName = data?.customerName ?? null;
+  const orders = scansOnlyPreview ? SCANS_ONLY_PREVIEW_ORDERS : (data?.orders ?? []);
+  const customerName = scansOnlyPreview ? "Avery Sample" : (data?.customerName ?? null);
 
   useEffect(() => {
     const clearSearch = () => {
@@ -490,6 +523,7 @@ export default function TrackingHome({
               <div className="flex w-full min-w-0 max-w-full flex-col gap-12">
               {orders.map((order) => {
                 const processOnlyOrder = order.process_only;
+                const scansOnlyOrder = order.scans_only;
                 const partialProgress = order.scan_progress;
                 const customerOrderNote = orderNoteForCustomerDisplay(order.notes);
 
@@ -524,7 +558,14 @@ export default function TrackingHome({
                       currentStatus={publicTimelineStatus(order)}
                       statusHistory={order.status_history}
                       processOnly={processOnlyOrder}
+                      scansOnly={scansOnlyOrder}
                     />
+
+                    {scansOnlyOrder && order.status !== "On Hold" && order.status !== "Scans Sent" ? (
+                      <div className="mb-6 rounded-xl border-2 border-neutral-900 bg-[#C5AED7]/40 px-4 py-3 text-center font-jetbrains text-sm font-bold text-neutral-900">
+                        This film is already developed. We scan it here and skip the lab.
+                      </div>
+                    ) : null}
 
                     {partialProgress.length > 0 && order.status !== "Scans Sent" ? (
                       <div className="mt-6 rounded-xl border-2 border-neutral-900 bg-[#C5AED7]/30 px-4 py-3 text-base leading-relaxed text-neutral-900">
@@ -680,7 +721,9 @@ export default function TrackingHome({
                     {order.status === "Scans Sent" ? (
                       <div className="mt-4 space-y-3 border-t border-slate-100 pt-4">
                         <div className="rounded-xl bg-[#A1CC93]/40 px-4 py-3 text-center font-jetbrains text-sm font-bold text-neutral-900">
-                          Your download link was sent to your email
+                          {scansOnlyOrder
+                            ? "Your scans are ready. This order was already developed, so it skipped the lab. Your download link was sent to your email."
+                            : "Your download link was sent to your email"}
                         </div>
                         <button
                           type="button"

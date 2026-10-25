@@ -202,6 +202,35 @@ describe("computeFilmDepartures", () => {
     expect(board.studioRolls).toBe(3);
   });
 
+  it("leaves scans-only film off the lab board", () => {
+    const board = computeFilmDepartures([
+      order({
+        id: "scans-studio",
+        customer_name: "Avery Sample",
+        status: "Received by Yours",
+        roll_count: 2,
+        roll_details: [{ scan_size: "Scans Only" }, { scan_size: "Scans Only" }],
+      }),
+      order({
+        id: "scans-sent",
+        customer_id: "scans-sent",
+        customer_name: "Avery Sample",
+        status: "Scans Sent",
+        roll_count: 1,
+        roll_details: [{ scan_size: "Scans Only" }],
+        scans_sent_at: "2026-10-08T15:00:00.000Z",
+      }),
+      order({
+        customer_name: "Justin Edwards",
+        roll_count: 1,
+      }),
+    ], NOW);
+    expect(board.departures.map((row) => row.name)).toEqual(["JUSTIN E."]);
+    expect(board.arrivals).toEqual([]);
+    expect(board.studioRolls).toBe(1);
+    expect(JSON.stringify(board)).not.toMatch(/AVERY/);
+  });
+
   it("estimates the scans date from the lab date plus the turnaround average, and marks a late order delayed", () => {
     const averages = { colorDays: 4.2, bwDays: 3 };
     const board = computeFilmDepartures([

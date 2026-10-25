@@ -1,6 +1,6 @@
 import type { RollDetail } from "@/lib/types";
 
-const CANONICAL: RollDetail["scan_size"][] = ["Standard", "High-Res", "TIFF", "Process Only"];
+const CANONICAL: RollDetail["scan_size"][] = ["Standard", "High-Res", "TIFF", "Process Only", "Scans Only"];
 
 const ALIAS_TO_LABEL: Record<string, RollDetail["scan_size"]> = {
   standard: "Standard",
@@ -10,6 +10,12 @@ const ALIAS_TO_LABEL: Record<string, RollDetail["scan_size"]> = {
   tiff: "TIFF",
   process_only: "Process Only",
   processonly: "Process Only",
+  scans_only: "Scans Only",
+  scansonly: "Scans Only",
+  scan_only: "Scans Only",
+  scanonly: "Scans Only",
+  scanning_only: "Scans Only",
+  scanningonly: "Scans Only",
 };
 
 /** Customer-facing scan size label for UI badges and summaries. */

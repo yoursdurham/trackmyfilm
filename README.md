@@ -70,7 +70,7 @@ Example body (35mm C41, High-Res, 4x6 prints, Portra 800, 1 roll):
 }
 ```
 
-`C41` is stored as Color. `film_stock` is optional. `scan_size` may be `Standard` or `High-Res` (also `TIFF` or `Process Only`). Send `squarespace_order_number` as a string so leading zeros in `01050` are kept. Duplicate order numbers and duplicate `external_order_id` values are rejected, including order numbers that already exist as film orders. `01050`, `1050`, and `001050` count as the same order number.
+`C41` is stored as Color. `film_stock` is optional. `scan_size` may be `Standard` or `High-Res` (also `TIFF`, `Process Only`, or `Scans Only`). `Scans Only` is already-developed film: it skips the lab and finishes at Scans Sent. Send `squarespace_order_number` as a string so leading zeros in `01050` are kept. Duplicate order numbers and duplicate `external_order_id` values are rejected, including order numbers that already exist as film orders. `01050`, `1050`, and `001050` count as the same order number.
 
 **Dismiss** keeps the Pending Intake row and marks it dismissed. It leaves the queue, and later imports skip that Squarespace order id and the same order number (`01034` and `1034` match). Deleting a film order still deletes a matching pending or accepted intake row (same order number or Squarespace external id) and does not delete a dismissed row. Neither action changes any other draft or film order.
 

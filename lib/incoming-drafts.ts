@@ -17,7 +17,7 @@ import {
 export const MAX_INCOMING_DRAFT_ROLLS = 20;
 
 export const INCOMING_DRAFT_PROCESSES = ["Color", "Black & White"] as const satisfies readonly FilmProcess[];
-export const INCOMING_DRAFT_SCAN_SIZES = ["Standard", "High-Res", "TIFF", "Process Only"] as const;
+export const INCOMING_DRAFT_SCAN_SIZES = ["Standard", "High-Res", "TIFF", "Process Only", "Scans Only"] as const;
 export const PENDING_INTAKE_STATUS = "Pending Intake" as const;
 export const INCOMING_DRAFT_STATUSES = [PENDING_INTAKE_STATUS, "accepted", "dismissed"] as const satisfies readonly IncomingDraftStatus[];
 

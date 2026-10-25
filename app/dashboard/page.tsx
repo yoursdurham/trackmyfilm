@@ -6,14 +6,15 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Search, Film, Clock, CheckCircle, Package, Pause, Loader2 } from "lucide-react";
+import { Plus, Search, Film, Clock, CheckCircle, Package, Pause, Loader2, ScanLine } from "lucide-react";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
 import IncomingSquarespaceQueue from "@/components/IncomingSquarespaceQueue";
 import InternalHeader, { openNewDropoffDialog } from "@/components/InternalHeader";
 import OrderCard from "@/components/OrderCard";
 import BulkStatusActionBar from "@/components/BulkStatusActionBar";
-import { countDashboardStatuses, orderMatchesDashboardFilter } from "@/lib/dashboard-status";
+import { countDashboardStatuses, orderMatchesDashboardFilter, SCANS_ONLY_FILTER } from "@/lib/dashboard-status";
+import { isScansOnlyOrder } from "@/lib/order-service";
 import { totalFilmRollsDeveloped } from "@/lib/legacy-rolls";
 import { getUrgentAgeDays, isUrgent } from "@/lib/order-urgency";
 import { ORDER_STATUS } from "@/lib/constants";
@@ -25,6 +26,7 @@ const statusFilters = [
   { value: "Received by Yours",  label: "Received", mobileLabel: "Recvd",  icon: Clock },
   { value: "Received at Lab",    label: "At Lab",   mobileLabel: "Lab",    icon: Package },
   { value: "Scans Sent",         label: "Sent",     mobileLabel: "Sent",   icon: CheckCircle },
+  { value: SCANS_ONLY_FILTER,    label: "Scans Only", mobileLabel: "Scans", icon: ScanLine },
   { value: "On Hold",            label: "On Hold",  mobileLabel: "Hold",   icon: Pause },
   { value: "urgent",             label: "Urgent",   mobileLabel: "Urg",    icon: Clock },
 ];
@@ -184,6 +186,7 @@ function Dashboard() {
   });
 
   const statusCounts = countDashboardStatuses(dateFilteredOrders);
+  const scansOnlyCount = dateFilteredOrders.filter((order) => isScansOnlyOrder(order)).length;
   const filmRollsDeveloped = totalFilmRollsDeveloped(
     dateFilteredOrders,
     selectedTimeFrame === "all" && !isLoading,
@@ -197,7 +200,10 @@ function Dashboard() {
     if (!isReceivedTab) setSelectedOrderIds(new Set());
   }
 
-  const visibleOrderIds = filteredOrders.map((order) => order.id);
+  const visibleOrderIds = (showBulkSelection
+    ? filteredOrders.filter((order) => !isScansOnlyOrder(order))
+    : filteredOrders
+  ).map((order) => order.id);
   const allVisibleSelected = visibleOrderIds.length > 0 &&
     visibleOrderIds.every((id) => selectedOrderIds.has(id));
 
@@ -333,6 +339,11 @@ function Dashboard() {
                       {statusCounts["On Hold"]}
                     </span>
                   ) : null}
+                  {f.value === SCANS_ONLY_FILTER ? (
+                    <span className="rounded-full bg-[#C5AED7]/50 px-1.5 text-[10px] font-semibold text-slate-700">
+                      {scansOnlyCount}
+                    </span>
+                  ) : null}
                 </TabsTrigger>
               ))}
             </TabsList>
@@ -374,7 +385,7 @@ function Dashboard() {
                   <OrderCard order={order} onStatusChange={handleStatusChange}
                     onDelete={(id) => deleteMutation.mutate(id)}
                     onOrderUpdated={() => queryClient.invalidateQueries({ queryKey: ["filmOrders"] })}
-                    selectable={showBulkSelection}
+                    selectable={showBulkSelection && !isScansOnlyOrder(order)}
                     selected={selectedOrderIds.has(order.id)}
                     onSelectedChange={(selected) => toggleOrderSelection(order.id, selected)} />
                 </motion.div>

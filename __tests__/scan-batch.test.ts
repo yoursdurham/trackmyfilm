@@ -47,6 +47,22 @@ describe("isMixedScanOrder", () => {
     expect(isMixedScanOrder(makeOrder({ film_process: "Both", roll_details: undefined }))).toBe(true);
   });
 
+  it("does not split a scans-only color and black-and-white order into lab batches", () => {
+    expect(isMixedScanOrder(makeOrder({
+      roll_details: [
+        { film_type: "35mm", film_process: "Color", scan_size: "Scans Only" },
+        { film_type: "120", film_process: "Black & White", scan_size: "Scans Only" },
+      ],
+    }))).toBe(false);
+    expect(scansSentBlockedReason(makeOrder({
+      status: "Received by Yours",
+      roll_details: [
+        { film_type: "35mm", film_process: "Color", scan_size: "Scans Only" },
+        { film_type: "120", film_process: "Black & White", scan_size: "Scans Only" },
+      ],
+    }), false)).toBeNull();
+  });
+
   it("ignores process-only rolls when detecting mixed scan orders", () => {
     expect(isMixedScanOrder(makeOrder({
       roll_details: [

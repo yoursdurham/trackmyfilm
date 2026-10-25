@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isProcessOnlyOrder } from "../lib/order-service";
+import { emailTemplateForStatus, getStatusOptionsForOrder, isProcessOnlyOrder, isScansOnlyOrder } from "../lib/order-service";
 import type { FilmOrder } from "../lib/types";
 
 function makeOrder(overrides: Partial<FilmOrder> = {}): FilmOrder {
@@ -48,5 +48,44 @@ describe("isProcessOnlyOrder", () => {
     order.scan_option = "Process Only";
 
     expect(isProcessOnlyOrder(order)).toBe(true);
+  });
+});
+
+describe("isScansOnlyOrder", () => {
+  it("detects orders where every roll is Scans Only", () => {
+    const order = makeOrder({
+      roll_details: [
+        { film_type: "35mm", film_process: "Color", scan_size: "Scans Only" },
+        { film_type: "120", film_process: "Black & White", scan_size: "scan only" },
+      ] as FilmOrder["roll_details"],
+    });
+    expect(isScansOnlyOrder(order)).toBe(true);
+    expect(isProcessOnlyOrder(order)).toBe(false);
+    expect(getStatusOptionsForOrder(order)).toEqual([
+      "Received by Yours",
+      "Scans Sent",
+      "On Hold",
+    ]);
+    expect(emailTemplateForStatus(order, "Scans Sent")).toBe("scans_only_ready");
+    expect(emailTemplateForStatus(order, "Received by Yours")).toBe("film_drop_received");
+  });
+
+  it("does not treat a mixed order as Scans Only", () => {
+    const order = makeOrder({
+      roll_details: [
+        { film_type: "35mm", film_process: "Color", scan_size: "Scans Only" },
+        { film_type: "35mm", film_process: "Color", scan_size: "High-Res" },
+      ],
+    });
+    expect(isScansOnlyOrder(order)).toBe(false);
+    expect(emailTemplateForStatus(order, "Scans Sent")).toBe("scans_sent");
+  });
+
+  it("falls back to a legacy scans-only field when rolls have no scan size", () => {
+    const order = makeOrder({
+      roll_details: [{ film_type: "35mm", film_process: "Color" }],
+    }) as FilmOrder & { scan_size: string };
+    order.scan_size = "scans_only";
+    expect(isScansOnlyOrder(order)).toBe(true);
   });
 });

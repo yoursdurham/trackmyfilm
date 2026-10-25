@@ -35,7 +35,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       bw_scans_wetransfer_link, bw_scans_delivered_at, bw_partial_email_sent_at,
       wetransfer_link: rawWetransferLink,
       received_by_yours_at, at_lab_at, scans_sent_at,
-      received_email_sent_at, at_lab_email_sent_at, process_only_finished_emailed_at, scans_sent_email_sent_at,
+      received_email_sent_at, at_lab_email_sent_at, process_only_finished_emailed_at, scans_only_ready_emailed_at, scans_sent_email_sent_at,
       email_status, email_error,
     } = body;
 
@@ -80,7 +80,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       bw_scans_wetransfer_link, bw_scans_delivered_at, bw_partial_email_sent_at,
       wetransfer_link, notes,
       received_by_yours_at, at_lab_at, scans_sent_at,
-      received_email_sent_at, at_lab_email_sent_at, process_only_finished_emailed_at, scans_sent_email_sent_at,
+      received_email_sent_at, at_lab_email_sent_at, process_only_finished_emailed_at, scans_only_ready_emailed_at, scans_sent_email_sent_at,
       email_status, email_error,
     });
     return NextResponse.json(order);

@@ -15,6 +15,7 @@ type TemplateName =
   | "film_drop_received"
   | "film_at_lab"
   | "process_only_finished"
+  | "scans_only_ready"
   | "scans_sent"
   | "film_delay"
   | "partial_scans_sent";
@@ -41,6 +42,7 @@ const DEDUP_FIELDS: Record<Exclude<TemplateName, "partial_scans_sent">, keyof Fi
   film_drop_received: "received_email_sent_at",
   film_at_lab: "at_lab_email_sent_at",
   process_only_finished: "process_only_finished_emailed_at",
+  scans_only_ready: "scans_only_ready_emailed_at",
   scans_sent: "scans_sent_email_sent_at",
   film_delay: "film_delay_email_sent_at",
 };
@@ -76,6 +78,7 @@ function getTemplateIds(): Record<TemplateName, string | undefined> {
     film_drop_received: process.env.RESEND_TEMPLATE_FILM_DROP_RECEIVED,
     film_at_lab: process.env.RESEND_TEMPLATE_FILM_AT_LAB,
     process_only_finished: process.env.RESEND_TEMPLATE_PROCESS_ONLY_FINISHED,
+    scans_only_ready: process.env.RESEND_TEMPLATE_SCANS_ONLY_READY,
     scans_sent: process.env.RESEND_TEMPLATE_SCANS_SENT,
     film_delay: process.env.RESEND_TEMPLATE_FILM_DELAY,
     partial_scans_sent: process.env.RESEND_TEMPLATE_PARTIAL_SCANS_SENT,
@@ -86,8 +89,21 @@ function isKnownEmailTemplate(template: string): template is TemplateName {
   return (KNOWN_EMAIL_TEMPLATES as string[]).includes(template);
 }
 
+function sendsOnce(template: TemplateName) {
+  return template === "process_only_finished"
+    || template === "scans_only_ready"
+    || template === "film_delay"
+    || template === "partial_scans_sent";
+}
+
+function templateEnvName(template: TemplateName) {
+  if (template === "process_only_finished") return "RESEND_TEMPLATE_PROCESS_ONLY_FINISHED";
+  if (template === "scans_only_ready") return "RESEND_TEMPLATE_SCANS_ONLY_READY";
+  return `RESEND_TEMPLATE_${template.toUpperCase()}`;
+}
+
 function shouldSkipEmail(template: TemplateName, lastSent: string | undefined) {
-  if (template === "process_only_finished" || template === "film_delay") {
+  if (template === "process_only_finished" || template === "scans_only_ready" || template === "film_delay") {
     return Boolean(lastSent);
   }
 
@@ -194,7 +210,7 @@ export async function sendOrderEmail(
       ? Boolean(lastSent)
       : shouldSkipEmail(template as Exclude<TemplateName, "partial_scans_sent">, lastSent)
   ) {
-    const reason = template === "partial_scans_sent" || template === "process_only_finished" || template === "film_delay"
+    const reason = sendsOnce(template)
       ? `${dedupField} is already set for this order`
       : `${dedupField} is within the one-hour dedup window`;
     console.log("[email] Skipping duplicate send:", {
@@ -217,16 +233,12 @@ export async function sendOrderEmail(
     orderId,
     orderNumber: order.order_number,
     template,
-    envVar: template === "process_only_finished"
-      ? "RESEND_TEMPLATE_PROCESS_ONLY_FINISHED"
-      : undefined,
+    envVar: templateEnvName(template),
     templateIdConfigured: Boolean(templateId),
   });
 console.log("[email] USING TEMPLATE ID:", templateId);
   if (!templateId) {
-    const envVarName = template === "process_only_finished"
-      ? "RESEND_TEMPLATE_PROCESS_ONLY_FINISHED"
-      : `RESEND_TEMPLATE_${template.toUpperCase()}`;
+    const envVarName = templateEnvName(template);
     console.error("[email] Missing Resend template ID:", {
       orderId,
       orderNumber: order.order_number,
@@ -272,7 +284,7 @@ const variables: Record<string, string> = {
     variables.notes = order.notes?.trim() ?? "";
   }
 
-  if (template === "scans_sent") {
+  if (template === "scans_sent" || template === "scans_only_ready") {
     variables.wetransfer_link = order.wetransfer_link ?? "";
     variables.color_wetransfer_link = order.color_scans_wetransfer_link ?? "";
     variables.bw_wetransfer_link = order.bw_scans_wetransfer_link ?? "";
@@ -280,6 +292,11 @@ const variables: Record<string, string> = {
       options?.scanNotes !== undefined ? options.scanNotes : order.scan_notes;
     variables.scan_notes = scanNotesForEmail(noteSource);
     variables.scan_notes_html = scanNotesHtml(noteSource);
+  }
+
+  if (template === "scans_only_ready") {
+    variables.scans_ready_message =
+      "Your scans are ready. This order was already developed, so there was no lab processing.";
   }
 
   console.log("[email] Template variables (scans_sent includes scan_notes):", {

@@ -75,6 +75,13 @@ describe("getStatusOptionsForOrder", () => {
       "Ready for Pickup",
       "On Hold",
     ]);
+    expect(getStatusOptionsForOrder(makeOrder({
+      roll_details: [{ film_type: "35mm", film_process: "Color", scan_size: "Scans Only" }],
+    }))).toEqual([
+      "Received by Yours",
+      "Scans Sent",
+      "On Hold",
+    ]);
   });
 });
 
@@ -163,6 +170,42 @@ describe("updateOrderStatus — On Hold", () => {
     expect(patch.status).toBe("Received at Lab");
     expect(patch.hold_reason).toBeNull();
     expect(patch.at_lab_at).toBeTruthy();
+  });
+
+  it("sends the scans-only template when scans are marked ready", async () => {
+    mockGetOrderById.mockResolvedValue(makeOrder({
+      status: "Received by Yours",
+      roll_details: [{ film_type: "35mm", film_process: "Color", scan_size: "Scans Only" }],
+      wetransfer_link: "https://wetransfer.com/downloads/scans",
+    }));
+
+    const result = await updateOrderStatus({
+      order_id: "order-1",
+      new_status: "Scans Sent",
+      wetransfer_link: "https://wetransfer.com/downloads/scans",
+    });
+
+    expect(result.success).toBe(true);
+    expect(mockSendOrderEmail).toHaveBeenCalledWith("order-1", "scans_only_ready", {
+      scanNotes: undefined,
+    });
+  });
+
+  it("refuses to send a scans-only order to the lab", async () => {
+    mockGetOrderById.mockResolvedValue(makeOrder({
+      status: "Received by Yours",
+      roll_details: [{ film_type: "120", film_process: "Black & White", scan_size: "Scans Only" }],
+    }));
+
+    const result = await updateOrderStatus({
+      order_id: "order-1",
+      new_status: "Received at Lab",
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error).toMatch(/skip the lab/);
+    expect(mockUpdateOrder).not.toHaveBeenCalled();
+    expect(mockSendOrderEmail).not.toHaveBeenCalled();
   });
 
   it("still blocks Scans Sent for a process-only order that was On Hold", async () => {

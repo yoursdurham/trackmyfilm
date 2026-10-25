@@ -27,11 +27,11 @@ import { format } from "date-fns";
 import StatusBadge from "./StatusBadge";
 import FilmProcessBadge from "./FilmProcessBadge";
 import CopyField from "./CopyField";
-import { ORDER_STATUS, STATUS_FLOW, STATUS_TEMPLATE_MAP } from "@/lib/constants";
+import { ORDER_STATUS, STATUS_FLOW } from "@/lib/constants";
 import { correctFilmStockSpelling } from "@/lib/film-stocks";
 import { HOLD_REASON_MAX_LENGTH } from "@/lib/hold-reason";
 import { getUrgentAgeDays, isUrgent } from "@/lib/order-urgency";
-import { getStatusOptionsForOrder, isProcessOnlyOrder } from "@/lib/order-service";
+import { emailTemplateForStatus, getStatusOptionsForOrder, isProcessOnlyOrder, isScansOnlyOrder } from "@/lib/order-service";
 import {
   getPartialScanProgress,
   isMixedScanOrder,
@@ -46,7 +46,7 @@ import type { FilmOrder, FilmProcess, FilmType, OrderStatus, RollDetail } from "
 
 const FILM_TYPES: FilmType[] = ["35mm", "120", "110"];
 const FILM_PROCESSES: FilmProcess[] = ["Color", "Black & White", "Both"];
-const SCAN_SIZES = ["Standard", "High-Res", "TIFF", "Process Only"] as const;
+const SCAN_SIZES = ["Standard", "High-Res", "TIFF", "Process Only", "Scans Only"] as const;
 
 function getStatusDotClass(status: OrderStatus) {
   if (status === ORDER_STATUS.RECEIVED_BY_YOURS) return "bg-[var(--accent-tan)]";
@@ -60,6 +60,14 @@ function ProcessOnlyBadge() {
   return (
     <span className="inline-flex h-5 shrink-0 items-center rounded-full border border-sky-200 bg-sky-50 px-2 text-xs font-medium text-slate-700">
       Process Only
+    </span>
+  );
+}
+
+function ScansOnlyBadge() {
+  return (
+    <span className="inline-flex h-5 shrink-0 items-center rounded-full border border-[#C5AED7] bg-[#C5AED7]/40 px-2 text-xs font-medium text-slate-700">
+      Scans Only
     </span>
   );
 }
@@ -138,7 +146,7 @@ export default function OrderCard({
   const handleRetryEmail = async () => {
     setIsRetryingEmail(true);
     try {
-      const template = STATUS_TEMPLATE_MAP[order.status as keyof typeof STATUS_TEMPLATE_MAP] ?? "film_drop_received";
+      const template = emailTemplateForStatus(order, order.status) ?? "film_drop_received";
       const res = await fetch("/api/email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -166,6 +174,7 @@ export default function OrderCard({
   const urgent = isUrgent(order);
   const urgentAgeDays = getUrgentAgeDays(order);
   const processOnlyOrder = isProcessOnlyOrder(order);
+  const scansOnlyOrder = isScansOnlyOrder(order);
   const statusOptions = getStatusOptionsForOrder(order);
 
   const currentIdx = STATUS_FLOW.indexOf(order.status);
@@ -190,15 +199,10 @@ export default function OrderCard({
     order.status === ORDER_STATUS.RECEIVED_AT_LAB &&
     !partialDeliveryComplete;
 
-  const draftProcessOnly = orderDraft?.roll_details.length
-    ? orderDraft.roll_details.every((roll) => roll.scan_size === "Process Only")
-    : processOnlyOrder;
-  const draftStatusOptions: OrderStatus[] = [
-    ...(draftProcessOnly
-      ? [ORDER_STATUS.RECEIVED_BY_YOURS, ORDER_STATUS.RECEIVED_AT_LAB, ORDER_STATUS.READY_FOR_PICKUP]
-      : [ORDER_STATUS.RECEIVED_BY_YOURS, ORDER_STATUS.RECEIVED_AT_LAB, ORDER_STATUS.SCANS_SENT]),
-    ORDER_STATUS.ON_HOLD,
-  ];
+  const draftServiceOrder = orderDraft ? { ...order, roll_details: orderDraft.roll_details } : order;
+  const draftProcessOnly = isProcessOnlyOrder(draftServiceOrder);
+  const draftScansOnly = isScansOnlyOrder(draftServiceOrder);
+  const draftStatusOptions = getStatusOptionsForOrder(draftServiceOrder);
 
   const buildOrderDraft = (): OrderDraft => ({
     order_number: order.order_number,
@@ -225,12 +229,12 @@ export default function OrderCard({
   ) => {
     setOrderDraft((draft) => {
       if (!draft) return draft;
-      return {
-        ...draft,
-        roll_details: draft.roll_details.map((roll, rollIndex) =>
-          rollIndex === index ? { ...roll, [key]: value } : roll
-        ),
-      };
+      const roll_details = draft.roll_details.map((roll, rollIndex) =>
+        rollIndex === index ? { ...roll, [key]: value } : roll
+      );
+      const allowed = getStatusOptionsForOrder({ ...order, roll_details });
+      const status = allowed.includes(draft.status) ? draft.status : ORDER_STATUS.RECEIVED_BY_YOURS;
+      return { ...draft, roll_details, status };
     });
   };
 
@@ -540,14 +544,15 @@ export default function OrderCard({
               ) : null}
             </div>
           ) : null}
-          {(order.film_process || processOnlyOrder) && (
+          {(order.film_process || processOnlyOrder || scansOnlyOrder) && (
             <div className="flex flex-wrap items-center gap-2 text-sm text-slate-600">
               <span className="text-slate-400">Process:</span>
               {order.film_process ? <FilmProcessBadge process={order.film_process} /> : null}
-              {order.film_process && processOnlyOrder ? (
+              {order.film_process && (processOnlyOrder || scansOnlyOrder) ? (
                 <span className="text-slate-300">•</span>
               ) : null}
               {processOnlyOrder ? <ProcessOnlyBadge /> : null}
+              {scansOnlyOrder ? <ScansOnlyBadge /> : null}
             </div>
           )}
           {lastUpdated && (
@@ -578,6 +583,21 @@ export default function OrderCard({
                 onClick={handleRetryEmail}
                 disabled={isRetryingEmail}
                 className="flex shrink-0 items-center gap-1 rounded border border-amber-300 bg-white px-2 py-0.5 text-xs font-medium text-amber-700 transition hover:border-amber-500 hover:bg-amber-100 disabled:opacity-50"
+              >
+                {isRetryingEmail
+                  ? <Loader2 className="h-3 w-3 animate-spin" />
+                  : <Mail className="h-3 w-3" />}
+                Send email
+              </button>
+            </div>
+          ) : null}
+          {order.status === ORDER_STATUS.SCANS_SENT && scansOnlyOrder ? (
+            <div className="flex items-center justify-between gap-2 rounded-lg border border-[#C5AED7] bg-[#C5AED7]/30 px-2 py-1.5">
+              <p className="text-xs text-slate-700">Scans ready — already developed</p>
+              <button
+                onClick={handleRetryEmail}
+                disabled={isRetryingEmail}
+                className="flex shrink-0 items-center gap-1 rounded border border-[#C5AED7] bg-white px-2 py-0.5 text-xs font-medium text-slate-700 transition hover:bg-[#C5AED7]/40 disabled:opacity-50"
               >
                 {isRetryingEmail
                   ? <Loader2 className="h-3 w-3 animate-spin" />
@@ -1007,6 +1027,11 @@ export default function OrderCard({
                 </div>
               </section>
 
+              {draftScansOnly ? (
+                <div className="rounded-lg border border-[#C5AED7] bg-[#C5AED7]/30 px-3 py-2 text-xs text-slate-700">
+                  Scans Only orders skip the lab. Mark them Scans Sent when the download is ready.
+                </div>
+              ) : null}
               {!draftProcessOnly ? (
                 <div>
                   <label className="mb-1 block text-xs font-medium text-slate-500">Download Link</label>

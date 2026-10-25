@@ -267,6 +267,21 @@ export function isFilmProcessingProductName(productName: string): boolean {
   return filmTypeFromProductName(productName) !== null || processFromProductName(productName) !== null;
 }
 
+/**
+ * Already-developed film that only needs a scan.
+ * Shop names: "35mm Scanning Only" and "120 Scanning Only".
+ * Slide, photo, video, and 8mm scanning are not film-roll drop-offs.
+ */
+export function isFilmScanningOnlyProductName(productName: string): boolean {
+  if (!/scanning\s+only/i.test(productName)) return false;
+  if (/slide|photo|video|8\s*mm/i.test(productName)) return false;
+  return filmTypeFromProductName(productName) !== null;
+}
+
+function isFilmServiceProductName(productName: string): boolean {
+  return isFilmProcessingProductName(productName) || isFilmScanningOnlyProductName(productName);
+}
+
 export function filmTypeFromProductName(productName: string): FilmSize | null {
   const matches: Array<{ index: number; type: FilmSize }> = [];
   const thirtyFive = /\b35\s*mm\b/i.exec(productName);
@@ -365,8 +380,15 @@ function orderFilmTypeListing(order: Record<string, unknown>): string {
 
 function scanSizeFromOptions(options: NamedValue[]): RollDetail["scan_size"] {
   for (const option of options) {
-    const haystack = `${option.label} ${option.value}`;
+    const haystack = `${option.label} ${option.value}`.toLowerCase();
     if (!/process|scan/i.test(haystack)) continue;
+    if (
+      haystack.includes("scans only") ||
+      haystack.includes("scan only") ||
+      haystack.includes("scanning only")
+    ) {
+      return "Scans Only";
+    }
     const value = option.value.toLowerCase();
     if (value.includes("high res") || value.includes("high-res")) return "High-Res";
     if (value.includes("tiff")) return "TIFF";
@@ -375,6 +397,17 @@ function scanSizeFromOptions(options: NamedValue[]): RollDetail["scan_size"] {
   }
   return "Standard";
 }
+
+function processFromOptions(options: NamedValue[]): "Color" | "Black & White" | null {
+  for (const option of options) {
+    const found = processFromProductName(`${option.label} ${option.value}`);
+    if (found) return found;
+  }
+  return null;
+}
+
+const SCANS_ONLY_PROCESS_NOTE =
+  "Color vs Black & White was not on the Scanning Only product. Confirm the process before approving.";
 
 /**
  * Squarespace shows the print choice as variant text:
@@ -483,31 +516,36 @@ export function selectSquarespaceOrdersForIntake(
 }
 
 function mapFilmLine(line: Record<string, unknown>, index: number):
-  | { ok: true; rolls: RollDetail[] }
+  | { ok: true; rolls: RollDetail[]; note?: string }
   | { ok: false; error: string } {
   const productName = readString(line.productName)?.trim() ?? "";
+  const scansOnlyProduct = isFilmScanningOnlyProductName(productName);
   const filmType = filmTypeFromProductName(productName);
   if (!filmType) {
-    return { ok: false, error: `Film processing item "${productName || `line ${index + 1}`}" is missing a film type (35mm, 120, or 110)` };
+    return { ok: false, error: `Film service item "${productName || `line ${index + 1}`}" is missing a film type (35mm, 120, or 110)` };
   }
-  const filmProcess = processFromProductName(productName);
-  if (!filmProcess) {
+  const options = lineItemOptions(line);
+  const filmProcess = processFromProductName(productName) ?? processFromOptions(options);
+  if (!filmProcess && !scansOnlyProduct) {
     return { ok: false, error: `Film processing item "${productName}" is missing C41/color or black and white` };
   }
   const quantity = line.quantity;
   if (typeof quantity !== "number" || !Number.isInteger(quantity) || quantity < 1) {
-    return { ok: false, error: `Film processing item "${productName}" has an invalid quantity` };
+    return { ok: false, error: `Film service item "${productName}" has an invalid quantity` };
   }
-  const options = lineItemOptions(line);
   const roll: RollDetail = {
     film_type: filmType,
-    film_process: filmProcess,
-    scan_size: scanSizeFromOptions(options),
+    film_process: filmProcess ?? "Color",
+    scan_size: scansOnlyProduct ? "Scans Only" : scanSizeFromOptions(options),
     prints_4x6: printsFromOptions(options),
   };
   const stock = stockFromOptions(options);
   if (stock) roll.film_stock = stock;
-  return { ok: true, rolls: Array.from({ length: quantity }, () => ({ ...roll })) };
+  return {
+    ok: true,
+    rolls: Array.from({ length: quantity }, () => ({ ...roll })),
+    note: scansOnlyProduct && !filmProcess ? SCANS_ONLY_PROCESS_NOTE : undefined,
+  };
 }
 
 /**
@@ -532,7 +570,7 @@ export function classifySquarespaceOrder(order: unknown): ClassifiedSquarespaceO
   lineItems.forEach((line, index) => {
     const item = asRecord(line);
     const productName = item ? readString(item.productName)?.trim() ?? "" : "";
-    if (!item || !isFilmProcessingProductName(productName)) return;
+    if (!item || !isFilmServiceProductName(productName)) return;
     sawFilm = true;
     const mapped = mapFilmLine(item, index);
     if (!mapped.ok) {
@@ -546,6 +584,7 @@ export function classifySquarespaceOrder(order: unknown): ClassifiedSquarespaceO
     const applied = applyFilmListingToRolls(mapped.rolls, listing || null);
     rolls.push(...applied.rolls);
     notes = mergeCustomerFilmNote(notes, applied.unmatchedNote);
+    notes = mergeCustomerFilmNote(notes, mapped.note);
   });
   if (usedOrderListing && orderListing) collectedListings.push(orderListing);
   const squarespaceFilmListing = joinUnique(collectedListings).slice(0, MAX_SQUARESPACE_FILM_LISTING);

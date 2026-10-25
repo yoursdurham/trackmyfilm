@@ -448,6 +448,9 @@ export default function NewDropoffForm({
                       <option key={size} value={size}>{size}</option>
                     ))}
                   </select>
+                  {roll.scan_size === "Scans Only" ? (
+                    <p className="text-xs text-slate-500">Already developed. This roll is scanned here and skips the lab.</p>
+                  ) : null}
                 </div>
 
                 {/* 4x6 Prints */}

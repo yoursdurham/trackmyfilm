@@ -6,6 +6,7 @@
  *   film_drop_received — confirmation when film is dropped off
  *   film_at_lab        — film has arrived at the lab in Raleigh
  *   process_only_finished — process-only negatives are ready
+ *   scans_only_ready   — scans-only download is ready (no developing)
  *   scans_sent         — scans ready with WeTransfer link
  *   film_delay         — film has been at the lab 8+ days without movement
  *

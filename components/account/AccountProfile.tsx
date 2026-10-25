@@ -17,18 +17,24 @@ function displayStat(value: string, empty: string) {
 }
 
 function Progress({ steps }: { steps: AccountProgressStep[] }) {
+  const columns = steps.length === 2 ? "grid-cols-2" : "grid-cols-3";
   return (
-    <ol className="grid grid-cols-3 gap-2">
-      {steps.map((step, index) => (
+    <ol className={`grid gap-2 ${columns}`}>
+      {steps.map((step, index) => {
+        const color = steps.length === 2
+          ? (index === 0 ? STEP_COLORS[0] : STEP_COLORS[2])
+          : STEP_COLORS[index];
+        return (
         <li key={step.label} className="flex flex-col items-center gap-2 text-center">
           <span
-            className={`size-3 rounded-full border-2 border-neutral-900 ${step.reached ? STEP_COLORS[index] : "bg-white"}`}
+            className={`size-3 rounded-full border-2 border-neutral-900 ${step.reached ? color : "bg-white"}`}
             aria-hidden="true"
           />
           <span className="font-jetbrains text-xs font-bold leading-snug text-neutral-900">{step.label}</span>
           <span className="sr-only">{step.reached ? "Done" : "Not yet"}</span>
         </li>
-      ))}
+        );
+      })}
     </ol>
   );
 }

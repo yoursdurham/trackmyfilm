@@ -20,6 +20,7 @@ Run these in order in: **Supabase Dashboard → SQL Editor → New Query**
 | `020_add_order_hold_reason.sql` | Adds optional staff-only `hold_reason` on `film_orders` for the On Hold status | Yes — before relying on the On Hold reason. The status itself can be saved before this runs; the reason is skipped until the column exists. Safe to run again. |
 | `021_keep_dismissed_squarespace_orders.sql` | Allows `incoming_squarespace_drafts.status = 'dismissed'` again so a dismissed Squarespace order is not imported a second time | Yes — before Dismiss can stick. Pending Intake, Check Squarespace, and Approve & Receive keep working before this runs; Dismiss returns an error until it does. Safe to run again. |
 | `023_customer_account_rls.sql` | Lets a signed-in customer read only their own orders and contact fields. Staff notes and hold reasons stay unreadable. | Yes — before `/account` can show orders. Run it yourself in the SQL editor. Safe to run again. |
+| `026_scans_only_ready_email.sql` | Adds `scans_only_ready_emailed_at` on `film_orders` so the Scans Only completion email is recorded once. Scans Only itself is the `scan_size` value `Scans Only` inside `roll_details`. | Yes — before Scans Only completion emails can store a timestamp. The app does not run this file. Safe to run again. |
 
 ## Notes
 

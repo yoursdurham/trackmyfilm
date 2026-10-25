@@ -69,6 +69,22 @@ describe("computeFilmMetrics", () => {
     expect(metrics.rollsProcessing).toBe(5);
   });
 
+  it("counts scans-only rolls as in process while they are still at the studio", () => {
+    const metrics = computeFilmMetrics([
+      makeOrder({
+        id: "scans-only",
+        status: "Received by Yours",
+        film_process: "Color",
+        roll_count: 2,
+        roll_details: rolls("Color", 2, "Scans Only"),
+        received_by_yours_at: "2026-10-08T15:00:00.000Z",
+      }),
+    ], NOW);
+
+    expect(metrics.rollsProcessing).toBe(2);
+    expect(metrics.receivedToday).toBe(2);
+  });
+
   it("does not count a process-only order at the lab as in process", () => {
     const metrics = computeFilmMetrics([
       makeOrder({
