@@ -1,18 +1,21 @@
 import { NextResponse } from "next/server";
 import { KNOWN_ORDER_STATUSES } from "@/lib/constants";
 import { requireAuth } from "@/lib/api-auth";
+import { bulkUpdateOrderStatus } from "@/lib/bulk-status";
 import { isKnownStatus } from "@/lib/validation";
-import { updateOrderStatus } from "@/lib/status-update-service";
 import type { OrderStatus } from "@/lib/types";
+
+export const maxDuration = 60;
 
 export async function POST(req: Request) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
 
   try {
-    const { orderIds, status } = await req.json() as {
+    const { orderIds, status, emailsOnly } = await req.json() as {
       orderIds?: string[];
       status?: OrderStatus;
+      emailsOnly?: boolean;
     };
 
     if (!Array.isArray(orderIds) || orderIds.length === 0) {
@@ -29,6 +32,13 @@ export async function POST(req: Request) {
       );
     }
 
+    if (emailsOnly !== undefined && typeof emailsOnly !== "boolean") {
+      return NextResponse.json(
+        { error: "emailsOnly must be a boolean" },
+        { status: 400 }
+      );
+    }
+
     const uniqueOrderIds = [...new Set(orderIds.filter((id) => typeof id === "string" && id.trim()))];
     if (uniqueOrderIds.length === 0) {
       return NextResponse.json(
@@ -37,32 +47,13 @@ export async function POST(req: Request) {
       );
     }
 
-    const results = await Promise.all(
-      uniqueOrderIds.map(async (orderId) => {
-        const result = await updateOrderStatus({
-          order_id: orderId,
-          new_status: status,
-          send_email: true,
-        });
-        return { orderId, ...result };
-      })
-    );
-
-    const successes = results.filter((result) => result.success);
-    const failures = results.filter((result) => !result.success);
-
-    return NextResponse.json({
-      success: failures.length === 0,
+    const result = await bulkUpdateOrderStatus({
+      orderIds: uniqueOrderIds,
       status,
-      successCount: successes.length,
-      failureCount: failures.length,
-      skippedCount: successes.filter((result) => result.skipped).length,
-      results,
-      failures: failures.map((result) => ({
-        orderId: result.orderId,
-        error: result.error ?? "Unknown error",
-      })),
+      emailsOnly: emailsOnly === true,
     });
+
+    return NextResponse.json(result);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 500 });

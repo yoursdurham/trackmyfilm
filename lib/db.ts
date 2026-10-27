@@ -169,6 +169,26 @@ export async function getOrderById(id: string): Promise<FilmOrder | null> {
   return data as FilmOrder | null;
 }
 
+const ORDER_ID_LOOKUP_CHUNK = 100;
+
+/** Loads the given orders in chunks. Missing ids are omitted. */
+export async function getOrdersByIds(ids: string[]): Promise<FilmOrder[]> {
+  const unique = [...new Set(ids.map((id) => id.trim()).filter(Boolean))];
+  if (unique.length === 0) return [];
+
+  const rows: FilmOrder[] = [];
+  for (let index = 0; index < unique.length; index += ORDER_ID_LOOKUP_CHUNK) {
+    const chunk = unique.slice(index, index + ORDER_ID_LOOKUP_CHUNK);
+    const { data, error } = await getSupabase()
+      .from("film_orders")
+      .select("*")
+      .in("id", chunk);
+    if (error) throw new Error(error.message);
+    rows.push(...((data ?? []) as FilmOrder[]));
+  }
+  return rows;
+}
+
 const ORDER_NUMBER_MATCH_LIMIT = 100;
 
 // Lookups compare the normalized key (leading zeros stripped) and return the

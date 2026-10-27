@@ -164,40 +164,61 @@ export async function sendPartialScanEmail(orderId: string, batch: ScanDeliveryB
   return sendOrderEmail(orderId, "partial_scans_sent", { partialBatch: batch });
 }
 
-export async function sendOrderEmail(
-  orderId: string,
-  template: string,
-  options?: { partialBatch?: ScanDeliveryBatch; scanNotes?: string | null }
-) {
-  if (!orderId || !template) {
-    throw new EmailSendError("order_id and template are required", 400);
-  }
+export type OrderEmailPayload = {
+  from: string;
+  to: string[];
+  reply_to: string;
+  template: {
+    id: string;
+    variables: Record<string, string>;
+  };
+};
 
+export type PreparedOrderEmail =
+  | {
+      outcome: "skipped";
+      template: TemplateName;
+      reason: string;
+      dedupField?: keyof FilmOrder;
+      lastSent?: string;
+    }
+  | { outcome: "error"; message: string; httpStatus: number }
+  | {
+      outcome: "ready";
+      template: TemplateName;
+      dedupField?: keyof FilmOrder;
+      recipientEmail: string;
+      payload: OrderEmailPayload;
+    };
+
+/**
+ * Builds one status email from an order already loaded from the database.
+ * Does not call Resend and does not write a sent timestamp.
+ */
+export async function prepareOrderEmail(
+  order: FilmOrder,
+  template: string,
+  options?: { partialBatch?: ScanDeliveryBatch; scanNotes?: string | null },
+): Promise<PreparedOrderEmail> {
   if (!isKnownEmailTemplate(template)) {
-    throw new EmailSendError(
-      `Unknown template "${template}". Valid: ${KNOWN_EMAIL_TEMPLATES.join(", ")}`,
-      400
-    );
+    return {
+      outcome: "error",
+      httpStatus: 400,
+      message: `Unknown template "${template}". Valid: ${KNOWN_EMAIL_TEMPLATES.join(", ")}`,
+    };
   }
 
   if (template === "partial_scans_sent" && !options?.partialBatch) {
-    throw new EmailSendError("partial_scans_sent requires partialBatch (Color or Black & White)", 400);
-  }
-
-  const RESEND_API_KEY = process.env.RESEND_API_KEY;
-  if (!RESEND_API_KEY) {
-    console.error("[email] RESEND_API_KEY not configured");
-    throw new EmailSendError("RESEND_API_KEY not configured", 500);
-  }
-
-  const order = await getOrderById(orderId);
-  if (!order) {
-    throw new EmailSendError("Order not found", 404);
+    return {
+      outcome: "error",
+      httpStatus: 400,
+      message: "partial_scans_sent requires partialBatch (Color or Black & White)",
+    };
   }
 
   const recipientEmail = order.customer_email ? normalizeEmail(order.customer_email) : null;
   if (!recipientEmail) {
-    throw new EmailSendError("Order has no customer email - cannot send", 400);
+    return { outcome: "error", httpStatus: 400, message: "Order has no customer email - cannot send" };
   }
 
   const dedupField =
@@ -213,42 +234,23 @@ export async function sendOrderEmail(
     const reason = sendsOnce(template)
       ? `${dedupField} is already set for this order`
       : `${dedupField} is within the one-hour dedup window`;
-    console.log("[email] Skipping duplicate send:", {
-      orderId,
-      orderNumber: order.order_number,
+    return {
+      outcome: "skipped",
       template,
+      reason,
       dedupField,
       lastSent,
-      reason,
-    });
-    return {
-      success: true,
-      skipped: true,
-      reason,
     };
   }
 
   const templateId = getTemplateIds()[template];
-  console.log("[email] Template environment check:", {
-    orderId,
-    orderNumber: order.order_number,
-    template,
-    envVar: templateEnvName(template),
-    templateIdConfigured: Boolean(templateId),
-  });
-console.log("[email] USING TEMPLATE ID:", templateId);
   if (!templateId) {
     const envVarName = templateEnvName(template);
-    console.error("[email] Missing Resend template ID:", {
-      orderId,
-      orderNumber: order.order_number,
-      template,
-      envVarName,
-    });
-    throw new EmailSendError(
-      `Template ID not configured for "${template}" - set ${envVarName}`,
-      500
-    );
+    return {
+      outcome: "error",
+      httpStatus: 500,
+      message: `Template ID not configured for "${template}" - set ${envVarName}`,
+    };
   }
 
  const nameParts = (order.customer_name || "there").trim().split(" ");
@@ -299,12 +301,6 @@ const variables: Record<string, string> = {
       "Your scans are ready. This order was already developed, so there was no lab processing.";
   }
 
-  console.log("[email] Template variables (scans_sent includes scan_notes):", {
-    orderId,
-    template,
-    scan_notes: template === "scans_sent" ? variables.scan_notes : undefined,
-  });
-
   if (template === "partial_scans_sent" && options?.partialBatch) {
     const batch = options.partialBatch;
     const batchLink =
@@ -332,15 +328,97 @@ const variables: Record<string, string> = {
   variables.top_stock = customerStats.top_stock;
   variables.days_since_first_drop = customerStats.days_since_first_drop;
 
-  const payload = {
-    from: process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev",
-    to: [recipientEmail],
-    reply_to: process.env.REPLY_TO_EMAIL || "hello@yoursdurham.com",
-    template: {
-      id: templateId,
-      variables,
+  return {
+    outcome: "ready",
+    template,
+    dedupField,
+    recipientEmail,
+    payload: {
+      from: process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev",
+      to: [recipientEmail],
+      reply_to: process.env.REPLY_TO_EMAIL || "hello@yoursdurham.com",
+      template: {
+        id: templateId,
+        variables,
+      },
     },
   };
+}
+
+export async function sendOrderEmail(
+  orderId: string,
+  template: string,
+  options?: { partialBatch?: ScanDeliveryBatch; scanNotes?: string | null }
+) {
+  if (!orderId || !template) {
+    throw new EmailSendError("order_id and template are required", 400);
+  }
+
+  if (!isKnownEmailTemplate(template)) {
+    throw new EmailSendError(
+      `Unknown template "${template}". Valid: ${KNOWN_EMAIL_TEMPLATES.join(", ")}`,
+      400
+    );
+  }
+
+  if (template === "partial_scans_sent" && !options?.partialBatch) {
+    throw new EmailSendError("partial_scans_sent requires partialBatch (Color or Black & White)", 400);
+  }
+
+  const RESEND_API_KEY = process.env.RESEND_API_KEY;
+  if (!RESEND_API_KEY) {
+    console.error("[email] RESEND_API_KEY not configured");
+    throw new EmailSendError("RESEND_API_KEY not configured", 500);
+  }
+
+  const order = await getOrderById(orderId);
+  if (!order) {
+    throw new EmailSendError("Order not found", 404);
+  }
+
+  const prepared = await prepareOrderEmail(order, template, options);
+  if (prepared.outcome === "error") {
+    if (prepared.httpStatus === 500 && prepared.message.startsWith("Template ID not configured")) {
+      console.error("[email] Missing Resend template ID:", {
+        orderId,
+        orderNumber: order.order_number,
+        template,
+        message: prepared.message,
+      });
+    }
+    throw new EmailSendError(prepared.message, prepared.httpStatus);
+  }
+
+  if (prepared.outcome === "skipped") {
+    console.log("[email] Skipping duplicate send:", {
+      orderId,
+      orderNumber: order.order_number,
+      template,
+      dedupField: prepared.dedupField,
+      lastSent: prepared.lastSent,
+      reason: prepared.reason,
+    });
+    return {
+      success: true,
+      skipped: true,
+      reason: prepared.reason,
+    };
+  }
+
+  const { payload, dedupField, recipientEmail } = prepared;
+  console.log("[email] Template environment check:", {
+    orderId,
+    orderNumber: order.order_number,
+    template,
+    envVar: templateEnvName(template),
+    templateIdConfigured: true,
+  });
+  console.log("[email] USING TEMPLATE ID:", payload.template.id);
+  console.log("[email] Template variables (scans_sent includes scan_notes):", {
+    orderId,
+    template,
+    scan_notes: template === "scans_sent" ? payload.template.variables.scan_notes : undefined,
+  });
 
   console.log("[email] Sending Resend template:", {
     orderId,
@@ -374,10 +452,17 @@ const variables: Record<string, string> = {
       template,
       error: message,
     });
-    await updateOrder(orderId, {
-      email_status: "failed",
-      email_error: message,
-    });
+    try {
+      await updateOrder(orderId, {
+        email_status: "failed",
+        email_error: message,
+      });
+    } catch (bookkeepingError) {
+      console.error("[email] Could not record email failure:", {
+        orderId,
+        error: bookkeepingError instanceof Error ? bookkeepingError.message : "Unknown error",
+      });
+    }
     throw new EmailSendError(message, 502);
   }
 
@@ -394,10 +479,17 @@ const variables: Record<string, string> = {
   if (!resendRes.ok) {
     const errorMsg = resendData.message ?? JSON.stringify(resendData);
     console.error("[email] Resend rejected request:", JSON.stringify(resendData, null, 2));
-    await updateOrder(orderId, {
-      email_status: "failed",
-      email_error: `${resendData.name ?? "ResendError"}: ${errorMsg}`,
-    });
+    try {
+      await updateOrder(orderId, {
+        email_status: "failed",
+        email_error: `${resendData.name ?? "ResendError"}: ${errorMsg}`,
+      });
+    } catch (bookkeepingError) {
+      console.error("[email] Could not record email failure:", {
+        orderId,
+        error: bookkeepingError instanceof Error ? bookkeepingError.message : "Unknown error",
+      });
+    }
     throw new EmailSendError(
       `${resendData.name ?? "ResendError"}: ${errorMsg}`,
       502,
