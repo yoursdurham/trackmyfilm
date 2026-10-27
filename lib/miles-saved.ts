@@ -129,6 +129,16 @@ export function toPublicMiles(input: {
   return { miles, laps: miles / EARTH_CIRCUMFERENCE_MILES };
 }
 
+/**
+ * The homepage lap is miles divided by the Earth's circumference.
+ * The globe caption rounds that to one decimal once it reaches a full lap.
+ * This is the same ratio, kept to two decimals for the public API.
+ */
+export function roundLaps(laps: number): number {
+  if (!Number.isFinite(laps) || laps <= 0) return 0;
+  return Math.round(laps * 100) / 100;
+}
+
 /** Laps rounded the way the caption and the ring both read. */
 export function displayLaps(laps: number): number {
   if (!Number.isFinite(laps) || laps <= 0) return 0;
