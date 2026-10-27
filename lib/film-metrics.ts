@@ -651,3 +651,60 @@ export function turnaroundOrderOrFilter(now: Date): string {
     `status_updated_at.gte.${since}`,
   ].join(",");
 }
+
+function deliveredInWindow(sentAt: Date | null, now: Date): boolean {
+  if (!sentAt || sentAt.getTime() > now.getTime()) return false;
+  const windowStart = now.getTime() - FILM_METRICS_CONFIG.turnaroundWindowDays * MS_PER_DAY;
+  return sentAt.getTime() >= windowStart;
+}
+
+export interface PublicRollsProcessed {
+  rolls: number;
+  windowDays: number;
+  updatedAt: string;
+}
+
+/**
+ * Rolls whose scans were sent in the rolling 30-day window.
+ * Scans Only rolls count. Process Only rolls do not: they were not scanned.
+ * Mixed orders count each side when that side was delivered, and a Both roll
+ * counts once on the first side delivered. Blank rolls and On Hold orders
+ * are left out.
+ */
+export function computePublicRollsProcessed(orders: FilmOrder[], now = new Date()): PublicRollsProcessed {
+  let rolls = 0;
+
+  for (const order of orders) {
+    if (order.status === ORDER_STATUS.ON_HOLD) continue;
+
+    const processed = sideWeights(order, false);
+    if (processed.color + processed.bw + processed.both <= 0) continue;
+    const scansSent = getScansSentDate(order);
+    const mixed = isMixedOrder(order, processed);
+    const colorEnd = mixed
+      ? parseTimestamp(order.color_scans_delivered_at) ?? scansSent
+      : scansSent;
+    const bwEnd = mixed
+      ? parseTimestamp(order.bw_scans_delivered_at) ?? scansSent
+      : scansSent;
+    const bothEnd = earliestDate(
+      parseTimestamp(order.color_scans_delivered_at),
+      parseTimestamp(order.bw_scans_delivered_at),
+    ) ?? scansSent;
+
+    if (deliveredInWindow(colorEnd, now)) rolls += processed.color;
+    if (deliveredInWindow(bwEnd, now)) rolls += processed.bw;
+    if (deliveredInWindow(bothEnd, now)) rolls += processed.both;
+  }
+
+  return {
+    rolls,
+    windowDays: FILM_METRICS_CONFIG.turnaroundWindowDays,
+    updatedAt: now.toISOString(),
+  };
+}
+
+/** Same finish window as the turnaround query. History-only scans-sent dates use status_updated_at. */
+export function rollsProcessedOrderOrFilter(now: Date): string {
+  return turnaroundOrderOrFilter(now);
+}

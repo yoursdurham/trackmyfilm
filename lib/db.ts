@@ -10,7 +10,7 @@ import type { DisplayRow, HeartbeatClient } from "./display";
 import { HEARTBEAT_WRITE_INTERVAL_MS } from "./display-heartbeat";
 import { correctFilmStockSpelling } from "./film-stocks";
 import { DEPARTURE_ORDER_SELECT, type DepartureOrder } from "./film-departures";
-import { FILM_METRICS_ORDER_SELECT, filmMetricsOrderOrFilter, turnaroundOrderOrFilter } from "./film-metrics";
+import { FILM_METRICS_ORDER_SELECT, filmMetricsOrderOrFilter, rollsProcessedOrderOrFilter, turnaroundOrderOrFilter } from "./film-metrics";
 import { ORDER_STATUS } from "./constants";
 import { FILM_MENU_SLUG, type FilmMenu } from "./film-menu";
 import {
@@ -84,6 +84,20 @@ export async function getTurnaroundOrders(now = new Date()): Promise<FilmOrder[]
     .from("film_orders")
     .select(FILM_METRICS_ORDER_SELECT)
     .or(turnaroundOrderOrFilter(now))
+    .limit(5000);
+  if (error) throw new Error(error.message);
+  return (data ?? []) as unknown as FilmOrder[];
+}
+
+/**
+ * Orders that can change the public rolls-processed count.
+ * Same columns as the studio metrics read. No names, emails, or notes.
+ */
+export async function getRollsProcessedOrders(now = new Date()): Promise<FilmOrder[]> {
+  const { data, error } = await getSupabase()
+    .from("film_orders")
+    .select(FILM_METRICS_ORDER_SELECT)
+    .or(rollsProcessedOrderOrFilter(now))
     .limit(5000);
   if (error) throw new Error(error.message);
   return (data ?? []) as unknown as FilmOrder[];
