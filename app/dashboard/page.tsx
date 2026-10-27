@@ -12,7 +12,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import IncomingSquarespaceQueue from "@/components/IncomingSquarespaceQueue";
 import InternalHeader, { openNewDropoffDialog } from "@/components/InternalHeader";
 import OrderCard from "@/components/OrderCard";
-import BulkStatusActionBar from "@/components/BulkStatusActionBar";
+import BulkStatusActionBar, { type BulkStatusCompletion } from "@/components/BulkStatusActionBar";
 import { countDashboardStatuses, orderMatchesDashboardFilter, SCANS_ONLY_FILTER } from "@/lib/dashboard-status";
 import { isScansOnlyOrder } from "@/lib/order-service";
 import { totalFilmRollsDeveloped } from "@/lib/legacy-rolls";
@@ -70,6 +70,7 @@ function Dashboard() {
   const [customStartDate, setCustomStartDate] = useState("");
   const [customEndDate, setCustomEndDate] = useState("");
   const [selectedOrderIds, setSelectedOrderIds] = useState<Set<string>>(new Set());
+  const [bulkReportVisible, setBulkReportVisible] = useState(false);
   const queryClient = useQueryClient();
 
   const { data: orders = [], isLoading } = useQuery<FilmOrder[]>({
@@ -197,7 +198,10 @@ function Dashboard() {
   const [selectionFilter, setSelectionFilter] = useState(activeFilter);
   if (activeFilter !== selectionFilter) {
     setSelectionFilter(activeFilter);
-    if (!isReceivedTab) setSelectedOrderIds(new Set());
+    if (!isReceivedTab) {
+      setSelectedOrderIds(new Set());
+      setBulkReportVisible(false);
+    }
   }
 
   const visibleOrderIds = (showBulkSelection
@@ -224,18 +228,19 @@ function Dashboard() {
     setSelectedOrderIds(new Set());
   };
 
-  const handleBulkUpdateComplete = () => {
-    const count = selectedOrderIds.size;
-    setSelectedOrderIds(new Set());
+  const handleBulkUpdateComplete = (result: BulkStatusCompletion) => {
+    setSelectedOrderIds(new Set(result.statusFailureIds));
     queryClient.invalidateQueries({ queryKey: ["filmOrders"] });
-    toast.success(`Updated ${count} order${count === 1 ? "" : "s"} to ${ORDER_STATUS.RECEIVED_AT_LAB}`);
+    if (result.statusFailureIds.length > 0) toast.error(result.summary);
+    else if (result.emailFailureCount > 0) toast.error(result.summary);
+    else toast.success(result.summary);
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-stone-50 via-orange-50/30 to-amber-50/20">
       <InternalHeader />
 
-      <main className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 ${showBulkSelection && selectedOrderIds.size > 0 ? "pb-28" : ""}`}>
+      <main className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 ${showBulkSelection && (selectedOrderIds.size > 0 || bulkReportVisible) ? "pb-36" : ""}`}>
         <IncomingSquarespaceQueue />
 
         <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -401,6 +406,7 @@ function Dashboard() {
           selectedOrderIds={[...selectedOrderIds]}
           onClearSelection={handleClearSelection}
           onBulkUpdateComplete={handleBulkUpdateComplete}
+          onReportChange={setBulkReportVisible}
         />
       ) : null}
     </div>

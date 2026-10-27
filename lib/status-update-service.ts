@@ -71,6 +71,188 @@ async function saveOrderUpdate(
   throw new Error("Could not save order status");
 }
 
+/** Writes a planned status patch, including the missing-column retry used by single moves. */
+export async function commitPlannedStatus(
+  orderId: string,
+  updateData: Partial<FilmOrder>,
+): Promise<{ holdReasonDropped: boolean }> {
+  return saveOrderUpdate(orderId, updateData);
+}
+
+export type StatusChangeArgs = {
+  new_status: OrderStatus;
+  wetransfer_link?: string;
+  scan_notes?: string | null;
+  hold_reason?: string | null;
+  force?: boolean;
+};
+
+export type PlannedStatusChange =
+  | { kind: "done"; result: Omit<StatusUpdateResult, "order_id"> }
+  | {
+      kind: "save";
+      updateData: Partial<FilmOrder>;
+      /** Status template to send after the row is saved. Absent when this status has no email. */
+      template?: string;
+      scanNotesForEmail?: string | null;
+    };
+
+/**
+ * Decides the status write for an order already loaded from the database.
+ * Does not read or write, and does not send email.
+ */
+export function planStatusChange(order: FilmOrder, {
+  new_status,
+  wetransfer_link,
+  scan_notes,
+  hold_reason,
+  force = false,
+}: StatusChangeArgs): PlannedStatusChange {
+  const processOnlyOrder = isProcessOnlyOrder(order);
+
+  if (new_status === ORDER_STATUS.SCANS_SENT && processOnlyOrder) {
+    return {
+      kind: "done",
+      result: {
+        success: false,
+        error: "Process Only orders should be marked Ready for Pickup instead.",
+      },
+    };
+  }
+
+  if (new_status === ORDER_STATUS.READY_FOR_PICKUP && !processOnlyOrder) {
+    return {
+      kind: "done",
+      result: {
+        success: false,
+        error: "Ready for Pickup is only available for Process Only orders.",
+      },
+    };
+  }
+
+  if (new_status === ORDER_STATUS.RECEIVED_AT_LAB && isScansOnlyOrder(order)) {
+    return {
+      kind: "done",
+      result: {
+        success: false,
+        error: "Scans Only orders skip the lab. Mark them Scans Sent when the scans are ready.",
+      },
+    };
+  }
+
+  if (order.status === new_status) {
+    if (new_status === ORDER_STATUS.ON_HOLD && hold_reason !== undefined) {
+      const normalized = normalizeHoldReason(hold_reason);
+      if (normalized.error) {
+        return { kind: "done", result: { success: false, error: normalized.error } };
+      }
+      const currentReason = order.hold_reason?.trim() || null;
+      if (normalized.reason === currentReason) {
+        return {
+          kind: "done",
+          result: {
+            success: true,
+            new_status,
+            skipped: true,
+            reason: "Already at this status",
+          },
+        };
+      }
+      return {
+        kind: "save",
+        updateData: { hold_reason: normalized.reason },
+      };
+    }
+    return {
+      kind: "done",
+      result: {
+        success: true,
+        new_status,
+        skipped: true,
+        reason: "Already at this status",
+      },
+    };
+  }
+
+  if (!isValidTransition(order.status, new_status) && !force) {
+    return {
+      kind: "done",
+      result: {
+        success: false,
+        error: `Cannot move from "${order.status}" to "${new_status}". Use force: true to override.`,
+        requiresForce: true,
+      },
+    };
+  }
+
+  const blockedReason = scansSentBlockedReason(order, force);
+  if (new_status === ORDER_STATUS.SCANS_SENT && blockedReason) {
+    return { kind: "done", result: { success: false, error: blockedReason } };
+  }
+
+  if (new_status === ORDER_STATUS.SCANS_SENT && wetransfer_link) {
+    if (!isValidUrl(wetransfer_link)) {
+      return { kind: "done", result: { success: false, error: "Please enter a valid link" } };
+    }
+  }
+
+  const now = new Date().toISOString();
+
+  const updatedHistory: StatusHistoryEntry[] = [
+    ...(order.status_history ?? []),
+    { status: new_status, changed_at: now },
+  ];
+
+  const updateData: Partial<FilmOrder> = {
+    status: new_status,
+    status_history: updatedHistory,
+    status_updated_at: now,
+  };
+
+  if (new_status === ORDER_STATUS.RECEIVED_BY_YOURS) updateData.received_by_yours_at = now;
+  if (new_status === ORDER_STATUS.RECEIVED_AT_LAB) updateData.at_lab_at = now;
+  if (new_status === ORDER_STATUS.ON_HOLD) {
+    const normalized = normalizeHoldReason(hold_reason);
+    if (normalized.error) {
+      return { kind: "done", result: { success: false, error: normalized.error } };
+    }
+    updateData.hold_reason = normalized.reason;
+  } else {
+    updateData.hold_reason = null;
+  }
+
+  if (new_status === ORDER_STATUS.SCANS_SENT) {
+    updateData.scans_sent_at = now;
+    if (scan_notes !== undefined) {
+      updateData.scan_notes = scanNotesForStorage(scan_notes);
+    }
+    if (isMixedScanOrder(order) && isPartialScanDeliveryComplete(order)) {
+      const fallback =
+        order.bw_scans_wetransfer_link ||
+        order.color_scans_wetransfer_link ||
+        order.wetransfer_link;
+      const rawLink = wetransfer_link || fallback;
+      updateData.wetransfer_link = rawLink ? ensureHttps(rawLink) : rawLink;
+    } else {
+      const rawLink = wetransfer_link || order.wetransfer_link;
+      updateData.wetransfer_link = rawLink ? ensureHttps(rawLink) : rawLink;
+    }
+  }
+
+  const template = emailTemplateForStatus(order, new_status);
+  const scanNotesForEmail =
+    new_status === ORDER_STATUS.SCANS_SENT && scan_notes !== undefined
+      ? scanNotesForStorage(scan_notes)
+      : undefined;
+
+  return {
+    kind: "save",
+    updateData,
+    template,
+    scanNotesForEmail,
+  };
+}
+
 export async function updateOrderStatus({
   order_id,
   new_status,
@@ -101,175 +283,72 @@ export async function updateOrderStatus({
     return { success: false, order_id, error: "Order not found" };
   }
 
-  const processOnlyOrder = isProcessOnlyOrder(order);
+  const plan = planStatusChange(order, {
+    new_status,
+    wetransfer_link,
+    scan_notes,
+    hold_reason,
+    force,
+  });
 
-  if (new_status === ORDER_STATUS.SCANS_SENT && processOnlyOrder) {
-    return {
-      success: false,
-      order_id,
-      error: "Process Only orders should be marked Ready for Pickup instead.",
-    };
+  if (plan.kind === "done") {
+    return { order_id, ...plan.result };
   }
 
-  if (new_status === ORDER_STATUS.READY_FOR_PICKUP && !processOnlyOrder) {
-    return {
-      success: false,
-      order_id,
-      error: "Ready for Pickup is only available for Process Only orders.",
-    };
-  }
+  const saved = await saveOrderUpdate(order_id, plan.updateData);
+  const holdWarning =
+    saved.holdReasonDropped && plan.updateData.hold_reason
+      ? HOLD_REASON_MIGRATION_WARNING
+      : undefined;
 
-  if (new_status === ORDER_STATUS.RECEIVED_AT_LAB && isScansOnlyOrder(order)) {
-    return {
-      success: false,
-      order_id,
-      error: "Scans Only orders skip the lab. Mark them Scans Sent when the scans are ready.",
-    };
-  }
-
-  if (order.status === new_status) {
-    if (new_status === ORDER_STATUS.ON_HOLD && hold_reason !== undefined) {
-      const normalized = normalizeHoldReason(hold_reason);
-      if (normalized.error) {
-        return { success: false, order_id, error: normalized.error };
-      }
-      const currentReason = order.hold_reason?.trim() || null;
-      if (normalized.reason === currentReason) {
-        return {
-          success: true,
-          order_id,
-          new_status,
-          skipped: true,
-          reason: "Already at this status",
-        };
-      }
-      const saved = await saveOrderUpdate(order_id, { hold_reason: normalized.reason });
-      return {
-        success: true,
-        order_id,
-        new_status,
-        email_sent: false,
-        warning: saved.holdReasonDropped && normalized.reason
-          ? HOLD_REASON_MIGRATION_WARNING
-          : undefined,
-      };
-    }
+  if (!plan.template || !send_email) {
     return {
       success: true,
       order_id,
       new_status,
-      skipped: true,
-      reason: "Already at this status",
+      email_sent: false,
+      warning: holdWarning,
     };
   }
-
-  if (!isValidTransition(order.status, new_status) && !force) {
-    return {
-      success: false,
-      order_id,
-      error: `Cannot move from "${order.status}" to "${new_status}". Use force: true to override.`,
-      requiresForce: true,
-    };
-  }
-
-  const blockedReason = scansSentBlockedReason(order, force);
-  if (new_status === ORDER_STATUS.SCANS_SENT && blockedReason) {
-    return { success: false, order_id, error: blockedReason };
-  }
-
-  if (new_status === ORDER_STATUS.SCANS_SENT && wetransfer_link) {
-    if (!isValidUrl(wetransfer_link)) {
-      return { success: false, order_id, error: "Please enter a valid link" };
-    }
-  }
-
-  const now = new Date().toISOString();
-
-  const updatedHistory: StatusHistoryEntry[] = [
-    ...(order.status_history ?? []),
-    { status: new_status, changed_at: now },
-  ];
-
-  const updateData: Partial<FilmOrder> = {
-    status: new_status,
-    status_history: updatedHistory,
-    status_updated_at: now,
-  };
-
-  if (new_status === ORDER_STATUS.RECEIVED_BY_YOURS) updateData.received_by_yours_at = now;
-  if (new_status === ORDER_STATUS.RECEIVED_AT_LAB) updateData.at_lab_at = now;
-  if (new_status === ORDER_STATUS.ON_HOLD) {
-    const normalized = normalizeHoldReason(hold_reason);
-    if (normalized.error) {
-      return { success: false, order_id, error: normalized.error };
-    }
-    updateData.hold_reason = normalized.reason;
-  } else {
-    updateData.hold_reason = null;
-  }
-
-  if (new_status === ORDER_STATUS.SCANS_SENT) {
-    updateData.scans_sent_at = now;
-    if (scan_notes !== undefined) {
-      updateData.scan_notes = scanNotesForStorage(scan_notes);
-    }
-    if (isMixedScanOrder(order) && isPartialScanDeliveryComplete(order)) {
-      const fallback =
-        order.bw_scans_wetransfer_link ||
-        order.color_scans_wetransfer_link ||
-        order.wetransfer_link;
-      const rawLink = wetransfer_link || fallback;
-      updateData.wetransfer_link = rawLink ? ensureHttps(rawLink) : rawLink;
-    } else {
-      const rawLink = wetransfer_link || order.wetransfer_link;
-      updateData.wetransfer_link = rawLink ? ensureHttps(rawLink) : rawLink;
-    }
-  }
-
-  const saved = await saveOrderUpdate(order_id, updateData);
-  const holdWarning =
-    saved.holdReasonDropped && updateData.hold_reason
-      ? HOLD_REASON_MIGRATION_WARNING
-      : undefined;
-
-  const template = emailTemplateForStatus(order, new_status);
-  if (!template || !send_email) {
-    return { success: true, order_id, new_status, email_sent: false, warning: holdWarning };
-  }
-
-  const scanNotesForSendEmail =
-    new_status === ORDER_STATUS.SCANS_SENT && scan_notes !== undefined
-      ? scanNotesForStorage(scan_notes)
-      : undefined;
 
   try {
-    const emailData = await sendOrderEmail(order_id, template, {
-      scanNotes: scanNotesForSendEmail,
+    const emailData = await sendOrderEmail(order_id, plan.template, {
+      scanNotes: plan.scanNotesForEmail,
     });
     return {
       success: true,
       order_id,
       new_status,
       email_sent: !emailData.skipped,
+      warning: holdWarning,
     };
   } catch (emailErr: unknown) {
+    const emailError = emailErr instanceof Error ? emailErr.message : "Unknown email error";
     console.error("[status] Email trigger failed:", {
       orderId: order_id,
       orderNumber: order.order_number,
       newStatus: new_status,
-      template,
-      error: emailErr instanceof Error ? emailErr.message : "Unknown email error",
+      template: plan.template,
+      error: emailError,
     });
-    await updateOrder(order_id, {
-      email_status: "failed",
-      email_error: emailErr instanceof Error ? emailErr.message : "Unknown email error",
-    });
+    try {
+      await updateOrder(order_id, {
+        email_status: "failed",
+        email_error: emailError,
+      });
+    } catch (bookkeepingErr: unknown) {
+      console.error("[status] Could not record email failure:", {
+        orderId: order_id,
+        error: bookkeepingErr instanceof Error ? bookkeepingErr.message : "Unknown error",
+      });
+    }
     return {
       success: true,
       order_id,
       new_status,
       email_sent: false,
       emailError: emailErr instanceof EmailSendError ? emailErr.message : String(emailErr),
+      warning: holdWarning,
     };
   }
 }
