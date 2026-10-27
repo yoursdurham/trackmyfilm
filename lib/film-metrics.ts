@@ -1,6 +1,6 @@
 import { ORDER_STATUS } from "@/lib/constants";
 import { FILM_METRICS_CONFIG } from "@/lib/film-metrics-config";
-import { isBlankRoll } from "@/lib/blank-roll";
+import { isBlankRoll, orderHasOnlyBlankRolls } from "@/lib/blank-roll";
 import { isProcessOnlyOrder, isProcessOnlyRoll } from "@/lib/order-service";
 import type { FilmOrder } from "@/lib/types";
 import { getReceivedAtLabDate, getScansSentDate, isTurnaroundOutlier } from "@/lib/turnaround-time";
@@ -358,6 +358,17 @@ function emptyBucket(): AverageBucket {
   return { rolls: 0, weightedDays: 0 };
 }
 
+/** Exact 24-hour days from lab to scans, or null when that span is left out of the average. */
+function includedTurnaroundDays(start: Date | null, end: Date | null, now: Date): number | null {
+  if (!start || !end) return null;
+  const elapsed = end.getTime() - start.getTime();
+  if (elapsed < 0 || isTurnaroundOutlier(elapsed)) return null;
+  if (end.getTime() > now.getTime()) return null;
+  const windowStart = now.getTime() - FILM_METRICS_CONFIG.turnaroundWindowDays * MS_PER_DAY;
+  if (end.getTime() < windowStart) return null;
+  return elapsed / MS_PER_DAY;
+}
+
 function addTurnaround(
   bucket: AverageBucket,
   rolls: number,
@@ -365,14 +376,11 @@ function addTurnaround(
   end: Date | null,
   now: Date,
 ) {
-  if (rolls <= 0 || !start || !end) return;
-  const elapsed = end.getTime() - start.getTime();
-  if (elapsed < 0 || isTurnaroundOutlier(elapsed)) return;
-  if (end.getTime() > now.getTime()) return;
-  const windowStart = now.getTime() - FILM_METRICS_CONFIG.turnaroundWindowDays * MS_PER_DAY;
-  if (end.getTime() < windowStart) return;
+  if (rolls <= 0) return;
+  const days = includedTurnaroundDays(start, end, now);
+  if (days === null) return;
   bucket.rolls += rolls;
-  bucket.weightedDays += (elapsed / MS_PER_DAY) * rolls;
+  bucket.weightedDays += days * rolls;
 }
 
 function averageDays(bucket: AverageBucket): number | null {
@@ -457,6 +465,78 @@ export function computeFilmMetrics(orders: FilmOrder[], now = new Date()): FilmM
     averageColorTurnaroundDays: averageDays(color),
     averageBwTurnaroundDays: averageDays(bw),
     nextLabRun: nextLabRunLabel(now),
+  };
+}
+
+const WITHIN_EIGHT_DAYS = 8;
+
+export interface PublicTurnaround {
+  avgDays: number | null;
+  pctWithin8Days: number | null;
+  color: { avgDays: number | null };
+  bw: { avgDays: number | null };
+  windowDays: number;
+  updatedAt: string;
+}
+
+/**
+ * Public lab-to-scans figure. Same roll-weighted spans as computeFilmMetrics:
+ * per-side delivery times on mixed orders, On Hold and blank-only orders left
+ * out, blank rolls left out, durations of 10 days or more left out, and a
+ * null average below three rolls. pctWithin8Days is the share of qualifying
+ * orders whose included spans are all 8 days or less, and it is null below
+ * three such orders.
+ */
+export function computePublicTurnaround(orders: FilmOrder[], now = new Date()): PublicTurnaround {
+  const color = emptyBucket();
+  const bw = emptyBucket();
+  let qualifyingOrders = 0;
+  let withinEight = 0;
+
+  for (const order of orders) {
+    if (order.status === ORDER_STATUS.ON_HOLD) continue;
+    if (orderHasOnlyBlankRolls(order)) continue;
+
+    const processed = sideWeights(order, true);
+    const timed = sideWeights(order, false);
+    const scansSent = getScansSentDate(order);
+    const mixed = isMixedOrder(order, processed);
+    const colorEnd = mixed
+      ? parseTimestamp(order.color_scans_delivered_at) ?? scansSent
+      : scansSent;
+    const bwEnd = mixed
+      ? parseTimestamp(order.bw_scans_delivered_at) ?? scansSent
+      : scansSent;
+    const started = getReceivedAtLabDate(order);
+    const colorRolls = timed.color + timed.both;
+    const bwRolls = timed.bw + timed.both;
+    const colorDays = includedTurnaroundDays(started, colorEnd, now);
+    const bwDays = includedTurnaroundDays(started, bwEnd, now);
+    const included: number[] = [];
+
+    if (colorDays !== null && colorRolls > 0) {
+      color.rolls += colorRolls;
+      color.weightedDays += colorDays * colorRolls;
+      included.push(colorDays);
+    }
+    if (bwDays !== null && bwRolls > 0) {
+      bw.rolls += bwRolls;
+      bw.weightedDays += bwDays * bwRolls;
+      included.push(bwDays);
+    }
+    if (included.length === 0) continue;
+    qualifyingOrders += 1;
+    if (included.every((days) => days <= WITHIN_EIGHT_DAYS)) withinEight += 1;
+  }
+
+  const minimum = FILM_METRICS_CONFIG.minimumTurnaroundSamples;
+  return {
+    avgDays: averageDays({ rolls: color.rolls + bw.rolls, weightedDays: color.weightedDays + bw.weightedDays }),
+    pctWithin8Days: qualifyingOrders < minimum ? null : Math.round((withinEight / qualifyingOrders) * 100),
+    color: { avgDays: averageDays(color) },
+    bw: { avgDays: averageDays(bw) },
+    windowDays: FILM_METRICS_CONFIG.turnaroundWindowDays,
+    updatedAt: now.toISOString(),
   };
 }
 
@@ -558,5 +638,16 @@ export function filmMetricsOrderOrFilter(now: Date): string {
     `at_lab_at.gte.${since}`,
     `status_updated_at.gte.${since}`,
     `dropoff_date.gte.${dropoff}`,
+  ].join(",");
+}
+
+/** Orders finished inside the turnaround window. In-process rows are not needed. */
+export function turnaroundOrderOrFilter(now: Date): string {
+  const since = new Date(now.getTime() - FILM_METRICS_CONFIG.turnaroundWindowDays * MS_PER_DAY).toISOString();
+  return [
+    `scans_sent_at.gte.${since}`,
+    `color_scans_delivered_at.gte.${since}`,
+    `bw_scans_delivered_at.gte.${since}`,
+    `status_updated_at.gte.${since}`,
   ].join(",");
 }
