@@ -18,6 +18,7 @@ import {
   photoByteSizeAllowed,
 } from "@/lib/photo-submissions";
 import { createClient } from "@/lib/supabase/client";
+import { createSignedUploadClient } from "@/lib/supabase/signed-upload-client";
 import { isValidEmail, normalizeEmail } from "@/lib/validation";
 
 const fieldClass =
@@ -26,7 +27,14 @@ const fieldClass =
 const submitClass =
   "inline-flex h-12 w-full items-center justify-center rounded-xl bg-[#A1CC93] px-5 font-jetbrains text-sm font-bold text-neutral-900 transition-colors hover:bg-[#8fbe80] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto";
 
-export default function SharePhotosForm({ mode }: { mode: "account" | "public" }) {
+export default function SharePhotosForm({
+  mode,
+  cookieFreeUpload = false,
+}: {
+  mode: "account" | "public";
+  /** Embed iframe uploads must not depend on cookies or a stored session. */
+  cookieFreeUpload?: boolean;
+}) {
   const [names, setNames] = useState<string[]>([]);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -105,7 +113,7 @@ export default function SharePhotosForm({ mode }: { mode: "account" | "public" }
         return;
       }
 
-      const supabase = createClient();
+      const supabase = cookieFreeUpload ? createSignedUploadClient() : createClient();
       for (let index = 0; index < chosen.photos.length; index += 1) {
         const slot = body.uploads[index];
         const photo = chosen.photos[index];
@@ -152,6 +160,7 @@ export default function SharePhotosForm({ mode }: { mode: "account" | "public" }
         aria-labelledby="share-photos-title"
         onSubmit={onSubmit}
         className="relative space-y-4"
+        {...(cookieFreeUpload ? { "data-cookie-free-upload": "true" } : {})}
       >
         <p className="font-jetbrains text-sm leading-relaxed text-neutral-900">
           Send a few photos from your rolls. We keep them private until the shop approves them.

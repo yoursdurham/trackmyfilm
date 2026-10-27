@@ -1,12 +1,5 @@
 import type { NextConfig } from "next";
-
-const securityHeaders = [
-  { key: "X-Frame-Options",           value: "SAMEORIGIN" },
-  { key: "X-Content-Type-Options",    value: "nosniff" },
-  { key: "Referrer-Policy",           value: "strict-origin-when-cross-origin" },
-  { key: "Permissions-Policy",        value: "camera=(), microphone=(), geolocation=()" },
-  { key: "X-Powered-By",             value: "" }, // strip the header
-];
+import { securityHeaderRules } from "./lib/security-headers";
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
@@ -14,12 +7,7 @@ const nextConfig: NextConfig = {
     agentUpgrade: "security",
   },
   async headers() {
-    return [
-      {
-        source: "/(.*)",
-        headers: securityHeaders,
-      },
-    ];
+    return securityHeaderRules();
   },
 };
 
