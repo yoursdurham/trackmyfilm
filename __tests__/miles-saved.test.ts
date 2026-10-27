@@ -7,6 +7,7 @@ import {
   labRunsElapsed,
   lapRings,
   lapsCaption,
+  roundLaps,
   legacyDropoffsForYear,
   shopMidnight,
   shopYearWindow,
@@ -55,6 +56,7 @@ describe("miles saved", () => {
     expect(result.miles).toBe(34_464);
     expect(result.miles).toBe((479 + 681 - 83) * MILES_PER_DROPOFF);
     expect(result.laps).toBeCloseTo(34_464 / EARTH_CIRCUMFERENCE_MILES, 10);
+    expect(roundLaps(result.laps)).toBe(1.38);
     expect(Object.keys(result).sort()).toEqual(["laps", "miles"]);
     expect(formatMiles(result.miles)).toBe("34,464");
     expect(lapsCaption(result.laps)).toBe("That's 1.4 times around the Earth.");
