@@ -11,10 +11,12 @@ import {
   displayUsesCrtTheme,
   isDisplayPayload,
   toPublicDisplayPayload,
+  type DisplayOrientation,
   type DisplayPayload,
 } from "@/lib/display";
 import AirportBoard from "@/components/display/AirportBoard";
 import CrtGreenScreen from "@/components/display/CrtGreenScreen";
+import LandscapeScreen from "@/components/display/LandscapeScreen";
 import YoursCleanScreen from "@/components/display/YoursCleanScreen";
 
 const IDLE: DisplayPayload = {
@@ -49,12 +51,14 @@ export default function DisplayPlayer({
   initial,
   loadedBuildId,
   preview = false,
+  orientation = "portrait",
 }: {
   slug: string;
   initial: DisplayPayload | null;
   /** Build id baked into this page load. Later polls compare against it. */
   loadedBuildId: string;
   preview?: boolean;
+  orientation?: DisplayOrientation;
 }) {
   const [payload, setPayload] = useState<DisplayPayload | null>(initial);
   const [missing, setMissing] = useState(false);
@@ -128,7 +132,9 @@ export default function DisplayPlayer({
   const inset = displaySafeArea(slug, screen.mode).left;
 
   let board;
-  if (displayUsesAirportTheme(screen.mode) || screen.theme === AIRPORT_THEME) {
+  if (orientation === "landscape") {
+    board = <LandscapeScreen payload={screen} notice={notice} />;
+  } else if (displayUsesAirportTheme(screen.mode) || screen.theme === AIRPORT_THEME) {
     board = <AirportBoard payload={screen} notice={notice} />;
   } else if (screen.mode === "film_stats" || screen.mode === "film_status") {
     board = <YoursCleanScreen payload={screen} notice={notice} />;
@@ -141,6 +147,7 @@ export default function DisplayPlayer({
   return (
     <div
       className="flex h-dvh w-full overflow-hidden bg-black"
+      data-display-orientation={orientation}
       data-display-safe-inset={inset}
     >
       {inset > 0 ? (

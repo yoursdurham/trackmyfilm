@@ -95,4 +95,33 @@ describe("GET /api/displays", () => {
     });
     expect(JSON.stringify(body)).not.toMatch(/Faith|faith\.oates|sessionType/);
   });
+
+  it("lists the front window beside the studio, each with its own mode", async () => {
+    mockListDisplays.mockResolvedValue([
+      row,
+      {
+        ...row,
+        id: "display-2",
+        slug: "front-window",
+        name: "Front window",
+        location: "Front window",
+        orientation: "landscape",
+        resolution: "1920x1080",
+        mode: "film_departures",
+      },
+    ]);
+
+    const response = await GET();
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    const studio = body.displays.find((display: { slug: string }) => display.slug === "studio-vertical");
+    const window = body.displays.find((display: { slug: string }) => display.slug === "front-window");
+    expect(studio).toMatchObject({ orientation: "portrait", defaultMode: "idle", resolution: "1080x3840" });
+    expect(window).toMatchObject({
+      name: "Front window",
+      orientation: "landscape",
+      resolution: "1920x1080",
+      defaultMode: "film_departures",
+    });
+  });
 });

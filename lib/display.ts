@@ -39,6 +39,7 @@ export const DISPLAY_SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
  * 1080×3840 mounted portrait: the dead strip runs past the old 210px
  * inset. 240px left a black gap; 222px is the inset for every mode
  * except film stats, which sits at 215px so the cards meet the strip.
+ * Any other slug, including front-window, gets a zero inset.
  */
 export const STUDIO_VERTICAL_DEAD_ZONE_PX = 222;
 export const STUDIO_STATS_DEAD_ZONE_PX = 215;
