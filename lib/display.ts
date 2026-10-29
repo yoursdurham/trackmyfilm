@@ -104,6 +104,7 @@ export const FILM_STATUS_DATA_KEYS = [
 ] as const;
 export const FILM_MENU_DATA_KEYS = ["menu"] as const;
 export const FILM_DEPARTURES_DATA_KEYS = ["departures"] as const;
+export const HALLOWEEN_DATA_KEYS = ["rolls"] as const;
 export const CRT_GREEN_THEME = "crt-green";
 export const AIRPORT_THEME = "airport";
 
@@ -112,6 +113,7 @@ export const SELECTABLE_DEFAULT_MODES = [
   { value: "film_stats", label: "Film stats" },
   { value: "film_menu", label: "Film menu" },
   { value: "film_departures", label: "Airport board" },
+  { value: "halloween", label: "Halloween" },
 ] as const;
 
 export type DisplayOrientation = "portrait" | "landscape";
@@ -196,6 +198,8 @@ export interface DisplayResolveInput {
   menu?: unknown;
   /** Sanitized again before it can reach a public payload. */
   departures?: unknown;
+  /** Rolls scanned in the rolling window. Halloween only. */
+  rolls?: number | null;
   playlist?: PlaylistInput | null;
 }
 
@@ -251,6 +255,7 @@ const DATA_KEYS_BY_MODE: Record<string, readonly string[]> = {
   film_status: FILM_STATUS_DATA_KEYS,
   film_menu: FILM_MENU_DATA_KEYS,
   film_departures: FILM_DEPARTURES_DATA_KEYS,
+  halloween: HALLOWEEN_DATA_KEYS,
 };
 
 export function isDisplaySlug(slug: string): boolean {
@@ -441,6 +446,13 @@ function dataForMode(
     const departures = sanitizeFilmDepartures(input.departures);
     return departures ? { departures } : {};
   }
+  if (mode === "halloween") {
+    const rolls = input.rolls;
+    if (typeof rolls === "number" && Number.isFinite(rolls) && rolls >= 0 && rolls <= 1_000_000) {
+      return { rolls: Math.round(rolls) };
+    }
+    return {};
+  }
   return {};
 }
 
@@ -575,6 +587,10 @@ export function toPublicDisplayPayload(resolved: {
     } else if (key === "departures") {
       const departures = sanitizeFilmDepartures(value);
       if (departures) data.departures = departures;
+    } else if (key === "rolls") {
+      if (typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 1_000_000) {
+        data.rolls = Math.round(value);
+      }
     } else if (NUMERIC_FILM_KEYS.has(key)) {
       if (typeof value === "number" && Number.isFinite(value)) data[key] = value;
       else if (value === null && NULLABLE_FILM_KEYS.has(key)) data[key] = null;

@@ -1,5 +1,6 @@
 import { displayNow } from "@/lib/display-clock";
 import { getCachedFilmDepartures } from "@/lib/film-departures-cache";
+import { getCachedPublicRollsProcessed } from "@/lib/rolls-processed-data";
 import { getCachedFilmMenu } from "@/lib/film-menu-cache";
 import { getCachedFilmMetrics } from "@/lib/film-metrics-cache";
 import { getCachedAllTimeMilesSaved } from "@/lib/miles-saved-data";
@@ -73,6 +74,11 @@ export function displayNeedsFilmDepartures(display: DisplayResolveInput["display
   return winningMode(display) === "film_departures";
 }
 
+/** One cached aggregate. Loaded only while Halloween is the selected mode. */
+export function displayNeedsHalloweenRolls(display: DisplayResolveInput["display"]): boolean {
+  return winningMode(display) === "halloween";
+}
+
 /** Bookings can cover the default mode. A manual override already wins, so skip the fetch. */
 export function displayShowsStudioBookings(display: DisplayResolveInput["display"]): boolean {
   if (display.is_enabled === false) return false;
@@ -89,11 +95,13 @@ export async function publicPayloadWithFilm(
   const needsMetrics = displayNeedsFilmMetrics(display);
   const needsMenu = displayNeedsFilmMenu(display);
   const needsDepartures = displayNeedsFilmDepartures(display);
+  const needsHalloweenRolls = displayNeedsHalloweenRolls(display);
   const needsStudio = displayShowsStudioBookings(display);
 
   let film: FilmMetrics | FilmMetricsInput | null = null;
   let menu: FilmMenu | null = null;
   let departures: FilmDepartures | null = null;
+  let rolls: number | undefined;
   let studio: StudioDisplayInput | null = null;
   let bookings: StudioBooking[] | null = null;
   if (needsMetrics) {
@@ -129,6 +137,14 @@ export async function publicPayloadWithFilm(
       console.error("[film-departures]", message);
     }
   }
+  if (needsHalloweenRolls) {
+    try {
+      rolls = (await getCachedPublicRollsProcessed()).rolls;
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      console.error("[rolls-processed]", message);
+    }
+  }
   if (needsStudio) {
     try {
       const agenda = await getCachedStudioAgenda(now);
@@ -143,6 +159,7 @@ export async function publicPayloadWithFilm(
     ...(film ? { film } : {}),
     ...(menu ? { menu } : {}),
     ...(departures ? { departures } : {}),
+    ...(rolls !== undefined ? { rolls } : {}),
     ...(studio ? { studio } : {}),
   });
   return {
