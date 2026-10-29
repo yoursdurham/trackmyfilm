@@ -153,3 +153,24 @@ body {
     animation: none;
   }
 }
+
+@keyframes halloween-flicker {
+  0%, 100% { opacity: 0.015; }
+  18% { opacity: 0.07; }
+  28% { opacity: 0.02; }
+  46% { opacity: 0.09; }
+  62% { opacity: 0.02; }
+  81% { opacity: 0.05; }
+}
+
+.halloween-flicker {
+  background: #fff;
+  mix-blend-mode: overlay;
+  animation: halloween-flicker 4.8s steps(2, end) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .halloween-flicker {
+    animation: none;
+  }
+}
