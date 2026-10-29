@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import Link from "next/link";
+import { YOURS_BLEND_COLORS } from "@/lib/brand-colors";
 
 type PublicHeaderProps = {
   /** The tracking page uses this title as its h1. Other public pages keep their own. */
@@ -10,7 +11,7 @@ type PublicHeaderProps = {
   corner?: ReactNode;
 };
 
-const COLORS = ["#DDB1B1", "#C5AED7", "#A1CC93"] as const;
+const COLORS = YOURS_BLEND_COLORS;
 const WORDMARK = "Track My Film";
 export const TRACK_MY_FILM_SUBTEXT = "A Project by Yours, Durham";
 

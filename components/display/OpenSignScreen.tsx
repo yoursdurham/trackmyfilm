@@ -1,12 +1,12 @@
 "use client";
 
+import type { CSSProperties } from "react";
+import { YOURS_BLEND_COLORS, YOURS_BLEND_GRADIENT } from "@/lib/brand-colors";
 import { FILM_METRICS_CONFIG, labRunScheduleLabel } from "@/lib/film-metrics-config";
 import type { OpenSignStats } from "@/lib/display";
 import { RETAIL_HOUR_LINES, RETAIL_HOURS_LABEL } from "@/lib/shop-hours";
 
-const PINK = "#ff4d8d";
-const LILAC = "#C5AED7";
-const GREEN = "#A1CC93";
+const [PINK, LILAC, GREEN] = YOURS_BLEND_COLORS;
 
 /** Neon OPEN sign for the front window. Other screens never mount this. */
 export default function OpenSignScreen({ stats }: { stats?: OpenSignStats | null }) {
@@ -19,17 +19,19 @@ export default function OpenSignScreen({ stats }: { stats?: OpenSignStats | null
       data-open-sign="open"
       data-retail-hours={RETAIL_HOURS_LABEL}
       className="grid h-full w-full grid-rows-[minmax(0,1fr)_auto] overflow-hidden bg-black font-jetbrains text-[#F4F1EA] select-none"
+      style={{ "--yours-blend": YOURS_BLEND_GRADIENT } as CSSProperties}
     >
       <div className="grid min-h-0 grid-cols-[minmax(0,1.55fr)_minmax(0,0.78fr)] items-stretch gap-[1.6vw] px-[2.2vw] pt-[2.2vh]">
         <div className="open-sign-tube flex min-h-0 items-center justify-center px-[2vw]">
           <p
             data-open-sign-word="OPEN"
-            className="open-sign-word text-center text-[clamp(7rem,24vh,18rem)] leading-[0.82] font-extrabold tracking-[0.06em]"
+            className="open-sign-word inline-grid text-center text-[clamp(7rem,24vh,18rem)] leading-[0.82] font-extrabold tracking-[0.06em]"
           >
-            OPEN
+            <span aria-hidden="true" className="open-sign-glow col-start-1 row-start-1">OPEN</span>
+            <span className="open-sign-face col-start-1 row-start-1">OPEN</span>
           </p>
         </div>
-        <aside data-open-sign-hours className="flex min-w-0 flex-col justify-center border-l-[0.45vh] border-[#ff4d8d] pl-[1.6vw]">
+        <aside data-open-sign-hours className="flex min-w-0 flex-col justify-center">
           <p className="text-[clamp(0.9rem,2vh,1.45rem)] font-bold tracking-[0.16em] uppercase text-[#A1CC93]">
             Retail hours
           </p>

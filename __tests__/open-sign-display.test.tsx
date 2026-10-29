@@ -218,6 +218,11 @@ describe("open sign rendering", () => {
     expect(html).toContain("Friday 12:00 PM");
     expect(html).toContain("Last 30 days");
     expect(html).not.toContain("is-closed");
+    expect(html).toContain("#DDB1B1");
+    expect(html).toContain("#C5AED7");
+    expect(html).toContain("#A1CC93");
+    expect(html).not.toContain("#ff4d8d");
+    expect(html).not.toContain("border-l-");
     expect(html.indexOf("data-open-sign-word")).toBeLessThan(html.indexOf("data-open-sign-hours"));
     expect(html.indexOf("data-open-sign-hours")).toBeLessThan(html.indexOf("data-open-sign-stats"));
   });
