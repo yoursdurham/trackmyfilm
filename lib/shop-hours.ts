@@ -128,6 +128,13 @@ function addCalendarDays(year: number, month: number, day: number, delta: number
   };
 }
 
+/** Midnight at the end of the current America/New_York calendar day. */
+export function endOfShopDay(now: Date): Date {
+  const today = zonedDateParts(now);
+  const next = addCalendarDays(today.year, today.month, today.day, 1);
+  return shopInstant(next.year, next.month, next.day, 0);
+}
+
 /** The next time the shop opens or closes after `now`. */
 export function nextRetailBoundary(now: Date): Date {
   const today = zonedDateParts(now);
@@ -147,19 +154,58 @@ export function nextRetailBoundary(now: Date): Date {
   return new Date(best ?? now.getTime() + 60_000);
 }
 
+export const OPEN_SIGN_MODES = ["auto", "on", "off"] as const;
+export type OpenSignMode = (typeof OPEN_SIGN_MODES)[number];
+
+export function isOpenSignMode(value: unknown): value is OpenSignMode {
+  return value === "auto" || value === "on" || value === "off";
+}
+
 /**
- * Only the front window. During retail hours the sign covers the selected
- * mode and any studio booking. A custom message still wins. Every other
- * slug ignores the switch.
+ * Front window only. `on` lasts until `openSignUntil` (or the end of the
+ * current New York day when that instant is missing), then returns to auto.
+ * A missing mode falls back to the older on/off switch: on means auto.
+ */
+export function resolveOpenSignMode(input: {
+  slug?: string | null;
+  openSignMode?: string | null;
+  openSignUntil?: string | null;
+  legacyEnabled?: boolean | null;
+  now: Date;
+}): OpenSignMode {
+  if (input.slug !== FRONT_WINDOW_SLUG) return "off";
+  const mode = isOpenSignMode(input.openSignMode)
+    ? input.openSignMode
+    : input.legacyEnabled === true
+      ? "auto"
+      : "off";
+  if (mode !== "on") return mode;
+  const parsed = input.openSignUntil ? new Date(input.openSignUntil) : endOfShopDay(input.now);
+  if (Number.isNaN(parsed.getTime()) || parsed.getTime() <= input.now.getTime()) return "auto";
+  return "on";
+}
+
+/** Instant when a forced-on sign returns to auto. A past or blank value means end of today. */
+export function openSignForceUntil(until: string | null | undefined, now: Date): Date {
+  const parsed = until ? new Date(until) : null;
+  if (parsed && !Number.isNaN(parsed.getTime()) && parsed.getTime() > now.getTime()) return parsed;
+  return endOfShopDay(now);
+}
+
+/**
+ * Only the front window. Auto follows retail hours. On shows the sign
+ * regardless of hours. Off hides it. A custom message still wins.
+ * Every other slug ignores the control.
  */
 export function shouldShowOpenSign(input: {
   slug: string;
-  enabled: boolean;
+  setting: OpenSignMode;
   mode: string;
   now: Date;
 }): boolean {
   if (input.slug !== FRONT_WINDOW_SLUG) return false;
-  if (!input.enabled) return false;
   if (input.mode === "custom_message") return false;
+  if (input.setting === "on") return true;
+  if (input.setting === "off") return false;
   return isShopOpen(input.now);
 }

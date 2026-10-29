@@ -17,7 +17,7 @@
  */
 
 import { sanitizeFilmDepartures } from "@/lib/film-departures";
-import { FRONT_WINDOW_SLUG } from "@/lib/shop-hours";
+import { FRONT_WINDOW_SLUG, isOpenSignMode, openSignForceUntil, resolveOpenSignMode, type OpenSignMode } from "@/lib/shop-hours";
 import { sanitizeFilmMenu } from "@/lib/film-menu";
 import {
   sanitizeStudioLines,
@@ -133,8 +133,12 @@ export interface DisplayRow {
   override_mode: string | null;
   override_payload: unknown;
   show_studio_bookings?: boolean | null;
-  /** Stored switch. Only the front window honors it. */
+  /** Stored switch. Only the front window honors it. Kept in step with open_sign_mode. */
   show_open_sign?: boolean | null;
+  /** auto follows hours, on forces the sign until open_sign_until, off hides it. */
+  open_sign_mode?: string | null;
+  /** When mode is on, the force ends at this instant and the screen returns to auto. */
+  open_sign_until?: string | null;
   /** Ordered guest notes. Null means the column is missing and the seed copy is used. */
   studio_info_lines?: unknown;
   studio_checkout_lines?: unknown;
@@ -186,7 +190,7 @@ export interface PlaylistInput {
 }
 
 export interface DisplayResolveInput {
-  display: Pick<DisplayRow, "mode" | "theme" | "is_enabled" | "override_mode" | "override_payload" | "show_open_sign"> & {
+  display: Pick<DisplayRow, "mode" | "theme" | "is_enabled" | "override_mode" | "override_payload" | "show_open_sign" | "open_sign_mode" | "open_sign_until"> & {
     slug?: string | null;
     refresh_seconds?: number | null;
     show_studio_bookings?: boolean | null;
@@ -210,7 +214,11 @@ export interface DisplayPayload {
   /** Deployment that produced this payload. The player reloads when it changes. */
   buildId: string;
   data: Record<string, unknown>;
-  /** Present only when this screen should cover itself with the Open sign during retail hours. */
+  /** Front window only. auto follows hours, on forces the sign, off hides it. */
+  openSign?: OpenSignMode;
+  /** When openSign is on, the player returns to auto at this instant without a reload. */
+  openSignUntil?: string;
+  /** Present when the front window may cover itself with the Open sign. */
   showOpenSign?: boolean;
   /** Film-stats figures for the front-window Open sign. No customer fields. */
   openSignStats?: OpenSignStats;
@@ -584,7 +592,15 @@ export function resolveDisplayState(input: DisplayResolveInput): ResolvedDisplay
 
   candidates.sort((a, b) => b.priority - a.priority);
   const winner = candidates[0];
-  const showOpenSign = input.display.slug === FRONT_WINDOW_SLUG && input.display.show_open_sign === true;
+  const now = input.now ?? new Date();
+  const openSign = resolveOpenSignMode({
+    slug: input.display.slug,
+    openSignMode: input.display.open_sign_mode,
+    openSignUntil: input.display.open_sign_until,
+    legacyEnabled: input.display.show_open_sign === true,
+    now,
+  });
+  const signCanShow = openSign === "auto" || openSign === "on";
 
   return {
     mode: winner.mode,
@@ -593,8 +609,12 @@ export function resolveDisplayState(input: DisplayResolveInput): ResolvedDisplay
     buildId: displayBuildId(),
     data: winner.data,
     priority: winner.priority,
-    ...(showOpenSign
-      ? { showOpenSign: true, openSignStats: sanitizeOpenSignStats(input.film) }
+    ...(input.display.slug === FRONT_WINDOW_SLUG
+      ? {
+        openSign,
+        ...(openSign === "on" ? { openSignUntil: openSignForceUntil(input.display.open_sign_until, now).toISOString() } : {}),
+        ...(signCanShow ? { showOpenSign: true, openSignStats: sanitizeOpenSignStats(input.film) } : {}),
+      }
       : {}),
   };
 }
@@ -607,6 +627,8 @@ export function toPublicDisplayPayload(resolved: {
   buildId?: unknown;
   data?: unknown;
   showOpenSign?: unknown;
+  openSign?: unknown;
+  openSignUntil?: unknown;
   openSignStats?: unknown;
 }): DisplayPayload {
   const mode = typeof resolved.mode === "string" && resolved.mode.trim() ? resolved.mode.trim() : "idle";
@@ -645,6 +667,13 @@ export function toPublicDisplayPayload(resolved: {
     if (message) data.message = message;
     else delete data.message;
   }
+  const openSign = isOpenSignMode(resolved.openSign) ? resolved.openSign : null;
+  const signCanShow = openSign === "auto" || openSign === "on" || (openSign === null && resolved.showOpenSign === true);
+  let openSignUntil: string | undefined;
+  if (openSign === "on" && typeof resolved.openSignUntil === "string") {
+    const until = new Date(resolved.openSignUntil);
+    if (!Number.isNaN(until.getTime())) openSignUntil = until.toISOString();
+  }
   return {
     mode,
     theme: themeForMode(mode, typeof resolved.theme === "string" ? resolved.theme : null),
@@ -653,7 +682,9 @@ export function toPublicDisplayPayload(resolved: {
     ),
     buildId: payloadBuildId(resolved.buildId),
     data,
-    ...(resolved.showOpenSign === true
+    ...(openSign ? { openSign } : {}),
+    ...(openSignUntil ? { openSignUntil } : {}),
+    ...(signCanShow
       ? { showOpenSign: true, openSignStats: sanitizeOpenSignStats(resolved.openSignStats) }
       : {}),
   };
@@ -692,6 +723,8 @@ export function isDisplayPayload(value: unknown): value is DisplayPayload {
   const record = value as Record<string, unknown>;
   if ("buildId" in record && typeof record.buildId !== "string") return false;
   if ("showOpenSign" in record && typeof record.showOpenSign !== "boolean") return false;
+  if ("openSign" in record && !isOpenSignMode(record.openSign)) return false;
+  if ("openSignUntil" in record && typeof record.openSignUntil !== "string") return false;
   if ("openSignStats" in record) {
     const stats = record.openSignStats;
     if (!stats || typeof stats !== "object" || Array.isArray(stats)) return false;

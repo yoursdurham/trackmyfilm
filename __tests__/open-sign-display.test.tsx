@@ -5,10 +5,11 @@ import DisplayPlayer from "../components/display/DisplayPlayer";
 import OpenSignScreen from "../components/display/OpenSignScreen";
 import { isSelectableDefaultMode, publicPayloadForDisplay } from "../lib/display";
 import { displayNeedsOpenSignStats } from "../lib/display-screen";
-import { FRONT_WINDOW_SLUG, isShopOpen, nextRetailBoundary, RETAIL_HOURS_LABEL, shouldShowOpenSign } from "../lib/shop-hours";
+import { endOfShopDay, FRONT_WINDOW_SLUG, isShopOpen, nextRetailBoundary, resolveOpenSignMode, RETAIL_HOURS_LABEL, shouldShowOpenSign } from "../lib/shop-hours";
 import type { DisplayPayload } from "../lib/display";
 
 const migration = readFileSync("supabase/migrations/028_display_open_sign.sql", "utf8");
+const modeMigration = readFileSync("supabase/migrations/029_display_open_sign_mode.sql", "utf8");
 
 const THURSDAY_OPEN = new Date("2026-10-29T22:00:00.000Z");
 const THURSDAY_START = new Date("2026-10-29T21:00:00.000Z");
@@ -44,24 +45,43 @@ describe("shop retail hours", () => {
 
 describe("open sign schedule", () => {
   it("covers the front window during open hours, and a custom message still wins", () => {
-    const front = { slug: FRONT_WINDOW_SLUG, enabled: true, now: THURSDAY_OPEN };
+    const front = { slug: FRONT_WINDOW_SLUG, setting: "auto" as const, now: THURSDAY_OPEN };
     expect(shouldShowOpenSign({ ...front, mode: "film_stats" })).toBe(true);
     expect(shouldShowOpenSign({ ...front, mode: "studio_welcome" })).toBe(true);
     expect(shouldShowOpenSign({ ...front, mode: "custom_message" })).toBe(false);
     expect(shouldShowOpenSign({ ...front, mode: "film_stats", now: WEDNESDAY })).toBe(false);
-    expect(shouldShowOpenSign({ ...front, enabled: false, mode: "film_stats" })).toBe(false);
+    expect(shouldShowOpenSign({ ...front, setting: "off", mode: "film_stats" })).toBe(false);
+    expect(shouldShowOpenSign({ ...front, setting: "on", mode: "film_stats", now: WEDNESDAY })).toBe(true);
+  });
+
+  it("forces the sign on until midnight Eastern, then returns to auto", () => {
+    expect(endOfShopDay(THURSDAY_OPEN).toISOString()).toBe("2026-10-30T04:00:00.000Z");
+    const forced = {
+      slug: FRONT_WINDOW_SLUG,
+      openSignMode: "on",
+      openSignUntil: "2026-10-30T04:00:00.000Z",
+      now: WEDNESDAY,
+    };
+    expect(resolveOpenSignMode(forced)).toBe("on");
+    expect(resolveOpenSignMode({ ...forced, now: new Date("2026-10-30T04:00:00.000Z") })).toBe("auto");
+    expect(resolveOpenSignMode({
+      slug: FRONT_WINDOW_SLUG,
+      openSignMode: "off",
+      legacyEnabled: true,
+      now: THURSDAY_OPEN,
+    })).toBe("off");
   });
 
   it("ignores the switch on every other screen, including studio-vertical", () => {
     expect(shouldShowOpenSign({
       slug: "studio-vertical",
-      enabled: true,
+      setting: "on",
       mode: "idle",
       now: THURSDAY_OPEN,
     })).toBe(false);
     expect(shouldShowOpenSign({
       slug: "studio-vertical",
-      enabled: true,
+      setting: "on",
       mode: "film_stats",
       now: SATURDAY_OPEN,
     })).toBe(false);
@@ -92,6 +112,8 @@ describe("open sign schedule", () => {
       },
     });
     expect(on.mode).toBe("film_stats");
+    expect(on.openSign).toBe("auto");
+    expect(on).not.toHaveProperty("openSignUntil");
     expect(on.showOpenSign).toBe(true);
     expect(on.openSignStats).toEqual({
       rollsProcessing: 12,
@@ -115,6 +137,7 @@ describe("open sign schedule", () => {
       show_open_sign: true,
     });
     expect(studio.mode).toBe("idle");
+    expect(studio).not.toHaveProperty("openSign");
     expect(studio).not.toHaveProperty("showOpenSign");
     expect(studio).not.toHaveProperty("openSignStats");
 
@@ -127,8 +150,23 @@ describe("open sign schedule", () => {
       override_payload: null,
       show_open_sign: false,
     });
+    expect(off.openSign).toBe("off");
     expect(off).not.toHaveProperty("showOpenSign");
     expect(off).not.toHaveProperty("openSignStats");
+
+    const forced = publicPayloadForDisplay({
+      slug: FRONT_WINDOW_SLUG,
+      mode: "idle",
+      theme: "yours-dark",
+      is_enabled: true,
+      override_mode: null,
+      override_payload: null,
+      open_sign_mode: "on",
+      open_sign_until: "2026-10-30T04:00:00.000Z",
+    }, { now: WEDNESDAY });
+    expect(forced.openSign).toBe("on");
+    expect(forced.openSignUntil).toBe("2026-10-30T04:00:00.000Z");
+    expect(forced.showOpenSign).toBe(true);
   });
 
   it("loads film stats for the front window only while the sign can show", () => {
@@ -144,17 +182,24 @@ describe("open sign schedule", () => {
     expect(displayNeedsOpenSignStats(front)).toBe(true);
     expect(displayNeedsOpenSignStats({ ...front, override_mode: "custom_message" })).toBe(false);
     expect(displayNeedsOpenSignStats({ ...front, show_open_sign: false })).toBe(false);
+    expect(displayNeedsOpenSignStats({ ...front, open_sign_mode: "on", show_open_sign: false }, WEDNESDAY)).toBe(true);
+    expect(displayNeedsOpenSignStats({ ...front, open_sign_mode: "off" }, THURSDAY_OPEN)).toBe(false);
     expect(displayNeedsOpenSignStats({ ...front, slug: "studio-vertical" })).toBe(false);
   });
 
-  it("puts the staff switch only on the front window card", () => {
+  it("puts the staff control only on the front window card", () => {
     const page = readFileSync("app/displays/page.tsx", "utf8");
+    const control = readFileSync("components/displays/OpenSignControl.tsx", "utf8");
     const start = page.indexOf(`display.slug === FRONT_WINDOW_SLUG`);
     const end = page.indexOf(": null}", start);
     const block = page.slice(start, end);
     expect(start).toBeGreaterThan(-1);
-    expect(block).toContain("Show Open sign during open hours");
-    expect(page.replace(block, "")).not.toContain("Show Open sign during open hours");
+    expect(block).toContain("<OpenSignControl");
+    expect(page.replace(block, "")).not.toContain("<OpenSignControl");
+    expect(control).toContain("Auto (by hours)");
+    expect(control).toContain("On now");
+    expect(control).toContain('label: "Off"');
+    expect(control).toContain("midnight ET");
   });
 
   it("turns the front window on once and leaves later edits alone", () => {
@@ -163,6 +208,10 @@ describe("open sign schedule", () => {
     expect(migration).toMatch(/show_open_sign is null/);
     expect(migration).toMatch(/set default false/i);
     expect(migration).not.toMatch(/show_open_sign = true\s+where slug <> 'front-window'/);
+    expect(modeMigration).toMatch(/open_sign_mode text/);
+    expect(modeMigration).toMatch(/open_sign_until timestamptz/);
+    expect(modeMigration).toMatch(/when show_open_sign is true then 'auto'/);
+    expect(modeMigration).toMatch(/check \(open_sign_mode in \('auto', 'on', 'off'\)\)/);
   });
 });
 
@@ -225,6 +274,33 @@ describe("open sign rendering", () => {
     expect(html).not.toContain("border-l-");
     expect(html.indexOf("data-open-sign-word")).toBeLessThan(html.indexOf("data-open-sign-hours"));
     expect(html.indexOf("data-open-sign-hours")).toBeLessThan(html.indexOf("data-open-sign-stats"));
+  });
+
+  it("shows the sign outside hours when forced on, and hides it when off", () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(WEDNESDAY);
+    const forced = renderToStaticMarkup(
+      <DisplayPlayer
+        slug="front-window"
+        orientation="landscape"
+        initial={{ ...idle, openSign: "on", openSignUntil: "2026-10-30T04:00:00.000Z" }}
+        loadedBuildId="dev"
+        preview
+      />,
+    );
+    expect(forced).toContain("data-display-mode=\"open_sign\"");
+
+    vi.setSystemTime(THURSDAY_OPEN);
+    const hidden = renderToStaticMarkup(
+      <DisplayPlayer
+        slug="front-window"
+        orientation="landscape"
+        initial={{ ...idle, openSign: "off" }}
+        loadedBuildId="dev"
+        preview
+      />,
+    );
+    expect(hidden).not.toContain("data-display-mode=\"open_sign\"");
   });
 
   it("covers the front window during open hours and never the studio screen", () => {

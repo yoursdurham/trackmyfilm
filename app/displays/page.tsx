@@ -9,6 +9,7 @@ import InternalHeader from "@/components/InternalHeader";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import FilmMenuEditor from "@/components/displays/FilmMenuEditor";
+import OpenSignControl from "@/components/displays/OpenSignControl";
 import StudioLinesEditor from "@/components/displays/StudioLinesEditor";
 import { SELECTABLE_DEFAULT_MODES, SELECTABLE_DISPLAY_THEMES } from "@/lib/display";
 import { FRONT_WINDOW_SLUG } from "@/lib/shop-hours";
@@ -218,23 +219,12 @@ export default function DisplaysPage() {
                       </label>
 
                       {display.slug === FRONT_WINDOW_SLUG ? (
-                        <label className="mt-4 flex items-start gap-2 text-sm text-slate-600">
-                          <input
-                            type="checkbox"
-                            aria-label="Show Open sign during open hours for Front window"
-                            className="mt-0.5 h-4 w-4 accent-amber-600"
-                            checked={display.showOpenSign}
-                            onChange={(event) => {
-                              save.mutate({ slug: display.slug, body: { showOpenSign: event.target.checked } });
-                            }}
-                          />
-                          <span>
-                            Show Open sign during open hours
-                            <span className="mt-0.5 block text-xs text-slate-400">
-                              Thursday 5–7PM and Saturday 11–2PM. The selected mode shows the rest of the time. A custom message still covers the sign.
-                            </span>
-                          </span>
-                        </label>
+                        <OpenSignControl
+                          value={display.openSignMode}
+                          onChange={(openSignMode) => {
+                            save.mutate({ slug: display.slug, body: { openSignMode } });
+                          }}
+                        />
                       ) : null}
 
                       <label className="mt-4 flex items-start gap-2 text-sm text-slate-600">

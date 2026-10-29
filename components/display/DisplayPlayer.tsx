@@ -14,7 +14,7 @@ import {
   type DisplayOrientation,
   type DisplayPayload,
 } from "@/lib/display";
-import { FRONT_WINDOW_SLUG, nextRetailBoundary, shouldShowOpenSign } from "@/lib/shop-hours";
+import { nextRetailBoundary, resolveOpenSignMode, shouldShowOpenSign } from "@/lib/shop-hours";
 import AirportBoard from "@/components/display/AirportBoard";
 import CrtGreenScreen from "@/components/display/CrtGreenScreen";
 import LandscapeScreen from "@/components/display/LandscapeScreen";
@@ -132,22 +132,38 @@ export default function DisplayPlayer({
   const screen = payload ?? IDLE;
   const notice = missing && !payload ? "This screen is not set up yet." : null;
   const [shopNow, setShopNow] = useState(() => new Date());
+  const openSignUntilRef = useRef<string | undefined>(screen.openSignUntil);
+  useEffect(() => {
+    openSignUntilRef.current = screen.openSignUntil;
+  }, [screen.openSignUntil]);
 
   useEffect(() => {
     let timer = 0;
     const arm = () => {
       const now = new Date();
       setShopNow(now);
-      const wait = Math.min(Math.max(250, nextRetailBoundary(now).getTime() - now.getTime() + 50), 60_000);
+      const marks = [nextRetailBoundary(now).getTime()];
+      if (openSignUntilRef.current) {
+        const until = new Date(openSignUntilRef.current).getTime();
+        if (Number.isFinite(until)) marks.push(until);
+      }
+      const wait = Math.min(Math.max(250, Math.min(...marks) - now.getTime() + 50), 60_000);
       timer = window.setTimeout(arm, wait);
     };
     arm();
     return () => window.clearTimeout(timer);
   }, []);
 
+  const openSignSetting = resolveOpenSignMode({
+    slug,
+    openSignMode: screen.openSign,
+    openSignUntil: screen.openSignUntil,
+    legacyEnabled: screen.showOpenSign === true,
+    now: shopNow,
+  });
   const coverWithOpenSign = shouldShowOpenSign({
     slug,
-    enabled: slug === FRONT_WINDOW_SLUG && screen.showOpenSign === true,
+    setting: openSignSetting,
     mode: screen.mode,
     now: shopNow,
   });
