@@ -90,7 +90,8 @@ describe("halloween rendering", () => {
     expect(html).toContain("data-halloween-rolls");
     expect(html).toContain(">40<");
     expect(html).toContain("data-halloween-sprockets=\"horizontal\"");
-    expect(html).not.toMatch(/Avery|Sample|\.exe|C:\\\\/);
+    expect(html).toContain("data-halloween-rule");
+    expect(html).not.toMatch(/Avery|Sample|\.exe|C:\\\\|<polygon/);
   });
 
   it("keeps the studio dead zone and stacks the tall layout", () => {
@@ -102,6 +103,7 @@ describe("halloween rendering", () => {
     expect(html).toContain("data-display-safe-inset=\"222\"");
     expect(html).toContain("data-display-deadzone");
     expect(html).toContain("data-halloween-sprockets=\"vertical\"");
+    expect(html).not.toContain("<polygon");
     expect(html).not.toContain("data-halloween-rolls");
     expect(html).not.toContain("data-display-chrome=\"tmf\"");
   });

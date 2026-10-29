@@ -8,7 +8,6 @@ import type { DisplayOrientation } from "@/lib/display";
 const ORANGE = "#FF6A00";
 const PINK = "#DDB1B1";
 const GREEN = "#A1CC93";
-const INK = "#F4F1EA";
 
 function pad(value: number) {
   return String(value).padStart(2, "0");
@@ -23,26 +22,6 @@ function useCountdown() {
     return () => window.clearInterval(id);
   }, []);
   return count;
-}
-
-function Bat({ className }: { className: string }) {
-  return (
-    <svg viewBox="0 0 64 28" aria-hidden className={className} fill={INK}>
-      <polygon points="32,14 10,2 16,14 2,10 18,18 32,15 46,18 62,10 48,14 54,2" />
-    </svg>
-  );
-}
-
-function Pumpkin({ className }: { className: string }) {
-  return (
-    <svg viewBox="0 0 80 88" aria-hidden className={className}>
-      <rect x="36" y="4" width="8" height="16" rx="2" fill={GREEN} />
-      <circle cx="40" cy="50" r="30" fill={ORANGE} />
-      <polygon points="26,46 34,46 30,56" fill="#0a0a0a" />
-      <polygon points="46,46 54,46 50,56" fill="#0a0a0a" />
-      <path d="M28 64 Q40 74 52 64" fill="none" stroke="#0a0a0a" strokeWidth="3" strokeLinecap="round" />
-    </svg>
-  );
 }
 
 function SprocketRail({ along }: { along: "vertical" | "horizontal" }) {
@@ -67,15 +46,29 @@ function SprocketRail({ along }: { along: "vertical" | "horizontal" }) {
   );
 }
 
-function CountUnit({ value, label }: { value: string; label: string }) {
+function CountUnit({ value, label, wide }: { value: string; label: string; wide: boolean }) {
   return (
     <div className="min-w-0">
-      <p className="text-[clamp(2.4rem,8vh,7rem)] leading-none font-extrabold tabular-nums" style={{ color: ORANGE }}>
+      <p className={`leading-none font-extrabold tabular-nums ${
+        wide ? "text-[clamp(3.4rem,12vh,9rem)]" : "text-[clamp(3.8rem,16cqw,8rem)]"
+      }`} style={{ color: ORANGE }}>
         {value}
       </p>
-      <p className="mt-[0.6vh] text-[clamp(0.8rem,1.8vh,1.4rem)] font-bold tracking-[0.18em] uppercase" style={{ color: PINK }}>
+      <p className={`mt-[0.8vh] font-bold tracking-[0.2em] uppercase ${
+        wide ? "text-[clamp(0.95rem,2.2vh,1.7rem)]" : "text-[clamp(0.9rem,2.4cqw,1.5rem)]"
+      }`} style={{ color: PINK }}>
         {label}
       </p>
+    </div>
+  );
+}
+
+function ColorRule() {
+  return (
+    <div aria-hidden data-halloween-rule className="flex w-full items-center gap-[1.6vw]">
+      <span className="h-[0.7vh] min-h-[4px] flex-1 bg-[#DDB1B1]" />
+      <span className="h-[1.6vh] w-[1.6vh] min-h-[10px] min-w-[10px] bg-[#FF6A00]" />
+      <span className="h-[0.7vh] min-h-[4px] flex-1 bg-[#A1CC93]" />
     </div>
   );
 }
@@ -83,7 +76,9 @@ function CountUnit({ value, label }: { value: string; label: string }) {
 function Countdown({ count, wide }: { count: HalloweenCountdown; wide: boolean }) {
   if (count.phase === "today") {
     return (
-      <p data-halloween-phase="today" className="text-[clamp(2rem,6vh,5.5rem)] leading-none font-extrabold tracking-[0.08em] uppercase" style={{ color: ORANGE }}>
+      <p data-halloween-phase="today" className={`leading-none font-extrabold tracking-[0.08em] uppercase ${
+        wide ? "text-[clamp(3rem,8vh,7rem)]" : "text-[clamp(2.4rem,8cqw,5.5rem)]"
+      }`} style={{ color: ORANGE }}>
         Happy Halloween
       </p>
     );
@@ -92,12 +87,12 @@ function Countdown({ count, wide }: { count: HalloweenCountdown; wide: boolean }
   return (
     <div
       data-halloween-phase="countdown"
-      className={wide ? "grid grid-cols-4 gap-[3vw]" : "grid grid-cols-2 gap-x-[8vw] gap-y-[3vh]"}
+      className={wide ? "grid w-full max-w-[78rem] grid-cols-4 gap-[2vw]" : "flex h-full w-full flex-col justify-evenly"}
     >
-      <CountUnit value={pad(count.days)} label="Days" />
-      <CountUnit value={pad(count.hours)} label="Hours" />
-      <CountUnit value={pad(count.minutes)} label="Minutes" />
-      <CountUnit value={pad(count.seconds)} label="Seconds" />
+      <CountUnit wide={wide} value={pad(count.days)} label="Days" />
+      <CountUnit wide={wide} value={pad(count.hours)} label="Hours" />
+      <CountUnit wide={wide} value={pad(count.minutes)} label="Minutes" />
+      <CountUnit wide={wide} value={pad(count.seconds)} label="Seconds" />
     </div>
   );
 }
@@ -121,31 +116,50 @@ export default function HalloweenScreen({
       className={`relative h-full w-full overflow-hidden bg-black font-jetbrains text-[#F4F1EA] select-none ${wide ? "flex flex-col" : "flex"}`}
     >
       <SprocketRail along={wide ? "horizontal" : "vertical"} />
-      <div className="relative flex min-h-0 min-w-0 flex-1 flex-col items-center justify-center px-[4vw] py-[2vh] text-center">
-        <p className="text-[clamp(0.9rem,2vh,1.6rem)] font-bold tracking-[0.42em] uppercase" style={{ color: PINK }}>
+      <div className={`relative flex min-h-0 min-w-0 flex-1 flex-col items-center text-center ${
+        wide ? "justify-between px-[5vw] py-[2.4vh]" : "justify-between px-[4cqw] py-[5vh]"
+      }`}>
+        <p className={`font-bold tracking-[0.42em] uppercase ${
+          wide ? "text-[clamp(1.1rem,2.6vh,2rem)]" : "text-[clamp(1rem,3.2cqw,1.8rem)]"
+        }`} style={{ color: PINK }}>
           Yours Durham
         </p>
-        <h1 className={`mt-[1.2vh] leading-[0.9] font-extrabold tracking-[0.02em] uppercase ${
-          wide ? "text-[clamp(4.2rem,11vh,10rem)]" : "text-[clamp(3.2rem,10cqw,7rem)]"
-        }`}>
-          <span className="block">Happy</span>
-          <span className="block" style={{ color: ORANGE }}>Halloween</span>
-        </h1>
-        <p className="mt-[1.6vh] text-[clamp(1rem,2.2vh,1.8rem)] font-bold tracking-[0.16em] uppercase" style={{ color: GREEN }}>
-          {count.phase === "today" ? "Tonight" : "Until October 31"}
-        </p>
-        <div className="mt-[2.4vh]">
-          <Countdown count={count} wide={wide} />
-        </div>
-        {shownRolls !== null ? (
-          <p data-halloween-rolls className="mt-[3vh] text-[clamp(1.1rem,2.4vh,2rem)] font-bold tracking-[0.08em] uppercase">
-            <span className="text-[clamp(2rem,5vh,4.2rem)] font-extrabold tabular-nums" style={{ color: GREEN }}>{shownRolls}</span>
-            {` rolls scanned · last ${windowDays} days`}
+        <div className={`flex w-full flex-col items-center ${wide ? "" : "min-h-0 flex-1"}`}>
+          <h1 className={`leading-[0.86] font-extrabold tracking-[0.02em] uppercase ${
+            wide ? "text-[clamp(5.4rem,15vh,13rem)]" : "text-[clamp(3.6rem,13cqw,8.5rem)]"
+          }`}>
+            <span className="block">Happy</span>
+            <span className="block" style={{ color: ORANGE }}>Halloween</span>
+          </h1>
+          <div className={wide ? "mt-[2vh] w-full" : "mt-[3vh] w-full"}>
+            <ColorRule />
+          </div>
+          <p className={`font-bold tracking-[0.18em] uppercase ${
+            wide ? "mt-[1.8vh] text-[clamp(1.15rem,2.6vh,2.1rem)]" : "mt-[2.4vh] text-[clamp(1rem,3cqw,1.7rem)]"
+          }`} style={{ color: GREEN }}>
+            {count.phase === "today" ? "Tonight" : "Until October 31"}
           </p>
-        ) : null}
-        <Bat className={`halloween-drift absolute ${wide ? "top-[8%] left-[8%] w-[9vw]" : "top-[6%] left-[8%] w-[18cqw]"}`} />
-        <Bat className={`halloween-drift absolute ${wide ? "top-[18%] right-[10%] w-[7vw]" : "top-[14%] right-[6%] w-[14cqw]"}`} />
-        <Pumpkin className={`absolute ${wide ? "right-[6vw] bottom-[4vh] w-[8vw]" : "right-[4cqw] bottom-[3vh] w-[16cqw]"}`} />
+          <div className={wide ? "mt-[1.6vh] w-full" : "mt-[3vh] flex min-h-0 w-full flex-1 items-center"}>
+            <Countdown count={count} wide={wide} />
+          </div>
+        </div>
+        <div className="flex w-full flex-col items-center gap-[2vh]">
+          <ColorRule />
+          {shownRolls !== null ? (
+            <p data-halloween-rolls className={`font-bold tracking-[0.08em] uppercase ${
+              wide ? "text-[clamp(1.25rem,2.8vh,2.3rem)]" : "text-[clamp(1.1rem,3.2cqw,1.8rem)]"
+            }`}>
+              <span className={`font-extrabold tabular-nums ${
+                wide ? "text-[clamp(2.6rem,6.5vh,5.5rem)]" : "text-[clamp(2.2rem,8cqw,4.5rem)]"
+              }`} style={{ color: GREEN }}>{shownRolls}</span>
+              {` rolls scanned · last ${windowDays} days`}
+            </p>
+          ) : (
+            <p className="text-[clamp(1rem,2.2vh,1.6rem)] font-bold tracking-[0.22em] uppercase" style={{ color: PINK }}>
+              35mm · 120 · 110
+            </p>
+          )}
+        </div>
         <div aria-hidden className="halloween-flicker pointer-events-none absolute inset-0" />
       </div>
       <SprocketRail along={wide ? "horizontal" : "vertical"} />

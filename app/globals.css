@@ -163,24 +163,14 @@ body {
   81% { opacity: 0.05; }
 }
 
-@keyframes halloween-drift {
-  from { transform: translate3d(0, 0, 0); }
-  to { transform: translate3d(0, -1.6vh, 0); }
-}
-
 .halloween-flicker {
   background: #fff;
   mix-blend-mode: overlay;
   animation: halloween-flicker 4.8s steps(2, end) infinite;
 }
 
-.halloween-drift {
-  animation: halloween-drift 7s ease-in-out infinite alternate;
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .halloween-flicker,
-  .halloween-drift {
+  .halloween-flicker {
     animation: none;
   }
 }
