@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  YOURS_DARK_THEME,
   DISPLAY_ONLINE_WINDOW_MS,
   DISPLAY_PRIORITY,
   displayBuildId,
@@ -396,6 +397,16 @@ describe("toPublicDisplayPayload", () => {
     ]);
     expect(ending.data).not.toHaveProperty("infoLines");
     expect(JSON.stringify(ending)).not.toMatch(/4821|example123/);
+  });
+
+  it("keeps the studio themes and lets yours-dark cover every mode", () => {
+    expect(resolve().theme).toBe("crt-green");
+    expect(resolve({ display: { ...display, mode: "film_departures" } }).theme).toBe("airport");
+    expect(resolve({ display: { ...display, mode: "film_stats" } }).theme).toBe("yours-clean");
+
+    for (const mode of ["idle", "film_stats", "film_menu", "film_departures", "studio_welcome"]) {
+      expect(resolve({ display: { ...display, mode, theme: YOURS_DARK_THEME } }).theme).toBe(YOURS_DARK_THEME);
+    }
   });
 });
 

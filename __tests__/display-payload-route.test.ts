@@ -475,6 +475,19 @@ describe("PATCH /api/displays/:slug", () => {
     expect(body.customer_email).toBeUndefined();
   });
 
+  it("stores a high-contrast theme and rejects anything else", async () => {
+    const response = await patch({ theme: "yours-dark" });
+    expect(response.status).toBe(200);
+    expect(mockUpdateDisplay).toHaveBeenCalledWith("studio-vertical", { theme: "yours-dark" });
+    const body = await response.json();
+    expect(body.chromeTheme).toBe("yours-dark");
+    expect(body.theme).toBe("yours-dark");
+
+    const rejected = await patch({ theme: "crt-green" });
+    expect(rejected.status).toBe(400);
+    expect(mockUpdateDisplay).toHaveBeenCalledTimes(1);
+  });
+
   it("stores the bookings switch and the guest lines", async () => {
     mockUpdateDisplay.mockImplementation(async (_slug: string, patch: Record<string, unknown>) => ({
       ...row,
