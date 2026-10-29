@@ -25,6 +25,23 @@ import {
 } from "@/lib/studio-info";
 
 export const DISPLAY_THEME = "yours-clean";
+/** High-contrast chrome for the front window. Portrait screens ignore it. */
+export const YOURS_DARK_THEME = "yours-dark";
+
+export const SELECTABLE_DISPLAY_THEMES = [
+  { value: DISPLAY_THEME, label: "Light" },
+  { value: YOURS_DARK_THEME, label: "High contrast" },
+] as const;
+
+export function isSelectableDisplayTheme(theme: string): boolean {
+  return SELECTABLE_DISPLAY_THEMES.some((option) => option.value === theme);
+}
+
+/** Stored chrome theme. Unknown values fall back to light so a bad row cannot blank the control. */
+export function storedDisplayTheme(theme: string | null | undefined): string {
+  const value = theme?.trim() || DISPLAY_THEME;
+  return isSelectableDisplayTheme(value) ? value : DISPLAY_THEME;
+}
 export const DEFAULT_REFRESH_SECONDS = 30;
 export const MIN_REFRESH_SECONDS = 10;
 export const MAX_REFRESH_SECONDS = 300;
@@ -324,6 +341,10 @@ function themeOf(theme: string | null | undefined): string {
 }
 
 function themeForMode(mode: string, stored: string | null | undefined): string {
+  // yours-dark is a screen chrome choice. It wins over the per-mode CRT and
+  // airport themes so a landscape poll can follow the Displays control.
+  // Portrait rendering still keys off the mode, so studio-vertical stays put.
+  if (stored?.trim() === YOURS_DARK_THEME) return YOURS_DARK_THEME;
   if (displayUsesAirportTheme(mode)) return AIRPORT_THEME;
   if (displayUsesCrtTheme(mode)) return CRT_GREEN_THEME;
   return themeOf(stored);

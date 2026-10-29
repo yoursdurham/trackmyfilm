@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
-import type { DisplayPayload } from "@/lib/display";
+import { createContext, useContext, useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import { YOURS_DARK_THEME, type DisplayPayload } from "@/lib/display";
 import {
   formatDepartureName,
   sanitizeFilmDepartures,
@@ -14,6 +14,18 @@ import { FILM_METRICS_CONFIG, labRunScheduleLabel } from "@/lib/film-metrics-con
 import { LANDSCAPE_DEPARTURE_ROWS } from "@/lib/display-layout";
 
 const PAGE_DWELL_MS = 10_000;
+const LandscapeDark = createContext(false);
+
+function useDark() {
+  return useContext(LandscapeDark);
+}
+
+function statusTone(status: string, dark: boolean) {
+  if (!dark) return "";
+  if (status === "LANDED" || status === "CHECKED IN") return "text-[#A1CC93]";
+  if (status === "FINAL CALL" || status === "DELAYED") return "text-[#DDB1B1]";
+  return "text-[#C5AED7]";
+}
 
 function studioClock(date: Date) {
   const time = new Intl.DateTimeFormat("en-US", {
@@ -95,21 +107,29 @@ function Chrome({
 }) {
   const now = useClock();
   const clock = now ? studioClock(now) : null;
+  const dark = useDark();
 
   return (
     <div
       data-display-orientation="landscape"
       data-display-chrome="tmf"
+      data-display-theme={dark ? "yours-dark" : "yours-clean"}
       data-display-mode={mode}
-      className="relative flex h-dvh w-full flex-col overflow-hidden bg-[#FFF6D3] font-jetbrains text-neutral-900 select-none"
+      className={dark
+        ? "relative flex h-dvh w-full flex-col overflow-hidden bg-[#0a0a0a] font-jetbrains font-extrabold text-[#f4f1ea] select-none"
+        : "relative flex h-dvh w-full flex-col overflow-hidden bg-[#FFF6D3] font-jetbrains text-neutral-900 select-none"}
     >
-      <header className="flex shrink-0 items-center justify-between gap-[2vw] bg-[#DDB1B1] px-[2.2vw] py-[1.4vh]">
+      <header className={dark
+        ? "flex shrink-0 items-center justify-between gap-[2vw] border-b-[0.55vh] border-[#DDB1B1] bg-[#0a0a0a] px-[2.2vw] py-[1.4vh]"
+        : "flex shrink-0 items-center justify-between gap-[2vw] bg-[#DDB1B1] px-[2.2vw] py-[1.4vh]"}>
         <div className="flex min-w-0 items-center gap-[1.2vw]">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src="/logo.png"
+            src={dark ? "/logo-on-dark.png" : "/logo.png"}
             alt="Yours Durham"
-            className="h-[8vh] w-[8vh] max-h-[120px] max-w-[120px] shrink-0 rounded-[18%] object-cover ring-1 ring-neutral-900/10"
+            className={dark
+              ? "h-[8vh] w-[8vh] max-h-[120px] max-w-[120px] shrink-0 rounded-[18%] object-cover ring-1 ring-[#f4f1ea]/30"
+              : "h-[8vh] w-[8vh] max-h-[120px] max-w-[120px] shrink-0 rounded-[18%] object-cover ring-1 ring-neutral-900/10"}
           />
           <p className="truncate text-[clamp(1.4rem,3.4vh,3.2rem)] leading-none font-bold tracking-[0.16em] uppercase">
             Yours Durham
@@ -119,12 +139,14 @@ function Chrome({
           <p className="text-[clamp(1.8rem,5vh,4.6rem)] leading-none font-bold tabular-nums">
             {clock?.time ?? "\u00a0"}
           </p>
-          <p className="mt-[0.4vh] text-[clamp(0.85rem,1.8vh,1.6rem)] leading-none">
+          <p className={`mt-[0.4vh] text-[clamp(0.85rem,1.8vh,1.6rem)] leading-none ${dark ? "font-bold" : ""}`}>
             {clock?.day ?? "\u00a0"}
           </p>
         </div>
       </header>
-      <div className="m-[1.1vh] flex min-h-0 flex-1 flex-col overflow-hidden rounded-[1.2vh] border-[0.7vh] border-[#DDB1B1] bg-[#FFF6D3] px-[1.6vw] py-[1.2vh]">
+      <div className={dark
+        ? "m-[1.1vh] flex min-h-0 flex-1 flex-col overflow-hidden rounded-[1.2vh] border-[0.7vh] border-[#DDB1B1] bg-[#0a0a0a] px-[1.6vw] py-[1.2vh]"
+        : "m-[1.1vh] flex min-h-0 flex-1 flex-col overflow-hidden rounded-[1.2vh] border-[0.7vh] border-[#DDB1B1] bg-[#FFF6D3] px-[1.6vw] py-[1.2vh]"}>
         {children}
       </div>
     </div>
@@ -144,9 +166,10 @@ function BoardColumn({
   empty: string | null;
   children: ReactNode;
 }) {
+  const dark = useDark();
   return (
     <section data-board-column={column} className="flex min-h-0 min-w-0 flex-col">
-      <div className="mb-[1vh] flex shrink-0 items-end justify-between gap-[1vw] border-b-[0.35vh] border-[#DDB1B1] pb-[0.8vh]">
+      <div className={`mb-[1vh] flex shrink-0 items-end justify-between gap-[1vw] border-b-[0.35vh] pb-[0.8vh] ${dark ? "border-[#f4f1ea]" : "border-[#DDB1B1]"}`}>
         <h2 className="text-[clamp(1.3rem,3.2vh,2.8rem)] leading-none font-bold tracking-[0.12em] uppercase">
           {title}
         </h2>
@@ -168,14 +191,15 @@ function BoardColumn({
 }
 
 function DepartureLine({ row }: { row: DepartureRow }) {
+  const dark = useDark();
   return (
-    <div className="grid h-full min-h-0 grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-[1.4vw] border-b border-[#DDB1B1]/70">
-      <span className="text-[clamp(1.1rem,2.8vh,2.4rem)] tabular-nums">{row.time}</span>
-      <span data-board-field="name" className="truncate text-[clamp(1.8rem,5.6vh,4.8rem)] leading-none font-bold tracking-[0.04em]">
+    <div className={`grid h-full min-h-0 grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-[1.4vw] border-b ${dark ? "border-[#f4f1ea]/80" : "border-[#DDB1B1]/70"}`}>
+      <span className={`text-[clamp(1.1rem,2.8vh,2.4rem)] tabular-nums ${dark ? "font-bold" : ""}`}>{row.time}</span>
+      <span data-board-field="name" className={`truncate text-[clamp(1.8rem,5.6vh,4.8rem)] leading-none tracking-[0.04em] ${dark ? "font-extrabold" : "font-bold"}`}>
         {row.name}
       </span>
-      <span className="text-right text-[clamp(1.1rem,2.8vh,2.4rem)] tabular-nums">{row.rolls}</span>
-      <span className="truncate text-right text-[clamp(0.95rem,2.3vh,2rem)] font-bold tracking-[0.08em] uppercase">
+      <span className={`text-right text-[clamp(1.1rem,2.8vh,2.4rem)] tabular-nums ${dark ? "font-bold" : ""}`}>{row.rolls}</span>
+      <span className={`truncate text-right text-[clamp(0.95rem,2.3vh,2rem)] tracking-[0.08em] uppercase ${dark ? "font-extrabold" : "font-bold"} ${statusTone(row.status, dark)}`}>
         {row.status}
       </span>
     </div>
@@ -183,14 +207,15 @@ function DepartureLine({ row }: { row: DepartureRow }) {
 }
 
 function ArrivalLine({ row }: { row: ArrivalRow }) {
+  const dark = useDark();
   return (
-    <div className="grid h-full min-h-0 grid-cols-[minmax(0,1fr)_auto_auto_auto] items-center gap-[1.4vw] border-b border-[#DDB1B1]/70">
-      <span data-board-field="name" className="truncate text-[clamp(1.8rem,5.6vh,4.8rem)] leading-none font-bold tracking-[0.04em]">
+    <div className={`grid h-full min-h-0 grid-cols-[minmax(0,1fr)_auto_auto_auto] items-center gap-[1.4vw] border-b ${dark ? "border-[#f4f1ea]/80" : "border-[#DDB1B1]/70"}`}>
+      <span data-board-field="name" className={`truncate text-[clamp(1.8rem,5.6vh,4.8rem)] leading-none tracking-[0.04em] ${dark ? "font-extrabold" : "font-bold"}`}>
         {row.name}
       </span>
-      <span className="text-right text-[clamp(1.1rem,2.8vh,2.4rem)] tabular-nums">{row.rolls}</span>
-      <span className="text-right text-[clamp(1.05rem,2.5vh,2.1rem)] tabular-nums">{row.expected}</span>
-      <span className="truncate text-right text-[clamp(0.95rem,2.3vh,2rem)] font-bold tracking-[0.08em] uppercase">
+      <span className={`text-right text-[clamp(1.1rem,2.8vh,2.4rem)] tabular-nums ${dark ? "font-bold" : ""}`}>{row.rolls}</span>
+      <span className={`text-right text-[clamp(1.05rem,2.5vh,2.1rem)] tabular-nums ${dark ? "font-bold" : ""}`}>{row.expected}</span>
+      <span className={`truncate text-right text-[clamp(0.95rem,2.3vh,2rem)] tracking-[0.08em] uppercase ${dark ? "font-extrabold" : "font-bold"} ${statusTone(row.status, dark)}`}>
         {row.status}
       </span>
     </div>
@@ -198,6 +223,7 @@ function ArrivalLine({ row }: { row: ArrivalRow }) {
 }
 
 function DeparturesBody({ board }: { board: FilmDepartures }) {
+  const dark = useDark();
   const departures = usePage(board.departures.length);
   const arrivals = usePage(board.arrivals.length);
   const departureStart = departures.page * LANDSCAPE_DEPARTURE_ROWS;
@@ -246,11 +272,11 @@ function DeparturesBody({ board }: { board: FilmDepartures }) {
           </div>
         </BoardColumn>
       </div>
-      <footer data-board-footer className="mt-[1vh] grid shrink-0 grid-cols-4 gap-[1vw] border-t-[0.35vh] border-[#DDB1B1] pt-[1vh] text-[clamp(0.85rem,2vh,1.6rem)] font-bold tracking-[0.04em] uppercase">
+      <footer data-board-footer className={`mt-[1vh] grid shrink-0 grid-cols-4 gap-[1vw] border-t-[0.35vh] pt-[1vh] text-[clamp(0.85rem,2vh,1.6rem)] font-bold tracking-[0.04em] uppercase ${dark ? "border-[#f4f1ea]" : "border-[#DDB1B1]"}`}>
         <span>{peopleLabel(board.people, "Person", "People")}</span>
         <span className="text-center">{`${peopleLabel(board.studioRolls, "Roll", "Rolls")} at studio`}</span>
         <span className="text-center">{`${peopleLabel(board.labRolls, "Roll", "Rolls")} at lab`}</span>
-        <span className="text-right">{peopleLabel(board.landedRolls, "Landed today", "Landed today")}</span>
+        <span className={`text-right ${dark ? "text-[#A1CC93]" : ""}`}>{peopleLabel(board.landedRolls, "Landed today", "Landed today")}</span>
       </footer>
     </div>
   );
@@ -265,8 +291,9 @@ function StatCard({
   children: ReactNode;
   note?: string;
 }) {
+  const dark = useDark();
   return (
-    <section className="flex min-h-0 min-w-0 flex-col rounded-[1vh] border-[0.35vh] border-[#DDB1B1] px-[1vw] py-[1.4vh]">
+    <section className={`flex min-h-0 min-w-0 flex-col rounded-[1vh] border-[0.35vh] px-[1vw] py-[1.4vh] ${dark ? "border-[#f4f1ea]" : "border-[#DDB1B1]"}`}>
       <h2 className="text-[clamp(0.8rem,1.8vh,1.5rem)] font-bold tracking-[0.16em] uppercase">{label}</h2>
       <div className="mt-[1.6vh] min-w-0">{children}</div>
       {note ? (
@@ -277,8 +304,9 @@ function StatCard({
 }
 
 function Figure({ value, paired = false }: { value: string; paired?: boolean }) {
+  const dark = useDark();
   return (
-    <p className={`leading-none font-bold tabular-nums ${
+    <p className={`leading-none tabular-nums ${dark ? "font-extrabold" : "font-bold"} ${
       paired
         ? "text-[clamp(1.7rem,4.4vh,3.8rem)]"
         : "text-[clamp(2.8rem,8vh,7.5rem)]"
@@ -289,6 +317,7 @@ function Figure({ value, paired = false }: { value: string; paired?: boolean }) 
 }
 
 function StatsBody({ data }: { data: Record<string, unknown> }) {
+  const dark = useDark();
   const windowDays = FILM_METRICS_CONFIG.turnaroundWindowDays;
   const schedule = labRunScheduleLabel();
   return (
@@ -335,7 +364,7 @@ function StatsBody({ data }: { data: Record<string, unknown> }) {
         </div>
       </StatCard>
       <StatCard label="Next lab run" note={schedule || undefined}>
-        <p data-stat="next-lab-run" className="text-[clamp(1.5rem,3.2vh,2.8rem)] leading-tight font-bold">
+        <p data-stat="next-lab-run" className={`text-[clamp(1.5rem,3.2vh,2.8rem)] leading-tight ${dark ? "font-extrabold" : "font-bold"}`}>
           {typeof data.nextLabRun === "string" && data.nextLabRun.trim() ? data.nextLabRun : "—"}
         </p>
       </StatCard>
@@ -352,6 +381,7 @@ function scrollSeconds(menu: FilmMenu) {
 }
 
 function MenuCopy({ menu, hidden = false }: { menu: FilmMenu; hidden?: boolean }) {
+  const dark = useDark();
   const midpoint = Math.ceil(menu.sections.length / 2);
   const columns = [menu.sections.slice(0, midpoint), menu.sections.slice(midpoint)];
   return (
@@ -370,7 +400,7 @@ function MenuCopy({ menu, hidden = false }: { menu: FilmMenu; hidden?: boolean }
           <div key={column}>
             {sections.map((section) => (
               <section key={section.title} className="mt-[2vh]">
-                <h2 className="border-b-[0.3vh] border-[#DDB1B1] pb-[0.6vh] text-[clamp(1.2rem,2.8vh,2.4rem)] font-bold tracking-[0.1em] uppercase">
+                <h2 className={`border-b-[0.3vh] pb-[0.6vh] text-[clamp(1.2rem,2.8vh,2.4rem)] font-bold tracking-[0.1em] uppercase ${dark ? "border-[#C5AED7]" : "border-[#DDB1B1]"}`}>
                   {section.title}
                 </h2>
                 <ul className="mt-[0.8vh]">
@@ -380,7 +410,7 @@ function MenuCopy({ menu, hidden = false }: { menu: FilmMenu; hidden?: boolean }
                       className="flex items-baseline justify-between gap-[1vw] py-[0.35vh] text-[clamp(1rem,2.5vh,2.1rem)] leading-tight"
                     >
                       <span className="min-w-0">{item.name}</span>
-                      <span className="shrink-0 font-bold tabular-nums">{item.price}</span>
+                      <span className={`shrink-0 tabular-nums ${dark ? "font-extrabold text-[#A1CC93]" : "font-bold"}`}>{item.price}</span>
                     </li>
                   ))}
                 </ul>
@@ -468,19 +498,20 @@ function StudioBody({ mode, data }: { mode: string; data: Record<string, unknown
 }
 
 function IdleBody({ notice, message }: { notice: string | null; message: string | null }) {
+  const dark = useDark();
   return (
     <div data-idle-layout="landscape" className="flex min-h-0 flex-1 flex-col items-center justify-center text-center">
       {notice ? (
-        <p className="max-w-[22ch] text-[clamp(2rem,6vh,5rem)] leading-tight font-bold">{notice}</p>
+        <p className={`max-w-[22ch] text-[clamp(2rem,6vh,5rem)] leading-tight ${dark ? "font-extrabold" : "font-bold"}`}>{notice}</p>
       ) : message ? (
-        <p className="max-w-[24ch] text-[clamp(2rem,6.5vh,6rem)] leading-[1.05] font-bold whitespace-pre-wrap break-words">
+        <p className={`max-w-[24ch] text-[clamp(2rem,6.5vh,6rem)] leading-[1.05] whitespace-pre-wrap break-words ${dark ? "font-extrabold" : "font-bold"}`}>
           {message}
         </p>
       ) : (
         <>
           <p className="text-[clamp(1.1rem,2.6vh,2.2rem)] font-bold tracking-[0.28em] uppercase">The studio</p>
           <h1 className="mt-[1vh] text-[clamp(4rem,14vh,12rem)] leading-none font-bold tracking-[0.04em]">Welcome</h1>
-          <p className="mt-[2vh] text-[clamp(1.4rem,3.4vh,3rem)]">Make yourself at home.</p>
+          <p className={`mt-[2vh] text-[clamp(1.4rem,3.4vh,3rem)] ${dark ? "font-extrabold" : ""}`}>Make yourself at home.</p>
           <p className="mt-[3vh] text-[clamp(1rem,2.4vh,2rem)] font-bold tracking-[0.22em] uppercase">35mm · 120 · 110</p>
         </>
       )}
@@ -532,5 +563,10 @@ export default function LandscapeScreen({
   else if (studio) body = <StudioBody mode={payload.mode} data={payload.data} />;
   else body = <IdleBody notice={notice ?? null} message={message} />;
 
-  return <Chrome mode={mode}>{body}</Chrome>;
+  const dark = payload.theme === YOURS_DARK_THEME;
+  return (
+    <LandscapeDark.Provider value={dark}>
+      <Chrome mode={mode}>{body}</Chrome>
+    </LandscapeDark.Provider>
+  );
 }

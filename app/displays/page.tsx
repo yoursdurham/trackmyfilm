@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import FilmMenuEditor from "@/components/displays/FilmMenuEditor";
 import StudioLinesEditor from "@/components/displays/StudioLinesEditor";
-import { SELECTABLE_DEFAULT_MODES } from "@/lib/display";
+import { SELECTABLE_DEFAULT_MODES, SELECTABLE_DISPLAY_THEMES } from "@/lib/display";
 import { adminPreviewFrame } from "@/lib/display-layout";
 import type { AdminDisplay, DisplaysAdminResponse } from "@/lib/display-admin";
 import type { StudioCalendarStatus } from "@/lib/studio-calendar-config";
@@ -194,6 +194,25 @@ export default function DisplaysPage() {
                         </select>
                         <span className="mt-1 block text-xs text-slate-400">
                           Used when nothing is booked and the custom message is cleared.
+                        </span>
+                      </label>
+
+                      <label className="mt-4 block text-sm text-slate-600">
+                        Theme
+                        <select
+                          aria-label={`Theme for ${display.name}`}
+                          value={display.chromeTheme}
+                          onChange={(event) => {
+                            save.mutate({ slug: display.slug, body: { theme: event.target.value } });
+                          }}
+                          className="mt-1 h-9 w-full rounded-lg border border-stone-200 bg-white px-3 text-sm text-slate-800 outline-none focus-visible:border-amber-500 focus-visible:ring-2 focus-visible:ring-amber-500/20"
+                        >
+                          {SELECTABLE_DISPLAY_THEMES.map((option) => (
+                            <option key={option.value} value={option.value}>{option.label}</option>
+                          ))}
+                        </select>
+                        <span className="mt-1 block text-xs text-slate-400">
+                          High contrast is for the front window. The studio screen keeps its current look.
                         </span>
                       </label>
 

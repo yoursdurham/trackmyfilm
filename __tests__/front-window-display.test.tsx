@@ -9,6 +9,7 @@ import { adminPreviewFrame, departuresLayout, departureRowsPerPage } from "../li
 import type { FilmDepartures } from "../lib/film-departures";
 
 const migration = readFileSync("supabase/migrations/023_front_window_display.sql", "utf8");
+const darkMigration = readFileSync("supabase/migrations/027_front_window_dark_theme.sql", "utf8");
 
 function departure(index: number) {
   return {
@@ -53,6 +54,14 @@ describe("front window migration", () => {
     expect(migration).toMatch(/true/);
     expect(migration).toMatch(/on conflict \(slug\) do nothing/i);
     expect(migration).not.toMatch(/on conflict \(slug\) do update/i);
+  });
+
+  it("sets only the front window to the dark theme, and a second run is a no-op", () => {
+    expect(darkMigration).toMatch(/update displays/i);
+    expect(darkMigration).toMatch(/theme = 'yours-dark'/);
+    expect(darkMigration).toMatch(/slug = 'front-window'/);
+    expect(darkMigration).toMatch(/theme is distinct from 'yours-dark'/);
+    expect(darkMigration).not.toMatch(/slug = 'studio-vertical'/);
   });
 });
 
@@ -102,6 +111,8 @@ describe("landscape display rendering", () => {
     expect(studio).toContain("Departures → Lab");
     expect(studio).not.toContain("data-display-chrome=\"tmf\"");
     expect(studio).not.toContain("data-departures-layout=\"side-by-side\"");
+    expect(studio).not.toContain("#0a0a0a");
+    expect(studio).not.toContain("yours-dark");
   });
 
   it("keeps the studio stats inset and the portrait stats stack", () => {
@@ -221,5 +232,49 @@ describe("landscape display rendering", () => {
     expect(portrait).toContain(">Avery<");
     expect(portrait).not.toContain("AVERY S.");
     expect(portrait).not.toContain("data-display-chrome=\"tmf\"");
+    expect(portrait).not.toContain("#0a0a0a");
+  });
+
+  it("uses the high-contrast theme on every landscape mode without touching the light theme", () => {
+    const darkIdle = renderToStaticMarkup(
+      <DisplayPlayer
+        slug="front-window"
+        orientation="landscape"
+        initial={payload("idle", {}, "yours-dark")}
+        loadedBuildId="dev"
+        preview
+      />,
+    );
+    expect(darkIdle).toContain("data-display-theme=\"yours-dark\"");
+    expect(darkIdle).toContain("bg-[#0a0a0a]");
+    expect(darkIdle).toContain("text-[#f4f1ea]");
+    expect(darkIdle).toContain("src=\"/logo-on-dark.png\"");
+    expect(darkIdle).toContain("font-extrabold");
+    expect(darkIdle).not.toContain("bg-[#FFF6D3]");
+
+    const lightIdle = renderToStaticMarkup(
+      <DisplayPlayer slug="front-window" orientation="landscape" initial={payload("idle")} loadedBuildId="dev" preview />,
+    );
+    expect(lightIdle).toContain("data-display-theme=\"yours-clean\"");
+    expect(lightIdle).toContain("bg-[#FFF6D3]");
+    expect(lightIdle).toContain("src=\"/logo.png\"");
+    expect(lightIdle).not.toContain("src=\"/logo-on-dark.png\"");
+
+    for (const mode of ["film_stats", "film_menu", "film_departures", "studio_welcome", "custom_message"] as const) {
+      const data = mode === "custom_message"
+        ? { message: "Scans are ready" }
+        : mode === "studio_welcome"
+          ? { firstName: "Avery Sample", sessionType: "1 Hour Session", start: "2:00 PM" }
+          : mode === "film_departures"
+            ? { departures: board(2) }
+            : mode === "film_menu"
+              ? { menu: { title: "Menu", subtitle: "", banner: [], sections: [{ title: "35mm", items: [{ name: "Gold", price: "$12" }] }], notes: [] } }
+              : { rollsProcessing: 4 };
+      const html = renderToStaticMarkup(
+        <DisplayPlayer slug="front-window" orientation="landscape" initial={payload(mode, data, "yours-dark")} loadedBuildId="dev" preview />,
+      );
+      expect(html).toContain("data-display-theme=\"yours-dark\"");
+      expect(html).toContain("bg-[#0a0a0a]");
+    }
   });
 });

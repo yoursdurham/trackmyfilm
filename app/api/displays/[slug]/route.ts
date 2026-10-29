@@ -5,6 +5,7 @@ import { publicPayloadWithFilm } from "@/lib/display-screen";
 import {
   isDisplaySlug,
   isSelectableDefaultMode,
+  isSelectableDisplayTheme,
   sanitizeCustomMessage,
 } from "@/lib/display";
 import { toAdminDisplay } from "@/lib/display-admin";
@@ -64,6 +65,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ slug: 
 
   const patch: {
     mode?: string;
+    theme?: string;
     override_mode?: string | null;
     override_payload?: { message: string } | null;
     show_studio_bookings?: boolean;
@@ -76,6 +78,13 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ slug: 
       return json({ error: "That default mode is not available." }, 400);
     }
     patch.mode = record.mode;
+  }
+
+  if ("theme" in record) {
+    if (typeof record.theme !== "string" || !isSelectableDisplayTheme(record.theme)) {
+      return json({ error: "That theme is not available." }, 400);
+    }
+    patch.theme = record.theme;
   }
 
   if ("showStudioBookings" in record) {

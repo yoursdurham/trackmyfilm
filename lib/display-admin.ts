@@ -1,6 +1,7 @@
 import {
   isDisplayOnline,
   publicPayloadForDisplay,
+  storedDisplayTheme,
   sanitizeCustomMessage,
   type DisplayResolveInput,
   type DisplayRow,
@@ -14,7 +15,10 @@ export interface AdminDisplay {
   location: string | null;
   orientation: string;
   resolution: string | null;
+  /** Resolved payload theme (crt-green, airport, or a chrome theme). */
   theme: string;
+  /** Theme stored on the row. Light or high contrast. */
+  chromeTheme: string;
   defaultMode: string;
   resolvedMode: string;
   isEnabled: boolean;
@@ -53,6 +57,7 @@ export function toAdminDisplay(
     orientation: row.orientation,
     resolution: row.resolution,
     theme: payload.theme,
+    chromeTheme: storedDisplayTheme(row.theme),
     defaultMode: row.mode,
     resolvedMode: payload.mode,
     isEnabled: row.is_enabled,
