@@ -18,6 +18,7 @@ import { nextRetailBoundary, resolveOpenSignMode, shouldShowOpenSign } from "@/l
 import AirportBoard from "@/components/display/AirportBoard";
 import CrtGreenScreen from "@/components/display/CrtGreenScreen";
 import LandscapeScreen from "@/components/display/LandscapeScreen";
+import OpenSignBoundary from "@/components/display/OpenSignBoundary";
 import OpenSignScreen from "@/components/display/OpenSignScreen";
 import YoursCleanScreen from "@/components/display/YoursCleanScreen";
 
@@ -140,15 +141,20 @@ export default function DisplayPlayer({
   useEffect(() => {
     let timer = 0;
     const arm = () => {
-      const now = new Date();
-      setShopNow(now);
-      const marks = [nextRetailBoundary(now).getTime()];
-      if (openSignUntilRef.current) {
-        const until = new Date(openSignUntilRef.current).getTime();
-        if (Number.isFinite(until)) marks.push(until);
+      try {
+        const now = new Date();
+        setShopNow(now);
+        const marks = [nextRetailBoundary(now).getTime()];
+        if (openSignUntilRef.current) {
+          const until = new Date(openSignUntilRef.current).getTime();
+          if (Number.isFinite(until)) marks.push(until);
+        }
+        const wait = Math.min(Math.max(250, Math.min(...marks) - now.getTime() + 50), 60_000);
+        timer = window.setTimeout(arm, wait);
+      } catch (error) {
+        console.error("[display-clock]", error);
+        timer = window.setTimeout(arm, 60_000);
       }
-      const wait = Math.min(Math.max(250, Math.min(...marks) - now.getTime() + 50), 60_000);
-      timer = window.setTimeout(arm, wait);
     };
     arm();
     return () => window.clearTimeout(timer);
@@ -169,20 +175,21 @@ export default function DisplayPlayer({
   });
   const inset = displaySafeArea(slug, screen.mode).left;
 
-  let board;
-  if (coverWithOpenSign) {
-    board = <OpenSignScreen stats={screen.openSignStats} />;
-  } else if (orientation === "landscape") {
-    board = <LandscapeScreen payload={screen} notice={notice} />;
+  let normal;
+  if (orientation === "landscape") {
+    normal = <LandscapeScreen payload={screen} notice={notice} />;
   } else if (displayUsesAirportTheme(screen.mode) || screen.theme === AIRPORT_THEME) {
-    board = <AirportBoard payload={screen} notice={notice} />;
+    normal = <AirportBoard payload={screen} notice={notice} />;
   } else if (screen.mode === "film_stats" || screen.mode === "film_status") {
-    board = <YoursCleanScreen payload={screen} notice={notice} />;
+    normal = <YoursCleanScreen payload={screen} notice={notice} />;
   } else if (displayUsesCrtTheme(screen.mode) || screen.theme === "crt-green") {
-    board = <CrtGreenScreen payload={screen} notice={notice} />;
+    normal = <CrtGreenScreen payload={screen} notice={notice} />;
   } else {
-    board = <YoursCleanScreen payload={screen} notice={notice} />;
+    normal = <YoursCleanScreen payload={screen} notice={notice} />;
   }
+  const board = coverWithOpenSign
+    ? <OpenSignBoundary fallback={normal}><OpenSignScreen stats={screen.openSignStats} /></OpenSignBoundary>
+    : normal;
 
   return (
     <div

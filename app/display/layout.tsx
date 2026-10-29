@@ -13,7 +13,7 @@ export const viewport: Viewport = {
 
 export default function DisplayLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="display-kiosk fixed inset-0 overflow-hidden bg-[var(--bg-main)] [&_*]:cursor-none">
+    <div className="display-kiosk fixed inset-0 overflow-hidden bg-black [&_*]:cursor-none">
       {children}
     </div>
   );

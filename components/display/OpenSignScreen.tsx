@@ -158,6 +158,6 @@ function daysLabel(value: number | null | undefined): string {
   return "—";
 }
 
-function labRunLabel(value: string | null | undefined): string {
-  return value?.trim() ? value : "—";
+function labRunLabel(value: unknown): string {
+  return typeof value === "string" && value.trim() ? value : "—";
 }
