@@ -155,7 +155,7 @@ export default function DisplayPlayer({
 
   let board;
   if (coverWithOpenSign) {
-    board = <OpenSignScreen />;
+    board = <OpenSignScreen stats={screen.openSignStats} />;
   } else if (orientation === "landscape") {
     board = <LandscapeScreen payload={screen} notice={notice} />;
   } else if (displayUsesAirportTheme(screen.mode) || screen.theme === AIRPORT_THEME) {

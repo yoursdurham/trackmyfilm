@@ -156,6 +156,65 @@ describe("GET /api/displays/:slug", () => {
     expect(mockGetCachedFilmMenu).not.toHaveBeenCalled();
   });
 
+  it("attaches film stats to the front-window Open sign and drops customer fields", async () => {
+    mockGetDisplayBySlug.mockResolvedValue({
+      ...row,
+      slug: "front-window",
+      orientation: "landscape",
+      mode: "idle",
+      theme: "yours-dark",
+      show_open_sign: true,
+      override_mode: null,
+      override_payload: null,
+    });
+    mockGetCachedFilmMetrics.mockResolvedValue({
+      rollsProcessing: 14,
+      receivedToday: 4,
+      receivedThisWeek: 19,
+      scansSentToday: 6,
+      scansSentThisWeek: 22,
+      averageColorTurnaroundDays: 4.2,
+      averageBwTurnaroundDays: 5.6,
+      nextLabRun: "Friday 12:00 PM",
+      customer_email: "secret@example.com",
+      customer_name: "Ada Lovelace",
+    });
+
+    const response = await get("front-window");
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.mode).toBe("idle");
+    expect(body.showOpenSign).toBe(true);
+    expect(body.data).toEqual({});
+    expect(body.openSignStats).toEqual({
+      rollsProcessing: 14,
+      receivedToday: 4,
+      receivedThisWeek: 19,
+      scansSentToday: 6,
+      scansSentThisWeek: 22,
+      averageColorTurnaroundDays: 4.2,
+      averageBwTurnaroundDays: 5.6,
+      nextLabRun: "Friday 12:00 PM",
+    });
+    expect(JSON.stringify(body)).not.toMatch(/secret@|Ada Lovelace/);
+    expect(mockGetCachedFilmMetrics).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not load film stats for the Open sign on any other screen", async () => {
+    mockGetDisplayBySlug.mockResolvedValue({
+      ...row,
+      show_open_sign: true,
+      override_mode: null,
+      override_payload: null,
+    });
+    const response = await get("studio-vertical");
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body).not.toHaveProperty("showOpenSign");
+    expect(body).not.toHaveProperty("openSignStats");
+    expect(mockGetCachedFilmMetrics).not.toHaveBeenCalled();
+  });
+
   it("returns only the film menu when that mode is selected", async () => {
     mockGetDisplayBySlug.mockResolvedValue({
       ...row,

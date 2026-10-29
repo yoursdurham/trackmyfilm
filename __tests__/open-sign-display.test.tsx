@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import DisplayPlayer from "../components/display/DisplayPlayer";
 import OpenSignScreen from "../components/display/OpenSignScreen";
 import { isSelectableDefaultMode, publicPayloadForDisplay } from "../lib/display";
+import { displayNeedsOpenSignStats } from "../lib/display-screen";
 import { FRONT_WINDOW_SLUG, isShopOpen, nextRetailBoundary, RETAIL_HOURS_LABEL, shouldShowOpenSign } from "../lib/shop-hours";
 import type { DisplayPayload } from "../lib/display";
 
@@ -76,9 +77,33 @@ describe("open sign schedule", () => {
       override_mode: null,
       override_payload: null,
       show_open_sign: true,
+    }, {
+      film: {
+        rollsProcessing: 12,
+        receivedToday: 3,
+        receivedThisWeek: 9,
+        scansSentToday: 2,
+        scansSentThisWeek: 7,
+        averageColorTurnaroundDays: 4.5,
+        averageBwTurnaroundDays: null,
+        nextLabRun: "Friday 12:00 PM",
+        customer_email: "guest@example.com",
+        customer_name: "Ada Lovelace",
+      },
     });
     expect(on.mode).toBe("film_stats");
     expect(on.showOpenSign).toBe(true);
+    expect(on.openSignStats).toEqual({
+      rollsProcessing: 12,
+      receivedToday: 3,
+      receivedThisWeek: 9,
+      scansSentToday: 2,
+      scansSentThisWeek: 7,
+      averageColorTurnaroundDays: 4.5,
+      averageBwTurnaroundDays: null,
+      nextLabRun: "Friday 12:00 PM",
+    });
+    expect(JSON.stringify(on)).not.toMatch(/guest@|Ada Lovelace/);
 
     const studio = publicPayloadForDisplay({
       slug: "studio-vertical",
@@ -91,6 +116,7 @@ describe("open sign schedule", () => {
     });
     expect(studio.mode).toBe("idle");
     expect(studio).not.toHaveProperty("showOpenSign");
+    expect(studio).not.toHaveProperty("openSignStats");
 
     const off = publicPayloadForDisplay({
       slug: FRONT_WINDOW_SLUG,
@@ -102,6 +128,23 @@ describe("open sign schedule", () => {
       show_open_sign: false,
     });
     expect(off).not.toHaveProperty("showOpenSign");
+    expect(off).not.toHaveProperty("openSignStats");
+  });
+
+  it("loads film stats for the front window only while the sign can show", () => {
+    const front = {
+      slug: FRONT_WINDOW_SLUG,
+      mode: "idle",
+      theme: "yours-dark",
+      is_enabled: true,
+      show_open_sign: true,
+      override_mode: null,
+      override_payload: null,
+    };
+    expect(displayNeedsOpenSignStats(front)).toBe(true);
+    expect(displayNeedsOpenSignStats({ ...front, override_mode: "custom_message" })).toBe(false);
+    expect(displayNeedsOpenSignStats({ ...front, show_open_sign: false })).toBe(false);
+    expect(displayNeedsOpenSignStats({ ...front, slug: "studio-vertical" })).toBe(false);
   });
 
   it("puts the staff switch only on the front window card", () => {
@@ -130,6 +173,16 @@ const idle: DisplayPayload = {
   buildId: "dev",
   data: {},
   showOpenSign: true,
+  openSignStats: {
+    rollsProcessing: 12,
+    receivedToday: 3,
+    receivedThisWeek: 9,
+    scansSentToday: 2,
+    scansSentThisWeek: 7,
+    averageColorTurnaroundDays: 4.5,
+    averageBwTurnaroundDays: null,
+    nextLabRun: "Friday 12:00 PM",
+  },
 };
 
 describe("open sign rendering", () => {
@@ -137,15 +190,36 @@ describe("open sign rendering", () => {
     vi.useRealTimers();
   });
 
-  it("is only the lit OPEN word, with the published hours", () => {
-    const html = renderToStaticMarkup(<OpenSignScreen />);
+  it("puts hours beside OPEN and the film-stats strip along the bottom", () => {
+    const html = renderToStaticMarkup(
+      <OpenSignScreen
+        stats={{
+          rollsProcessing: 12,
+          receivedToday: 3,
+          receivedThisWeek: 9,
+          scansSentToday: 2,
+          scansSentThisWeek: 7,
+          averageColorTurnaroundDays: 4.5,
+          averageBwTurnaroundDays: null,
+          nextLabRun: "Friday 12:00 PM",
+        }}
+      />,
+    );
     expect(html).toContain(">OPEN<");
     expect(html).not.toContain("CLOSED");
+    expect(html).toContain("data-open-sign-hours");
     expect(html).toContain("Thursdays 5-7PM");
     expect(html).toContain("Saturdays 11-2PM");
-    expect(html).toContain("open-sign-word");
+    expect(html).toContain("data-open-sign-stats");
+    expect(html).toContain("data-stat=\"rolls-processing\"");
+    expect(html).toContain("data-stat=\"turnaround\"");
+    expect(html).toContain(">12<");
+    expect(html).toContain(">4.5<");
+    expect(html).toContain("Friday 12:00 PM");
+    expect(html).toContain("Last 30 days");
     expect(html).not.toContain("is-closed");
-    expect(html).not.toContain("orientation");
+    expect(html.indexOf("data-open-sign-word")).toBeLessThan(html.indexOf("data-open-sign-hours"));
+    expect(html.indexOf("data-open-sign-hours")).toBeLessThan(html.indexOf("data-open-sign-stats"));
   });
 
   it("covers the front window during open hours and never the studio screen", () => {
@@ -157,6 +231,8 @@ describe("open sign rendering", () => {
     );
     expect(front).toContain("data-display-mode=\"open_sign\"");
     expect(front).toContain(">OPEN<");
+    expect(front).toContain("data-open-sign-stats");
+    expect(front).toContain("data-stat=\"scans-sent\"");
     expect(front).toContain("data-display-safe-inset=\"0\"");
     expect(front).not.toContain("data-display-deadzone");
 
@@ -164,6 +240,7 @@ describe("open sign rendering", () => {
       <DisplayPlayer slug="studio-vertical" orientation="portrait" initial={idle} loadedBuildId="dev" preview />,
     );
     expect(studio).not.toContain("data-display-mode=\"open_sign\"");
+    expect(studio).not.toContain("data-open-sign-stats");
     expect(studio).not.toContain(">OPEN<");
     expect(studio).toContain("data-display-safe-inset=\"222\"");
     expect(studio).toContain("data-display-deadzone");
