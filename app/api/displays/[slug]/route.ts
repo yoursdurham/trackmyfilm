@@ -69,6 +69,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ slug: 
     override_mode?: string | null;
     override_payload?: { message: string } | null;
     show_studio_bookings?: boolean;
+    show_open_sign?: boolean;
     studio_info_lines?: string[];
     studio_checkout_lines?: string[];
   } = {};
@@ -92,6 +93,13 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ slug: 
       return json({ error: "Show studio bookings must be on or off." }, 400);
     }
     patch.show_studio_bookings = record.showStudioBookings;
+  }
+
+  if ("showOpenSign" in record) {
+    if (typeof record.showOpenSign !== "boolean") {
+      return json({ error: "Show Open sign must be on or off." }, 400);
+    }
+    patch.show_open_sign = record.showOpenSign;
   }
 
   if ("studioInfoLines" in record) {

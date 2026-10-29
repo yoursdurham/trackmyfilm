@@ -27,6 +27,7 @@ export interface AdminDisplay {
   overrideMessage: string | null;
   refreshSeconds: number;
   showStudioBookings: boolean;
+  showOpenSign: boolean;
   studioInfoLines: string[];
   studioCheckoutLines: string[];
 }
@@ -66,6 +67,7 @@ export function toAdminDisplay(
     overrideMessage,
     refreshSeconds: payload.refreshSeconds,
     showStudioBookings: row.show_studio_bookings !== false,
+    showOpenSign: row.show_open_sign === true,
     studioInfoLines: studioInfoLinesFromRow(row.studio_info_lines),
     studioCheckoutLines: studioCheckoutLinesFromRow(row.studio_checkout_lines),
   };

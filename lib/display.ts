@@ -112,7 +112,6 @@ export const SELECTABLE_DEFAULT_MODES = [
   { value: "film_stats", label: "Film stats" },
   { value: "film_menu", label: "Film menu" },
   { value: "film_departures", label: "Airport board" },
-  { value: "open_sign", label: "Open sign" },
 ] as const;
 
 export type DisplayOrientation = "portrait" | "landscape";
@@ -133,6 +132,8 @@ export interface DisplayRow {
   override_mode: string | null;
   override_payload: unknown;
   show_studio_bookings?: boolean | null;
+  /** When true, the neon Open sign covers this screen during retail hours. */
+  show_open_sign?: boolean | null;
   /** Ordered guest notes. Null means the column is missing and the seed copy is used. */
   studio_info_lines?: unknown;
   studio_checkout_lines?: unknown;
@@ -184,7 +185,7 @@ export interface PlaylistInput {
 }
 
 export interface DisplayResolveInput {
-  display: Pick<DisplayRow, "mode" | "theme" | "is_enabled" | "override_mode" | "override_payload"> & {
+  display: Pick<DisplayRow, "mode" | "theme" | "is_enabled" | "override_mode" | "override_payload" | "show_open_sign"> & {
     refresh_seconds?: number | null;
     show_studio_bookings?: boolean | null;
     studio_info_lines?: unknown;
@@ -207,6 +208,8 @@ export interface DisplayPayload {
   /** Deployment that produced this payload. The player reloads when it changes. */
   buildId: string;
   data: Record<string, unknown>;
+  /** Present only when this screen should cover itself with the Open sign during retail hours. */
+  showOpenSign?: boolean;
 }
 
 export interface ResolvedDisplay extends DisplayPayload {
@@ -252,7 +255,6 @@ const DATA_KEYS_BY_MODE: Record<string, readonly string[]> = {
   film_status: FILM_STATUS_DATA_KEYS,
   film_menu: FILM_MENU_DATA_KEYS,
   film_departures: FILM_DEPARTURES_DATA_KEYS,
-  open_sign: [],
 };
 
 export function isDisplaySlug(slug: string): boolean {
@@ -542,6 +544,7 @@ export function resolveDisplayState(input: DisplayResolveInput): ResolvedDisplay
     buildId: displayBuildId(),
     data: winner.data,
     priority: winner.priority,
+    ...(input.display.show_open_sign === true ? { showOpenSign: true } : {}),
   };
 }
 
@@ -552,6 +555,7 @@ export function toPublicDisplayPayload(resolved: {
   refreshSeconds?: unknown;
   buildId?: unknown;
   data?: unknown;
+  showOpenSign?: unknown;
 }): DisplayPayload {
   const mode = typeof resolved.mode === "string" && resolved.mode.trim() ? resolved.mode.trim() : "idle";
   const allowed = DATA_KEYS_BY_MODE[mode] ?? [];
@@ -597,6 +601,7 @@ export function toPublicDisplayPayload(resolved: {
     ),
     buildId: payloadBuildId(resolved.buildId),
     data,
+    ...(resolved.showOpenSign === true ? { showOpenSign: true } : {}),
   };
 }
 
@@ -632,6 +637,7 @@ export function isDisplayPayload(value: unknown): value is DisplayPayload {
   if (!value || typeof value !== "object") return false;
   const record = value as Record<string, unknown>;
   if ("buildId" in record && typeof record.buildId !== "string") return false;
+  if ("showOpenSign" in record && typeof record.showOpenSign !== "boolean") return false;
   return typeof record.mode === "string"
     && typeof record.theme === "string"
     && typeof record.refreshSeconds === "number"

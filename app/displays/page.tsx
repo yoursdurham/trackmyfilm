@@ -25,7 +25,6 @@ function modeLabel(mode: string) {
   if (mode === "film_stats") return "Film stats";
   if (mode === "film_menu") return "Film menu";
   if (mode === "film_departures") return "Airport board";
-  if (mode === "open_sign") return "Open sign";
   return mode;
 }
 
@@ -214,6 +213,24 @@ export default function DisplaysPage() {
                         </select>
                         <span className="mt-1 block text-xs text-slate-400">
                           High contrast is for the front window. The studio screen keeps its current look.
+                        </span>
+                      </label>
+
+                      <label className="mt-4 flex items-start gap-2 text-sm text-slate-600">
+                        <input
+                          type="checkbox"
+                          aria-label={`Show Open sign during open hours for ${display.name}`}
+                          className="mt-0.5 h-4 w-4 accent-amber-600"
+                          checked={display.showOpenSign}
+                          onChange={(event) => {
+                            save.mutate({ slug: display.slug, body: { showOpenSign: event.target.checked } });
+                          }}
+                        />
+                        <span>
+                          Show Open sign during open hours
+                          <span className="mt-0.5 block text-xs text-slate-400">
+                            Thursday 5–7PM and Saturday 11–2PM. The selected mode shows the rest of the time. A custom message still covers the sign.
+                          </span>
                         </span>
                       </label>
 
