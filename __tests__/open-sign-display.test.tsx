@@ -1,10 +1,10 @@
 import { readFileSync } from "node:fs";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import DisplayPlayer from "../components/display/DisplayPlayer";
 import OpenSignScreen from "../components/display/OpenSignScreen";
 import { isSelectableDefaultMode, publicPayloadForDisplay } from "../lib/display";
-import { isShopOpen, nextRetailBoundary, RETAIL_HOURS_LABEL, shouldShowOpenSign } from "../lib/shop-hours";
+import { FRONT_WINDOW_SLUG, isShopOpen, nextRetailBoundary, RETAIL_HOURS_LABEL, shouldShowOpenSign } from "../lib/shop-hours";
 import type { DisplayPayload } from "../lib/display";
 
 const migration = readFileSync("supabase/migrations/028_display_open_sign.sql", "utf8");
@@ -42,17 +42,34 @@ describe("shop retail hours", () => {
 });
 
 describe("open sign schedule", () => {
-  it("covers the selected mode during open hours, and a custom message still wins", () => {
-    expect(shouldShowOpenSign({ enabled: true, mode: "film_stats", now: THURSDAY_OPEN })).toBe(true);
-    expect(shouldShowOpenSign({ enabled: true, mode: "studio_welcome", now: THURSDAY_OPEN })).toBe(true);
-    expect(shouldShowOpenSign({ enabled: true, mode: "custom_message", now: THURSDAY_OPEN })).toBe(false);
-    expect(shouldShowOpenSign({ enabled: true, mode: "film_stats", now: WEDNESDAY })).toBe(false);
-    expect(shouldShowOpenSign({ enabled: false, mode: "film_stats", now: THURSDAY_OPEN })).toBe(false);
+  it("covers the front window during open hours, and a custom message still wins", () => {
+    const front = { slug: FRONT_WINDOW_SLUG, enabled: true, now: THURSDAY_OPEN };
+    expect(shouldShowOpenSign({ ...front, mode: "film_stats" })).toBe(true);
+    expect(shouldShowOpenSign({ ...front, mode: "studio_welcome" })).toBe(true);
+    expect(shouldShowOpenSign({ ...front, mode: "custom_message" })).toBe(false);
+    expect(shouldShowOpenSign({ ...front, mode: "film_stats", now: WEDNESDAY })).toBe(false);
+    expect(shouldShowOpenSign({ ...front, enabled: false, mode: "film_stats" })).toBe(false);
   });
 
-  it("is not a selectable mode, and the flag rides on the payload", () => {
+  it("ignores the switch on every other screen, including studio-vertical", () => {
+    expect(shouldShowOpenSign({
+      slug: "studio-vertical",
+      enabled: true,
+      mode: "idle",
+      now: THURSDAY_OPEN,
+    })).toBe(false);
+    expect(shouldShowOpenSign({
+      slug: "studio-vertical",
+      enabled: true,
+      mode: "film_stats",
+      now: SATURDAY_OPEN,
+    })).toBe(false);
+  });
+
+  it("is not a selectable mode, and only the front window carries the flag", () => {
     expect(isSelectableDefaultMode("open_sign")).toBe(false);
     const on = publicPayloadForDisplay({
+      slug: FRONT_WINDOW_SLUG,
       mode: "film_stats",
       theme: "yours-dark",
       is_enabled: true,
@@ -63,7 +80,20 @@ describe("open sign schedule", () => {
     expect(on.mode).toBe("film_stats");
     expect(on.showOpenSign).toBe(true);
 
+    const studio = publicPayloadForDisplay({
+      slug: "studio-vertical",
+      mode: "idle",
+      theme: "crt-green",
+      is_enabled: true,
+      override_mode: null,
+      override_payload: null,
+      show_open_sign: true,
+    });
+    expect(studio.mode).toBe("idle");
+    expect(studio).not.toHaveProperty("showOpenSign");
+
     const off = publicPayloadForDisplay({
+      slug: FRONT_WINDOW_SLUG,
       mode: "idle",
       theme: "yours-clean",
       is_enabled: true,
@@ -72,6 +102,16 @@ describe("open sign schedule", () => {
       show_open_sign: false,
     });
     expect(off).not.toHaveProperty("showOpenSign");
+  });
+
+  it("puts the staff switch only on the front window card", () => {
+    const page = readFileSync("app/displays/page.tsx", "utf8");
+    const start = page.indexOf(`display.slug === FRONT_WINDOW_SLUG`);
+    const end = page.indexOf(": null}", start);
+    const block = page.slice(start, end);
+    expect(start).toBeGreaterThan(-1);
+    expect(block).toContain("Show Open sign during open hours");
+    expect(page.replace(block, "")).not.toContain("Show Open sign during open hours");
   });
 
   it("turns the front window on once and leaves later edits alone", () => {
@@ -93,28 +133,61 @@ const idle: DisplayPayload = {
 };
 
 describe("open sign rendering", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("is only the lit OPEN word, with the published hours", () => {
-    const html = renderToStaticMarkup(<OpenSignScreen orientation="landscape" />);
+    const html = renderToStaticMarkup(<OpenSignScreen />);
     expect(html).toContain(">OPEN<");
     expect(html).not.toContain("CLOSED");
     expect(html).toContain("Thursdays 5-7PM");
     expect(html).toContain("Saturdays 11-2PM");
     expect(html).toContain("open-sign-word");
     expect(html).not.toContain("is-closed");
+    expect(html).not.toContain("orientation");
   });
 
-  it("keeps the studio dead zone when the sign is not covering the mode", () => {
-    const html = renderToStaticMarkup(
+  it("covers the front window during open hours and never the studio screen", () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(THURSDAY_OPEN);
+
+    const front = renderToStaticMarkup(
+      <DisplayPlayer slug="front-window" orientation="landscape" initial={idle} loadedBuildId="dev" preview />,
+    );
+    expect(front).toContain("data-display-mode=\"open_sign\"");
+    expect(front).toContain(">OPEN<");
+    expect(front).toContain("data-display-safe-inset=\"0\"");
+    expect(front).not.toContain("data-display-deadzone");
+
+    const studio = renderToStaticMarkup(
       <DisplayPlayer slug="studio-vertical" orientation="portrait" initial={idle} loadedBuildId="dev" preview />,
     );
-    expect(html).toContain("data-display-safe-inset=\"222\"");
-    expect(html).toContain("data-display-deadzone");
+    expect(studio).not.toContain("data-display-mode=\"open_sign\"");
+    expect(studio).not.toContain(">OPEN<");
+    expect(studio).toContain("data-display-safe-inset=\"222\"");
+    expect(studio).toContain("data-display-deadzone");
+
+    const message = renderToStaticMarkup(
+      <DisplayPlayer
+        slug="front-window"
+        orientation="landscape"
+        initial={{ ...idle, mode: "custom_message", data: { message: "Back in a few minutes" } }}
+        loadedBuildId="dev"
+        preview
+      />,
+    );
+    expect(message).not.toContain("data-display-mode=\"open_sign\"");
+    expect(message).toContain("Back in a few minutes");
   });
 
-  it("leaves the front window full bleed", () => {
+  it("leaves the front window on its selected mode outside retail hours", () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(WEDNESDAY);
     const html = renderToStaticMarkup(
-      <DisplayPlayer slug="front-window" orientation="landscape" initial={{ ...idle, showOpenSign: false }} loadedBuildId="dev" preview />,
+      <DisplayPlayer slug="front-window" orientation="landscape" initial={idle} loadedBuildId="dev" preview />,
     );
+    expect(html).not.toContain("data-display-mode=\"open_sign\"");
     expect(html).toContain("data-display-safe-inset=\"0\"");
     expect(html).not.toContain("data-display-deadzone");
   });

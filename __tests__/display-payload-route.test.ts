@@ -512,6 +512,43 @@ describe("PATCH /api/displays/:slug", () => {
     expect(body.customer_email).toBeUndefined();
   });
 
+  it("stores the Open sign only on the front window", async () => {
+    const rejected = await patch({ showOpenSign: true });
+    expect(rejected.status).toBe(400);
+    expect(await rejected.json()).toEqual({ error: "The Open sign is only for the front window." });
+    expect(mockUpdateDisplay).not.toHaveBeenCalled();
+
+    const invalid = await PATCH(new Request("http://localhost/api/displays/front-window", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ showOpenSign: "yes" }),
+    }), {
+      params: Promise.resolve({ slug: "front-window" }),
+    });
+    expect(invalid.status).toBe(400);
+
+    mockUpdateDisplay.mockImplementation(async () => ({
+      ...row,
+      slug: "front-window",
+      orientation: "landscape",
+      show_open_sign: false,
+      override_mode: null,
+      override_payload: null,
+    }));
+    const response = await PATCH(new Request("http://localhost/api/displays/front-window", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ showOpenSign: false }),
+    }), {
+      params: Promise.resolve({ slug: "front-window" }),
+    });
+    expect(response.status).toBe(200);
+    expect(mockUpdateDisplay).toHaveBeenCalledWith("front-window", { show_open_sign: false });
+    const body = await response.json();
+    expect(body.slug).toBe("front-window");
+    expect(body.showOpenSign).toBe(false);
+  });
+
   it("rejects a studio info value that is not a list", async () => {
     const response = await patch({ studioInfoLines: "Wi-Fi" });
     expect(response.status).toBe(400);

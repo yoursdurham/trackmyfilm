@@ -4,6 +4,7 @@
  * Times are America/New_York. The end minute is when the shop is closed.
  */
 export const SHOP_TIME_ZONE = "America/New_York";
+export const FRONT_WINDOW_SLUG = "front-window";
 
 export const RETAIL_HOUR_LINES = [
   "Thursdays 5-7PM",
@@ -147,15 +148,17 @@ export function nextRetailBoundary(now: Date): Date {
 }
 
 /**
- * The Open sign covers the selected mode and any studio booking during
- * retail hours. A custom message still wins: someone put that on the screen
- * on purpose.
+ * Only the front window. During retail hours the sign covers the selected
+ * mode and any studio booking. A custom message still wins. Every other
+ * slug ignores the switch.
  */
 export function shouldShowOpenSign(input: {
+  slug: string;
   enabled: boolean;
   mode: string;
   now: Date;
 }): boolean {
+  if (input.slug !== FRONT_WINDOW_SLUG) return false;
   if (!input.enabled) return false;
   if (input.mode === "custom_message") return false;
   return isShopOpen(input.now);

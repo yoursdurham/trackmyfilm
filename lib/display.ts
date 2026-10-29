@@ -17,6 +17,7 @@
  */
 
 import { sanitizeFilmDepartures } from "@/lib/film-departures";
+import { FRONT_WINDOW_SLUG } from "@/lib/shop-hours";
 import { sanitizeFilmMenu } from "@/lib/film-menu";
 import {
   sanitizeStudioLines,
@@ -132,7 +133,7 @@ export interface DisplayRow {
   override_mode: string | null;
   override_payload: unknown;
   show_studio_bookings?: boolean | null;
-  /** When true, the neon Open sign covers this screen during retail hours. */
+  /** Stored switch. Only the front window honors it. */
   show_open_sign?: boolean | null;
   /** Ordered guest notes. Null means the column is missing and the seed copy is used. */
   studio_info_lines?: unknown;
@@ -186,6 +187,7 @@ export interface PlaylistInput {
 
 export interface DisplayResolveInput {
   display: Pick<DisplayRow, "mode" | "theme" | "is_enabled" | "override_mode" | "override_payload" | "show_open_sign"> & {
+    slug?: string | null;
     refresh_seconds?: number | null;
     show_studio_bookings?: boolean | null;
     studio_info_lines?: unknown;
@@ -544,7 +546,9 @@ export function resolveDisplayState(input: DisplayResolveInput): ResolvedDisplay
     buildId: displayBuildId(),
     data: winner.data,
     priority: winner.priority,
-    ...(input.display.show_open_sign === true ? { showOpenSign: true } : {}),
+    ...(input.display.slug === FRONT_WINDOW_SLUG && input.display.show_open_sign === true
+      ? { showOpenSign: true }
+      : {}),
   };
 }
 

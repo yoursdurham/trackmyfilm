@@ -14,7 +14,7 @@ import {
   type DisplayOrientation,
   type DisplayPayload,
 } from "@/lib/display";
-import { nextRetailBoundary, shouldShowOpenSign } from "@/lib/shop-hours";
+import { FRONT_WINDOW_SLUG, nextRetailBoundary, shouldShowOpenSign } from "@/lib/shop-hours";
 import AirportBoard from "@/components/display/AirportBoard";
 import CrtGreenScreen from "@/components/display/CrtGreenScreen";
 import LandscapeScreen from "@/components/display/LandscapeScreen";
@@ -146,15 +146,16 @@ export default function DisplayPlayer({
   }, []);
 
   const coverWithOpenSign = shouldShowOpenSign({
-    enabled: screen.showOpenSign === true,
+    slug,
+    enabled: slug === FRONT_WINDOW_SLUG && screen.showOpenSign === true,
     mode: screen.mode,
     now: shopNow,
   });
-  const inset = displaySafeArea(slug, coverWithOpenSign ? undefined : screen.mode).left;
+  const inset = displaySafeArea(slug, screen.mode).left;
 
   let board;
   if (coverWithOpenSign) {
-    board = <OpenSignScreen orientation={orientation} />;
+    board = <OpenSignScreen />;
   } else if (orientation === "landscape") {
     board = <LandscapeScreen payload={screen} notice={notice} />;
   } else if (displayUsesAirportTheme(screen.mode) || screen.theme === AIRPORT_THEME) {

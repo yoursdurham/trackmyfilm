@@ -9,6 +9,7 @@ import {
   sanitizeCustomMessage,
 } from "@/lib/display";
 import { toAdminDisplay } from "@/lib/display-admin";
+import { FRONT_WINDOW_SLUG } from "@/lib/shop-hours";
 import { sanitizeStudioLines } from "@/lib/studio-info";
 
 function json(body: unknown, status = 200, cacheControl = "no-store") {
@@ -96,6 +97,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ slug: 
   }
 
   if ("showOpenSign" in record) {
+    if (slug !== FRONT_WINDOW_SLUG) {
+      return json({ error: "The Open sign is only for the front window." }, 400);
+    }
     if (typeof record.showOpenSign !== "boolean") {
       return json({ error: "Show Open sign must be on or off." }, 400);
     }
