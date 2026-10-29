@@ -9,7 +9,7 @@ import {
   sanitizeCustomMessage,
 } from "@/lib/display";
 import { toAdminDisplay } from "@/lib/display-admin";
-import { FRONT_WINDOW_SLUG } from "@/lib/shop-hours";
+import { endOfShopDay, FRONT_WINDOW_SLUG, isOpenSignMode } from "@/lib/shop-hours";
 import { sanitizeStudioLines } from "@/lib/studio-info";
 
 function json(body: unknown, status = 200, cacheControl = "no-store") {
@@ -71,6 +71,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ slug: 
     override_payload?: { message: string } | null;
     show_studio_bookings?: boolean;
     show_open_sign?: boolean;
+    open_sign_mode?: "auto" | "on" | "off";
+    open_sign_until?: string | null;
     studio_info_lines?: string[];
     studio_checkout_lines?: string[];
   } = {};
@@ -96,14 +98,16 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ slug: 
     patch.show_studio_bookings = record.showStudioBookings;
   }
 
-  if ("showOpenSign" in record) {
+  if ("openSignMode" in record) {
     if (slug !== FRONT_WINDOW_SLUG) {
       return json({ error: "The Open sign is only for the front window." }, 400);
     }
-    if (typeof record.showOpenSign !== "boolean") {
-      return json({ error: "Show Open sign must be on or off." }, 400);
+    if (!isOpenSignMode(record.openSignMode)) {
+      return json({ error: "Open sign must be Auto, On now, or Off." }, 400);
     }
-    patch.show_open_sign = record.showOpenSign;
+    patch.open_sign_mode = record.openSignMode;
+    patch.open_sign_until = record.openSignMode === "on" ? endOfShopDay(new Date()).toISOString() : null;
+    patch.show_open_sign = record.openSignMode !== "off";
   }
 
   if ("studioInfoLines" in record) {

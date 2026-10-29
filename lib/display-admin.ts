@@ -7,6 +7,7 @@ import {
   type DisplayRow,
 } from "@/lib/display";
 import type { StudioCalendarStatus } from "@/lib/studio-calendar-config";
+import { resolveOpenSignMode, type OpenSignMode } from "@/lib/shop-hours";
 import { studioCheckoutLinesFromRow, studioInfoLinesFromRow } from "@/lib/studio-info";
 
 export interface AdminDisplay {
@@ -28,6 +29,8 @@ export interface AdminDisplay {
   refreshSeconds: number;
   showStudioBookings: boolean;
   showOpenSign: boolean;
+  /** Front window control. Other screens stay off and do not show the control. */
+  openSignMode: OpenSignMode;
   studioInfoLines: string[];
   studioCheckoutLines: string[];
 }
@@ -68,6 +71,13 @@ export function toAdminDisplay(
     refreshSeconds: payload.refreshSeconds,
     showStudioBookings: row.show_studio_bookings !== false,
     showOpenSign: row.show_open_sign === true,
+    openSignMode: resolveOpenSignMode({
+      slug: row.slug,
+      openSignMode: row.open_sign_mode,
+      openSignUntil: row.open_sign_until,
+      legacyEnabled: row.show_open_sign === true,
+      now: new Date(now),
+    }),
     studioInfoLines: studioInfoLinesFromRow(row.studio_info_lines),
     studioCheckoutLines: studioCheckoutLinesFromRow(row.studio_checkout_lines),
   };

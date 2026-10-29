@@ -184,6 +184,7 @@ describe("GET /api/displays/:slug", () => {
     expect(response.status).toBe(200);
     const body = await response.json();
     expect(body.mode).toBe("idle");
+    expect(body.openSign).toBe("auto");
     expect(body.showOpenSign).toBe(true);
     expect(body.data).toEqual({});
     expect(body.openSignStats).toEqual({
@@ -210,6 +211,7 @@ describe("GET /api/displays/:slug", () => {
     const response = await get("studio-vertical");
     expect(response.status).toBe(200);
     const body = await response.json();
+    expect(body).not.toHaveProperty("openSign");
     expect(body).not.toHaveProperty("showOpenSign");
     expect(body).not.toHaveProperty("openSignStats");
     expect(mockGetCachedFilmMetrics).not.toHaveBeenCalled();
@@ -572,40 +574,66 @@ describe("PATCH /api/displays/:slug", () => {
   });
 
   it("stores the Open sign only on the front window", async () => {
-    const rejected = await patch({ showOpenSign: true });
-    expect(rejected.status).toBe(400);
-    expect(await rejected.json()).toEqual({ error: "The Open sign is only for the front window." });
-    expect(mockUpdateDisplay).not.toHaveBeenCalled();
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-29T22:00:00.000Z"));
+    try {
+      const rejected = await patch({ openSignMode: "on" });
+      expect(rejected.status).toBe(400);
+      expect(await rejected.json()).toEqual({ error: "The Open sign is only for the front window." });
+      expect(mockUpdateDisplay).not.toHaveBeenCalled();
 
-    const invalid = await PATCH(new Request("http://localhost/api/displays/front-window", {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ showOpenSign: "yes" }),
-    }), {
-      params: Promise.resolve({ slug: "front-window" }),
-    });
-    expect(invalid.status).toBe(400);
+      const invalid = await PATCH(new Request("http://localhost/api/displays/front-window", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ openSignMode: "yes" }),
+      }), {
+        params: Promise.resolve({ slug: "front-window" }),
+      });
+      expect(invalid.status).toBe(400);
+      expect(mockUpdateDisplay).not.toHaveBeenCalled();
 
-    mockUpdateDisplay.mockImplementation(async () => ({
-      ...row,
-      slug: "front-window",
-      orientation: "landscape",
-      show_open_sign: false,
-      override_mode: null,
-      override_payload: null,
-    }));
-    const response = await PATCH(new Request("http://localhost/api/displays/front-window", {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ showOpenSign: false }),
-    }), {
-      params: Promise.resolve({ slug: "front-window" }),
-    });
-    expect(response.status).toBe(200);
-    expect(mockUpdateDisplay).toHaveBeenCalledWith("front-window", { show_open_sign: false });
-    const body = await response.json();
-    expect(body.slug).toBe("front-window");
-    expect(body.showOpenSign).toBe(false);
+      mockUpdateDisplay.mockImplementation(async (_slug: string, body: Record<string, unknown>) => ({
+        ...row,
+        slug: "front-window",
+        orientation: "landscape",
+        override_mode: null,
+        override_payload: null,
+        ...body,
+      }));
+      const response = await PATCH(new Request("http://localhost/api/displays/front-window", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ openSignMode: "on" }),
+      }), {
+        params: Promise.resolve({ slug: "front-window" }),
+      });
+      expect(response.status).toBe(200);
+      expect(mockUpdateDisplay).toHaveBeenCalledWith("front-window", {
+        open_sign_mode: "on",
+        open_sign_until: "2026-10-30T04:00:00.000Z",
+        show_open_sign: true,
+      });
+      const body = await response.json();
+      expect(body.slug).toBe("front-window");
+      expect(body.openSignMode).toBe("on");
+
+      const cleared = await PATCH(new Request("http://localhost/api/displays/front-window", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ openSignMode: "off" }),
+      }), {
+        params: Promise.resolve({ slug: "front-window" }),
+      });
+      expect(cleared.status).toBe(200);
+      expect(mockUpdateDisplay).toHaveBeenCalledWith("front-window", {
+        open_sign_mode: "off",
+        open_sign_until: null,
+        show_open_sign: false,
+      });
+      expect((await cleared.json()).openSignMode).toBe("off");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("rejects a studio info value that is not a list", async () => {

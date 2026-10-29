@@ -14,7 +14,7 @@ import {
 import type { FilmDepartures } from "@/lib/film-departures";
 import type { FilmMenu } from "@/lib/film-menu";
 import { shopClock, type FilmMetrics } from "@/lib/film-metrics";
-import { FRONT_WINDOW_SLUG } from "@/lib/shop-hours";
+import { FRONT_WINDOW_SLUG, resolveOpenSignMode } from "@/lib/shop-hours";
 import type { StudioBooking } from "@/lib/studio-calendar";
 import { getCachedStudioAgenda } from "@/lib/studio-calendar-cache";
 
@@ -70,11 +70,18 @@ export function displayNeedsFilmMetrics(display: DisplayResolveInput["display"])
  * The front-window Open sign reuses the film-stats snapshot. Skip the read
  * when the sign cannot show, including while a custom message is covering it.
  */
-export function displayNeedsOpenSignStats(display: DisplayResolveInput["display"]): boolean {
+export function displayNeedsOpenSignStats(display: DisplayResolveInput["display"], now = new Date()): boolean {
   if (display.slug !== FRONT_WINDOW_SLUG) return false;
   if (display.is_enabled === false) return false;
-  if (display.show_open_sign !== true) return false;
-  return winningMode(display) !== "custom_message";
+  if (winningMode(display) === "custom_message") return false;
+  const setting = resolveOpenSignMode({
+    slug: display.slug,
+    openSignMode: display.open_sign_mode,
+    openSignUntil: display.open_sign_until,
+    legacyEnabled: display.show_open_sign === true,
+    now,
+  });
+  return setting === "auto" || setting === "on";
 }
 
 export function displayNeedsFilmMenu(display: DisplayResolveInput["display"]): boolean {
@@ -98,7 +105,7 @@ export async function publicPayloadWithFilm(
   display: DisplayResolveInput["display"],
 ): Promise<DisplayPayload> {
   const now = displayNow();
-  const needsMetrics = displayNeedsFilmMetrics(display) || displayNeedsOpenSignStats(display);
+  const needsMetrics = displayNeedsFilmMetrics(display) || displayNeedsOpenSignStats(display, now);
   const needsMenu = displayNeedsFilmMenu(display);
   const needsDepartures = displayNeedsFilmDepartures(display);
   const needsStudio = displayShowsStudioBookings(display);
