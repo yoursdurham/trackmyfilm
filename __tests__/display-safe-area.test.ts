@@ -21,6 +21,14 @@ describe("displaySafeArea", () => {
     expect(displaySafeArea("__proto__")).toEqual({ left: 0 });
   });
 
+  it("gives the front window no dead zone, including film stats", () => {
+    expect(DISPLAY_SAFE_AREA).not.toHaveProperty("front-window");
+    expect(displaySafeArea("front-window")).toEqual({ left: 0 });
+    expect(displaySafeArea("front-window", "idle")).toEqual({ left: 0 });
+    expect(displaySafeArea("front-window", "film_stats")).toEqual({ left: 0 });
+    expect(displaySafeArea("front-window", "film_departures")).toEqual({ left: 0 });
+  });
+
   it("stays off the public payload", () => {
     const payload = toPublicDisplayPayload({
       mode: "film_departures",

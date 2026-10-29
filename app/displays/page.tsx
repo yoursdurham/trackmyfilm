@@ -11,11 +11,9 @@ import { Textarea } from "@/components/ui/textarea";
 import FilmMenuEditor from "@/components/displays/FilmMenuEditor";
 import StudioLinesEditor from "@/components/displays/StudioLinesEditor";
 import { SELECTABLE_DEFAULT_MODES } from "@/lib/display";
+import { adminPreviewFrame } from "@/lib/display-layout";
 import type { AdminDisplay, DisplaysAdminResponse } from "@/lib/display-admin";
 import type { StudioCalendarStatus } from "@/lib/studio-calendar-config";
-
-const CANVAS = { width: 1080, height: 3840 };
-const PREVIEW_HEIGHT = 640;
 
 function modeLabel(mode: string) {
   if (mode === "idle") return "Branded idle";
@@ -105,7 +103,9 @@ export default function DisplaysPage() {
     },
   });
 
-  const scale = PREVIEW_HEIGHT / CANVAS.height;
+  const menuHost = displays.some((item) => item.slug === "studio-vertical")
+    ? "studio-vertical"
+    : displays[0]?.slug;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-stone-50 via-orange-50/30 to-amber-50/20">
@@ -140,6 +140,7 @@ export default function DisplaysPage() {
             {displays.map((display) => {
               const message = drafts[display.slug] ?? display.overrideMessage ?? "";
               const previewOpen = previewSlug === display.slug;
+              const preview = adminPreviewFrame(display);
               const modeChoices = SELECTABLE_DEFAULT_MODES.some((option) => option.value === display.defaultMode)
                 ? SELECTABLE_DEFAULT_MODES
                 : [...SELECTABLE_DEFAULT_MODES, { value: display.defaultMode, label: display.defaultMode }];
@@ -273,25 +274,25 @@ export default function DisplaysPage() {
                     />
                   </div>
 
-                  {display.slug === displays[0]?.slug ? <FilmMenuEditor /> : null}
+                  {display.slug === menuHost ? <FilmMenuEditor /> : null}
 
                   {previewOpen && (
                     <div className="mt-6 flex flex-col items-center border-t border-stone-100 pt-5">
                       <p className="mb-3 text-xs tracking-wide text-slate-400 uppercase">
-                        1080 × 3840 preview
+                        {preview.label}
                       </p>
                       <div
                         className="overflow-hidden rounded-lg bg-stone-200 shadow-inner ring-1 ring-stone-300"
-                        style={{ width: CANVAS.width * scale, height: PREVIEW_HEIGHT }}
+                        style={{ width: preview.frameWidth, height: preview.frameHeight }}
                       >
                         <iframe
                           title={`Preview of ${display.name}`}
                           src={`/display/${display.slug}?preview=1`}
                           className="origin-top-left border-0"
                           style={{
-                            width: CANVAS.width,
-                            height: CANVAS.height,
-                            transform: `scale(${scale})`,
+                            width: preview.width,
+                            height: preview.height,
+                            transform: `scale(${preview.scale})`,
                           }}
                         />
                       </div>
