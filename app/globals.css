@@ -153,3 +153,51 @@ body {
     animation: none;
   }
 }
+
+@keyframes neon-buzz {
+  0%, 18%, 22%, 55%, 100% { opacity: 1; }
+  19% { opacity: 0.72; }
+  21% { opacity: 0.94; }
+  53% { opacity: 0.84; }
+  54% { opacity: 1; }
+}
+
+.open-sign-tube {
+  border: 0.7vh solid #ff4d8d;
+  border-radius: 2.2vh;
+  box-shadow:
+    0 0 6px #fff,
+    0 0 14px #ff4d8d,
+    0 0 36px rgba(255, 77, 141, 0.85),
+    inset 0 0 10px rgba(255, 255, 255, 0.35),
+    inset 0 0 28px rgba(255, 77, 141, 0.45);
+}
+
+.open-sign-word {
+  color: #fff;
+  text-shadow:
+    0 0 2px #fff,
+    0 0 8px #fff,
+    0 0 16px #ff4d8d,
+    0 0 32px #ff4d8d,
+    0 0 64px #ff4d8d,
+    0 0 96px #DDB1B1;
+  animation: neon-buzz 3.2s steps(2, end) infinite;
+}
+
+.open-sign-tube.is-closed {
+  border-color: #3a3a3a;
+  box-shadow: inset 0 0 12px rgba(255, 255, 255, 0.04);
+}
+
+.open-sign-word.is-closed {
+  color: #3a3a3a;
+  text-shadow: 0 0 8px rgba(255, 77, 141, 0.18);
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .open-sign-word {
+    animation: none;
+  }
+}

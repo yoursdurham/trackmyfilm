@@ -17,6 +17,7 @@ import {
 import AirportBoard from "@/components/display/AirportBoard";
 import CrtGreenScreen from "@/components/display/CrtGreenScreen";
 import LandscapeScreen from "@/components/display/LandscapeScreen";
+import OpenSignScreen from "@/components/display/OpenSignScreen";
 import YoursCleanScreen from "@/components/display/YoursCleanScreen";
 
 const IDLE: DisplayPayload = {
@@ -132,7 +133,9 @@ export default function DisplayPlayer({
   const inset = displaySafeArea(slug, screen.mode).left;
 
   let board;
-  if (orientation === "landscape") {
+  if (screen.mode === "open_sign") {
+    board = <OpenSignScreen orientation={orientation} />;
+  } else if (orientation === "landscape") {
     board = <LandscapeScreen payload={screen} notice={notice} />;
   } else if (displayUsesAirportTheme(screen.mode) || screen.theme === AIRPORT_THEME) {
     board = <AirportBoard payload={screen} notice={notice} />;

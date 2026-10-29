@@ -112,6 +112,7 @@ export const SELECTABLE_DEFAULT_MODES = [
   { value: "film_stats", label: "Film stats" },
   { value: "film_menu", label: "Film menu" },
   { value: "film_departures", label: "Airport board" },
+  { value: "open_sign", label: "Open sign" },
 ] as const;
 
 export type DisplayOrientation = "portrait" | "landscape";
@@ -251,6 +252,7 @@ const DATA_KEYS_BY_MODE: Record<string, readonly string[]> = {
   film_status: FILM_STATUS_DATA_KEYS,
   film_menu: FILM_MENU_DATA_KEYS,
   film_departures: FILM_DEPARTURES_DATA_KEYS,
+  open_sign: [],
 };
 
 export function isDisplaySlug(slug: string): boolean {

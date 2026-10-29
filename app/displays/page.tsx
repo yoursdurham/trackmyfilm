@@ -25,6 +25,7 @@ function modeLabel(mode: string) {
   if (mode === "film_stats") return "Film stats";
   if (mode === "film_menu") return "Film menu";
   if (mode === "film_departures") return "Airport board";
+  if (mode === "open_sign") return "Open sign";
   return mode;
 }
 

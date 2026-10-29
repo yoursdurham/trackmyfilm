@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { isAccountEmailOtp } from "@/lib/account-email-otp";
+import { RETAIL_HOURS_LABEL } from "@/lib/shop-hours";
 
 export const ACCOUNT_SIGN_IN_SUBJECT = "Your Track My Film sign-in link";
 
@@ -15,7 +16,7 @@ const FONT = "'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, m
 const BUSINESS_LINES = [
   "Yours, Durham",
   "209 N. Gregson St. Durham, NC 27701",
-  "Retail Hours: Thursdays 5-7PM & Saturdays 11-2PM",
+  RETAIL_HOURS_LABEL,
   "hello@yoursdurham.com",
   "Film Drop Box - 24/7",
 ];
@@ -85,7 +86,7 @@ function accountAuthEmailHtml({
   const safeHeading = escapeHtml(heading);
   const safeIntro = escapeHtml(intro);
   const safeButton = escapeHtml(buttonLabel);
-  const hours = "Retail Hours: Thursdays 5-7PM &amp; Saturdays 11-2PM";
+  const hours = escapeHtml(RETAIL_HOURS_LABEL);
   const codeBlock = code
     ? `<p style="margin:22px 0 4px;font-family:${FONT};font-size:15px;line-height:1.5;color:#1a1a1a;text-align:center;">${CODE_CAPTION} <strong>${escapeHtml(code)}</strong></p>`
     : "";

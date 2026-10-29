@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { RETAIL_HOURS_LABEL } from "@/lib/shop-hours";
 import { useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
@@ -858,7 +859,7 @@ export default function TrackingHome({
           >
             209 N. Gregson St. Durham, NC 27701
           </a>
-          <span>Retail Hours: Thursdays 5-7PM & Saturdays 11-2PM</span>
+          <span>{RETAIL_HOURS_LABEL}</span>
           <span>Film Drop Box - 24/7</span>
         </div>
       </main>
