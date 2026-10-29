@@ -153,3 +153,77 @@ body {
     animation: none;
   }
 }
+
+@keyframes neon-buzz {
+  0%, 18%, 22%, 55%, 100% { opacity: 1; }
+  19% { opacity: 0.72; }
+  21% { opacity: 0.94; }
+  53% { opacity: 0.84; }
+  54% { opacity: 1; }
+}
+
+.open-sign-tube {
+  border: 0.8vh solid transparent;
+  border-radius: 2.2vh;
+  background:
+    linear-gradient(#000, #000) padding-box,
+    var(--yours-blend) border-box;
+  box-shadow:
+    0 0 6px rgba(255, 255, 255, 0.55),
+    0 0 16px rgba(221, 177, 177, 0.9),
+    0 0 28px rgba(197, 174, 215, 0.7),
+    0 0 42px rgba(161, 204, 147, 0.75),
+    inset 0 0 12px rgba(255, 255, 255, 0.2),
+    inset 0 0 28px rgba(221, 177, 177, 0.28),
+    inset 0 0 36px rgba(161, 204, 147, 0.22);
+}
+
+.open-sign-word {
+  animation: neon-buzz 3.2s steps(2, end) infinite;
+}
+
+.open-sign-glow {
+  /* Halo only. The colored face sits in the same grid cell. */
+  color: #fff;
+  text-shadow:
+    0 0 8px #fff,
+    0 0 16px #DDB1B1,
+    0 0 28px #C5AED7,
+    0 0 42px #A1CC93;
+}
+
+.open-sign-face {
+  position: relative;
+  background-image: var(--yours-blend);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+
+.open-sign-hours {
+  color: #fff;
+  text-shadow:
+    0 0 8px #fff,
+    0 0 16px rgba(221, 177, 177, 0.85),
+    0 0 28px rgba(161, 204, 147, 0.7);
+}
+
+.open-sign-stat {
+  color: #fff;
+  text-shadow:
+    0 0 8px rgba(255, 255, 255, 0.85),
+    0 0 16px rgba(221, 177, 177, 0.45);
+}
+
+.open-sign-stats {
+  border-top: 0.35vh solid transparent;
+  border-image: var(--yours-blend) 1;
+  box-shadow: 0 -10px 28px rgba(161, 204, 147, 0.28);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .open-sign-word {
+    animation: none;
+  }
+}

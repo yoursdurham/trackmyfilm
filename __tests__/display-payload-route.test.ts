@@ -156,6 +156,65 @@ describe("GET /api/displays/:slug", () => {
     expect(mockGetCachedFilmMenu).not.toHaveBeenCalled();
   });
 
+  it("attaches film stats to the front-window Open sign and drops customer fields", async () => {
+    mockGetDisplayBySlug.mockResolvedValue({
+      ...row,
+      slug: "front-window",
+      orientation: "landscape",
+      mode: "idle",
+      theme: "yours-dark",
+      show_open_sign: true,
+      override_mode: null,
+      override_payload: null,
+    });
+    mockGetCachedFilmMetrics.mockResolvedValue({
+      rollsProcessing: 14,
+      receivedToday: 4,
+      receivedThisWeek: 19,
+      scansSentToday: 6,
+      scansSentThisWeek: 22,
+      averageColorTurnaroundDays: 4.2,
+      averageBwTurnaroundDays: 5.6,
+      nextLabRun: "Friday 12:00 PM",
+      customer_email: "secret@example.com",
+      customer_name: "Ada Lovelace",
+    });
+
+    const response = await get("front-window");
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.mode).toBe("idle");
+    expect(body.showOpenSign).toBe(true);
+    expect(body.data).toEqual({});
+    expect(body.openSignStats).toEqual({
+      rollsProcessing: 14,
+      receivedToday: 4,
+      receivedThisWeek: 19,
+      scansSentToday: 6,
+      scansSentThisWeek: 22,
+      averageColorTurnaroundDays: 4.2,
+      averageBwTurnaroundDays: 5.6,
+      nextLabRun: "Friday 12:00 PM",
+    });
+    expect(JSON.stringify(body)).not.toMatch(/secret@|Ada Lovelace/);
+    expect(mockGetCachedFilmMetrics).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not load film stats for the Open sign on any other screen", async () => {
+    mockGetDisplayBySlug.mockResolvedValue({
+      ...row,
+      show_open_sign: true,
+      override_mode: null,
+      override_payload: null,
+    });
+    const response = await get("studio-vertical");
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body).not.toHaveProperty("showOpenSign");
+    expect(body).not.toHaveProperty("openSignStats");
+    expect(mockGetCachedFilmMetrics).not.toHaveBeenCalled();
+  });
+
   it("returns only the film menu when that mode is selected", async () => {
     mockGetDisplayBySlug.mockResolvedValue({
       ...row,
@@ -510,6 +569,43 @@ describe("PATCH /api/displays/:slug", () => {
     expect(body.showStudioBookings).toBe(false);
     expect(body.studioInfoLines).toEqual(["Wi-Fi: Guest", "Bathrooms left"]);
     expect(body.customer_email).toBeUndefined();
+  });
+
+  it("stores the Open sign only on the front window", async () => {
+    const rejected = await patch({ showOpenSign: true });
+    expect(rejected.status).toBe(400);
+    expect(await rejected.json()).toEqual({ error: "The Open sign is only for the front window." });
+    expect(mockUpdateDisplay).not.toHaveBeenCalled();
+
+    const invalid = await PATCH(new Request("http://localhost/api/displays/front-window", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ showOpenSign: "yes" }),
+    }), {
+      params: Promise.resolve({ slug: "front-window" }),
+    });
+    expect(invalid.status).toBe(400);
+
+    mockUpdateDisplay.mockImplementation(async () => ({
+      ...row,
+      slug: "front-window",
+      orientation: "landscape",
+      show_open_sign: false,
+      override_mode: null,
+      override_payload: null,
+    }));
+    const response = await PATCH(new Request("http://localhost/api/displays/front-window", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ showOpenSign: false }),
+    }), {
+      params: Promise.resolve({ slug: "front-window" }),
+    });
+    expect(response.status).toBe(200);
+    expect(mockUpdateDisplay).toHaveBeenCalledWith("front-window", { show_open_sign: false });
+    const body = await response.json();
+    expect(body.slug).toBe("front-window");
+    expect(body.showOpenSign).toBe(false);
   });
 
   it("rejects a studio info value that is not a list", async () => {

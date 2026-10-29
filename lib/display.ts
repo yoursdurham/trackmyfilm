@@ -17,6 +17,7 @@
  */
 
 import { sanitizeFilmDepartures } from "@/lib/film-departures";
+import { FRONT_WINDOW_SLUG } from "@/lib/shop-hours";
 import { sanitizeFilmMenu } from "@/lib/film-menu";
 import {
   sanitizeStudioLines,
@@ -132,6 +133,8 @@ export interface DisplayRow {
   override_mode: string | null;
   override_payload: unknown;
   show_studio_bookings?: boolean | null;
+  /** Stored switch. Only the front window honors it. */
+  show_open_sign?: boolean | null;
   /** Ordered guest notes. Null means the column is missing and the seed copy is used. */
   studio_info_lines?: unknown;
   studio_checkout_lines?: unknown;
@@ -183,7 +186,8 @@ export interface PlaylistInput {
 }
 
 export interface DisplayResolveInput {
-  display: Pick<DisplayRow, "mode" | "theme" | "is_enabled" | "override_mode" | "override_payload"> & {
+  display: Pick<DisplayRow, "mode" | "theme" | "is_enabled" | "override_mode" | "override_payload" | "show_open_sign"> & {
+    slug?: string | null;
     refresh_seconds?: number | null;
     show_studio_bookings?: boolean | null;
     studio_info_lines?: unknown;
@@ -206,6 +210,22 @@ export interface DisplayPayload {
   /** Deployment that produced this payload. The player reloads when it changes. */
   buildId: string;
   data: Record<string, unknown>;
+  /** Present only when this screen should cover itself with the Open sign during retail hours. */
+  showOpenSign?: boolean;
+  /** Film-stats figures for the front-window Open sign. No customer fields. */
+  openSignStats?: OpenSignStats;
+}
+
+/** Counts already shown on the film-stats screen. Every key is present; missing data is null. */
+export interface OpenSignStats {
+  rollsProcessing: number | null;
+  receivedToday: number | null;
+  receivedThisWeek: number | null;
+  scansSentToday: number | null;
+  scansSentThisWeek: number | null;
+  averageColorTurnaroundDays: number | null;
+  averageBwTurnaroundDays: number | null;
+  nextLabRun: string | null;
 }
 
 export interface ResolvedDisplay extends DisplayPayload {
@@ -312,6 +332,38 @@ const NUMERIC_FILM_KEYS = new Set<string>([
   ...FILM_STATS_DATA_KEYS.filter((key) => key !== "nextLabRun"),
   ...FILM_STATUS_DATA_KEYS.filter((key) => key !== "nextLabRun"),
 ]);
+
+const OPEN_SIGN_COUNT_KEYS = [
+  "rollsProcessing",
+  "receivedToday",
+  "receivedThisWeek",
+  "scansSentToday",
+  "scansSentThisWeek",
+] as const;
+
+function finiteNumber(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+/** The film-stats snapshot, with every other field dropped. */
+export function sanitizeOpenSignStats(film: unknown): OpenSignStats {
+  const source = film && typeof film === "object" ? film as Record<string, unknown> : {};
+  const stats: OpenSignStats = {
+    rollsProcessing: null,
+    receivedToday: null,
+    receivedThisWeek: null,
+    scansSentToday: null,
+    scansSentThisWeek: null,
+    averageColorTurnaroundDays: null,
+    averageBwTurnaroundDays: null,
+    nextLabRun: null,
+  };
+  for (const key of OPEN_SIGN_COUNT_KEYS) stats[key] = finiteNumber(source[key]);
+  stats.averageColorTurnaroundDays = finiteNumber(source.averageColorTurnaroundDays);
+  stats.averageBwTurnaroundDays = finiteNumber(source.averageBwTurnaroundDays);
+  stats.nextLabRun = plainText(source.nextLabRun, 80);
+  return stats;
+}
 
 function pickFilm(film: FilmMetricsInput | null | undefined, keys: readonly string[]): Record<string, unknown> {
   if (!film) return {};
@@ -532,6 +584,7 @@ export function resolveDisplayState(input: DisplayResolveInput): ResolvedDisplay
 
   candidates.sort((a, b) => b.priority - a.priority);
   const winner = candidates[0];
+  const showOpenSign = input.display.slug === FRONT_WINDOW_SLUG && input.display.show_open_sign === true;
 
   return {
     mode: winner.mode,
@@ -540,6 +593,9 @@ export function resolveDisplayState(input: DisplayResolveInput): ResolvedDisplay
     buildId: displayBuildId(),
     data: winner.data,
     priority: winner.priority,
+    ...(showOpenSign
+      ? { showOpenSign: true, openSignStats: sanitizeOpenSignStats(input.film) }
+      : {}),
   };
 }
 
@@ -550,6 +606,8 @@ export function toPublicDisplayPayload(resolved: {
   refreshSeconds?: unknown;
   buildId?: unknown;
   data?: unknown;
+  showOpenSign?: unknown;
+  openSignStats?: unknown;
 }): DisplayPayload {
   const mode = typeof resolved.mode === "string" && resolved.mode.trim() ? resolved.mode.trim() : "idle";
   const allowed = DATA_KEYS_BY_MODE[mode] ?? [];
@@ -595,6 +653,9 @@ export function toPublicDisplayPayload(resolved: {
     ),
     buildId: payloadBuildId(resolved.buildId),
     data,
+    ...(resolved.showOpenSign === true
+      ? { showOpenSign: true, openSignStats: sanitizeOpenSignStats(resolved.openSignStats) }
+      : {}),
   };
 }
 
@@ -630,6 +691,11 @@ export function isDisplayPayload(value: unknown): value is DisplayPayload {
   if (!value || typeof value !== "object") return false;
   const record = value as Record<string, unknown>;
   if ("buildId" in record && typeof record.buildId !== "string") return false;
+  if ("showOpenSign" in record && typeof record.showOpenSign !== "boolean") return false;
+  if ("openSignStats" in record) {
+    const stats = record.openSignStats;
+    if (!stats || typeof stats !== "object" || Array.isArray(stats)) return false;
+  }
   return typeof record.mode === "string"
     && typeof record.theme === "string"
     && typeof record.refreshSeconds === "number"
