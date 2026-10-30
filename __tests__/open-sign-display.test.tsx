@@ -36,6 +36,27 @@ describe("shop retail hours", () => {
     expect(isShopOpen(WEDNESDAY)).toBe(false);
   });
 
+  it("stays open on Thursday evening when the kiosk reports a long weekday name", () => {
+    const Original = Intl.DateTimeFormat;
+    class LongWeekday extends Original {
+      formatToParts(date?: Date | number): Intl.DateTimeFormatPart[] {
+        return super.formatToParts(date).map((part) => (
+          part.type === "weekday" ? { ...part, value: "Thursday" } : part
+        ));
+      }
+    }
+    vi.stubGlobal("Intl", { ...Intl, DateTimeFormat: LongWeekday });
+    try {
+      expect(() => isShopOpen(THURSDAY_OPEN)).not.toThrow();
+      expect(isShopOpen(THURSDAY_OPEN)).toBe(true);
+      expect(isShopOpen(WEDNESDAY)).toBe(false);
+      expect(() => nextRetailBoundary(THURSDAY_OPEN)).not.toThrow();
+      expect(nextRetailBoundary(BEFORE_OPEN).toISOString()).toBe(THURSDAY_START.toISOString());
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("names the next open or close instant", () => {
     expect(nextRetailBoundary(BEFORE_OPEN).toISOString()).toBe(THURSDAY_START.toISOString());
     expect(nextRetailBoundary(THURSDAY_OPEN).toISOString()).toBe(THURSDAY_END.toISOString());
@@ -265,6 +286,11 @@ describe("open sign rendering", () => {
     expect(html).toContain(">12<");
     expect(html).toContain(">4.5<");
     expect(html).toContain("Friday 12:00 PM");
+    const odd = renderToStaticMarkup(
+      <OpenSignScreen stats={{ ...idle.openSignStats!, nextLabRun: 12 as unknown as string }} />,
+    );
+    expect(odd).toContain("data-stat=\"next-lab-run\"");
+    expect(odd).toMatch(/data-stat="next-lab-run"[\s\S]*?>—</);
     expect(html).toContain("Last 30 days");
     expect(html).not.toContain("is-closed");
     expect(html).toContain("#DDB1B1");

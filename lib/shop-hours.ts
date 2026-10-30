@@ -13,41 +13,57 @@ export const RETAIL_HOUR_LINES = [
 
 export const RETAIL_HOURS_LABEL = `Retail Hours: ${RETAIL_HOUR_LINES.join(" & ")}`;
 
-const WEEKDAY_INDEX: Record<string, number> = {
-  Sun: 0,
-  Mon: 1,
-  Tue: 2,
-  Wed: 3,
-  Thu: 4,
-  Fri: 5,
-  Sat: 6,
-};
-
 /** Thursday 5:00 PM–7:00 PM, Saturday 11:00 AM–2:00 PM. */
 const RETAIL_WINDOWS = [
   { weekday: 4, start: 17 * 60, end: 19 * 60 },
   { weekday: 6, start: 11 * 60, end: 14 * 60 },
 ] as const;
 
+/**
+ * Weekday of a calendar date. Some kiosk Chromium builds report "Thursday"
+ * for weekday: "short", which used to throw and replace the display with
+ * the cream error page. The civil weekday does not depend on that name.
+ */
+function weekdayOfCalendarDate(year: number, month: number, day: number): number {
+  return new Date(Date.UTC(year, month - 1, day)).getUTCDay();
+}
+
+function zonedParts(now: Date, options: Intl.DateTimeFormatOptions): Record<string, string> {
+  try {
+    const formatted = new Intl.DateTimeFormat("en-US", {
+      timeZone: SHOP_TIME_ZONE,
+      ...options,
+    }).formatToParts(now);
+    const bag: Record<string, string> = {};
+    for (const part of formatted) {
+      if (part.type !== "literal") bag[part.type] = part.value;
+    }
+    return bag;
+  } catch {
+    return {};
+  }
+}
+
 function shopClock(now: Date): { weekday: number; minutes: number } {
-  const formatted = new Intl.DateTimeFormat("en-US", {
-    timeZone: SHOP_TIME_ZONE,
-    weekday: "short",
+  const bag = zonedParts(now, {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
     hourCycle: "h23",
-  }).formatToParts(now);
-  const bag: Record<string, string> = {};
-  for (const part of formatted) {
-    if (part.type !== "literal") bag[part.type] = part.value;
-  }
-  const weekday = WEEKDAY_INDEX[bag.weekday];
-  if (weekday === undefined) {
-    throw new Error(`Unrecognized weekday "${bag.weekday}"`);
-  }
+  });
+  const year = Number(bag.year);
+  const month = Number(bag.month);
+  const day = Number(bag.day);
+  if (!year || !month || !day) return { weekday: -1, minutes: 0 };
   let hour = Number(bag.hour);
   if (hour === 24) hour = 0;
-  return { weekday, minutes: hour * 60 + Number(bag.minute) };
+  const minute = Number(bag.minute);
+  return {
+    weekday: weekdayOfCalendarDate(year, month, day),
+    minutes: hour * 60 + (Number.isFinite(minute) ? minute : 0),
+  };
 }
 
 /** True only during the published retail windows. */
@@ -61,25 +77,18 @@ export function isShopOpen(now: Date): boolean {
 }
 
 function zonedDateParts(date: Date): { year: number; month: number; day: number; weekday: number } {
-  const formatted = new Intl.DateTimeFormat("en-US", {
-    timeZone: SHOP_TIME_ZONE,
+  const bag = zonedParts(date, {
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
-    weekday: "short",
-  }).formatToParts(date);
-  const bag: Record<string, string> = {};
-  for (const part of formatted) {
-    if (part.type !== "literal") bag[part.type] = part.value;
+  });
+  const year = Number(bag.year);
+  const month = Number(bag.month);
+  const day = Number(bag.day);
+  if (!year || !month || !day) {
+    return { year: date.getUTCFullYear(), month: date.getUTCMonth() + 1, day: date.getUTCDate(), weekday: date.getUTCDay() };
   }
-  const weekday = WEEKDAY_INDEX[bag.weekday];
-  if (weekday === undefined) throw new Error(`Unrecognized weekday "${bag.weekday}"`);
-  return {
-    year: Number(bag.year),
-    month: Number(bag.month),
-    day: Number(bag.day),
-    weekday,
-  };
+  return { year, month, day, weekday: weekdayOfCalendarDate(year, month, day) };
 }
 
 /** UTC instant for a New York wall-clock minute on a calendar day. */
