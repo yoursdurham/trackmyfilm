@@ -8,6 +8,8 @@
 --
 -- A signed-in customer may read only the film_orders and customers rows
 -- whose email matches the verified auth email, case-insensitive.
+-- auth.jwt() is wrapped in a scalar subquery so Postgres evaluates it
+-- once per query (migration 030). Do not call it bare in the USING clause.
 -- Staff notes, hold reasons, and email delivery columns are not granted.
 -- The service role used by staff pages, tracking, displays, email, and cron
 -- bypasses RLS. It is re-granted below so this script does not depend on
@@ -74,7 +76,7 @@ create policy customer_reads_own_orders
   using (
     customer_email is not null
     and trim(customer_email) <> ''
-    and lower(trim(customer_email)) = lower(trim(coalesce(auth.jwt() ->> 'email', '')))
+    and lower(trim(customer_email)) = lower(trim(coalesce((select auth.jwt() ->> 'email'), '')))
   );
 
 drop policy if exists customer_reads_own_profile on public.customers;
@@ -85,5 +87,5 @@ create policy customer_reads_own_profile
   using (
     email is not null
     and trim(email) <> ''
-    and lower(trim(email)) = lower(trim(coalesce(auth.jwt() ->> 'email', '')))
+    and lower(trim(email)) = lower(trim(coalesce((select auth.jwt() ->> 'email'), '')))
   );
