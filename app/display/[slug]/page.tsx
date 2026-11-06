@@ -2,8 +2,13 @@ import DisplayPlayer from "@/components/display/DisplayPlayer";
 import { getDisplayBySlug } from "@/lib/db";
 import { publicPayloadWithFilm } from "@/lib/display-screen";
 import { displayBuildId, isDisplaySlug, type DisplayOrientation, type DisplayPayload } from "@/lib/display";
+import { FRONT_WINDOW_SLUG } from "@/lib/shop-hours";
 
 export const dynamic = "force-dynamic";
+
+function orientationForSlug(slug: string): DisplayOrientation {
+  return slug === FRONT_WINDOW_SLUG ? "landscape" : "portrait";
+}
 
 export default async function DisplayPage({
   params,
@@ -14,10 +19,13 @@ export default async function DisplayPage({
 }) {
   const { slug } = await params;
   const { preview } = await searchParams;
+  const isPreview = preview === "1";
   let initial: DisplayPayload | null = null;
-  let orientation: DisplayOrientation = "portrait";
+  let orientation = orientationForSlug(slug);
 
-  if (isDisplaySlug(slug)) {
+  // The TV paints from its saved copy and must not read Supabase on a reboot.
+  // Staff preview is a person opening the screen, so it still loads the live row.
+  if (isPreview && isDisplaySlug(slug)) {
     try {
       const row = await getDisplayBySlug(slug);
       if (row) {
@@ -40,7 +48,7 @@ export default async function DisplayPage({
       slug={slug}
       initial={initial}
       loadedBuildId={displayBuildId()}
-      preview={preview === "1"}
+      preview={isPreview}
       orientation={orientation}
     />
   );

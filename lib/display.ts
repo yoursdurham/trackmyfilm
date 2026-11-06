@@ -16,6 +16,7 @@
  * function runs, so the clock and the calendar stay outside the renderer.
  */
 
+import { FILM_STATS_REFRESH_MS } from "@/lib/display-schedule";
 import { sanitizeFilmDepartures } from "@/lib/film-departures";
 import { FRONT_WINDOW_SLUG, isOpenSignMode, openSignForceUntil, resolveOpenSignMode, type OpenSignMode } from "@/lib/shop-hours";
 import { sanitizeFilmMenu } from "@/lib/film-menu";
@@ -43,10 +44,14 @@ export function storedDisplayTheme(theme: string | null | undefined): string {
   const value = theme?.trim() || DISPLAY_THEME;
   return isSelectableDisplayTheme(value) ? value : DISPLAY_THEME;
 }
+/**
+ * Poll interval for modes that stay live (idle, bookings, messages, the airport board).
+ * The film menu and film stats do not use this timer. See lib/display-schedule.ts.
+ */
 export const DEFAULT_REFRESH_SECONDS = 30;
 export const MIN_REFRESH_SECONDS = 10;
 export const MAX_REFRESH_SECONDS = 300;
-/** A screen is online if it checked in within this window (a 5-minute heartbeat plus a minute of grace). */
+/** A live screen is online if it checked in within this window (a 5-minute heartbeat plus a minute of grace). */
 export const DISPLAY_ONLINE_WINDOW_MS = 6 * 60 * 1000;
 export const CUSTOM_MESSAGE_MAX_LENGTH = 280;
 export const DISPLAY_SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -697,12 +702,23 @@ export function publicPayloadForDisplay(
   return toPublicDisplayPayload(resolveDisplayState({ display: row, ...extras }));
 }
 
-export function isDisplayOnline(lastSeen: string | null | undefined, now = Date.now()): boolean {
+/** Film menu checks in weekly and film stats every six hours, so "online" lasts as long as that schedule. */
+export function displayOnlineWindowMs(mode?: string | null): number {
+  if (mode === "film_menu") return 8 * 24 * 60 * 60 * 1000;
+  if (mode === "film_stats") return FILM_STATS_REFRESH_MS + 30 * 60 * 1000;
+  return DISPLAY_ONLINE_WINDOW_MS;
+}
+
+export function isDisplayOnline(
+  lastSeen: string | null | undefined,
+  now = Date.now(),
+  mode?: string | null,
+): boolean {
   if (!lastSeen) return false;
   const time = new Date(lastSeen).getTime();
   if (Number.isNaN(time)) return false;
   const age = now - time;
-  return age <= DISPLAY_ONLINE_WINDOW_MS && age >= -60_000;
+  return age <= displayOnlineWindowMs(mode) && age >= -60_000;
 }
 
 export function parseHeartbeatClient(body: unknown, userAgent: string | null): HeartbeatClient {

@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/api-auth";
 import { getDisplayBySlug, updateDisplay } from "@/lib/db";
+import { displayNow } from "@/lib/display-clock";
+import { forgetDisplayPayload, readFreshDisplayPayload, rememberDisplayPayload } from "@/lib/display-payload-cache";
 import { publicPayloadWithFilm } from "@/lib/display-screen";
+import { DISPLAY_REFRESH_QUERY } from "@/lib/display-schedule";
 import {
   isDisplaySlug,
   isSelectableDefaultMode,
@@ -37,10 +40,21 @@ export async function GET(req: Request, { params }: { params: Promise<{ slug: st
   const slug = await readSlug(params);
   if (!isDisplaySlug(slug)) return json({ error: "Unknown screen" }, 404);
 
+  const url = new URL(req.url);
+  const preview = url.searchParams.get("preview") === "1";
+  const force = url.searchParams.get(DISPLAY_REFRESH_QUERY) === "1";
+  const now = displayNow();
+  if (!preview && !force) {
+    const saved = readFreshDisplayPayload(slug, now.getTime());
+    if (saved) return json(saved, 200, publicCacheControl(req));
+  }
+
   try {
     const row = await getDisplayBySlug(slug);
     if (!row) return json({ error: "Unknown screen" }, 404);
-    return json(await publicPayloadWithFilm(row), 200, publicCacheControl(req));
+    const payload = await publicPayloadWithFilm(row);
+    if (!preview) rememberDisplayPayload(slug, payload, now);
+    return json(payload, 200, publicCacheControl(req));
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Unknown error";
     console.error("[GET /api/displays/:slug]", message);
@@ -139,6 +153,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ slug: 
   try {
     const updated = await updateDisplay(slug, patch);
     if (!updated) return json({ error: "Unknown screen" }, 404);
+    forgetDisplayPayload(slug);
     return json(toAdminDisplay(updated));
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Unknown error";

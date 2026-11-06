@@ -66,6 +66,16 @@ function seenLabel(lastSeen: string | null) {
   return `Last seen ${formatDistanceToNow(date, { addSuffix: true })}`;
 }
 
+function refreshHref(slug: string) {
+  return `/display/${slug}?refresh=1`;
+}
+
+function refreshHelp(mode: string) {
+  if (mode === "film_menu") return "Saves the price list and reads the database again on Saturday at 11:00 AM Eastern.";
+  if (mode === "film_stats") return "Saves the stats and reads the database again every six hours.";
+  return "Still checks about every 30 seconds.";
+}
+
 export default function DisplaysPage() {
   const queryClient = useQueryClient();
   const [drafts, setDrafts] = useState<Record<string, string>>({});
@@ -114,7 +124,11 @@ export default function DisplaysPage() {
       <InternalHeader title="Displays" subtitle="Studio screens" />
       <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
         <p className="mb-6 max-w-2xl text-sm text-slate-500">
-          Each screen opens one address and shows whatever you set here. A screen is online if it checked in during the last six minutes.
+          Each screen opens one address and shows whatever you set here.
+          The film menu waits until Saturday at 11:00 AM Eastern before it reads the database again, and film stats wait six hours.
+          A booking or a custom message updates within about 30 seconds only while the screen is already showing that kind of mode.
+          A price list stays up until Saturday, or until you open its refresh address on that TV.
+          Film menu can say Online for about a week after Saturday. Film stats stay Online for about six hours. Other screens go offline after a few quiet minutes.
         </p>
 
         {isLoading ? (
@@ -166,6 +180,16 @@ export default function DisplaysPage() {
                         Showing <span className="font-medium text-slate-800">{modeLabel(display.resolvedMode)}</span>
                         {" · "}
                         {seenLabel(display.lastSeen)}
+                      </p>
+                      <p className="mt-1 max-w-xl text-sm text-slate-500">
+                        {refreshHelp(display.resolvedMode)}
+                        {" "}
+                        On the TV, open{" "}
+                        <a href={refreshHref(display.slug)} className="font-mono text-amber-800 underline">
+                          {refreshHref(display.slug)}
+                        </a>
+                        {" "}
+                        once. Leave that off the TV’s home address so a reboot does not fetch again. Opening it on this computer does not update the TV.
                       </p>
                     </div>
                     <Button
