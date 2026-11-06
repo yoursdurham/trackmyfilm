@@ -144,6 +144,36 @@ export function endOfShopDay(now: Date): Date {
   return shopInstant(next.year, next.month, next.day, 0);
 }
 
+const SATURDAY = 6;
+const SATURDAY_OPEN_MINUTES = 11 * 60;
+
+/**
+ * Most recent Saturday 11:00 AM America/New_York at or before `now`.
+ * That is when the shop opens, and when the film-menu screens refresh.
+ */
+export function lastSaturdayOpening(now: Date): Date {
+  const today = zonedDateParts(now);
+  for (let offset = 0; offset < 8; offset += 1) {
+    const date = addCalendarDays(today.year, today.month, today.day, -offset);
+    if (weekdayOfCalendarDate(date.year, date.month, date.day) !== SATURDAY) continue;
+    const instant = shopInstant(date.year, date.month, date.day, SATURDAY_OPEN_MINUTES);
+    if (instant.getTime() <= now.getTime()) return instant;
+  }
+  return new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+}
+
+/** Next Saturday 11:00 AM America/New_York strictly after `now`. */
+export function nextSaturdayOpening(now: Date): Date {
+  const today = zonedDateParts(now);
+  for (let offset = 0; offset < 8; offset += 1) {
+    const date = addCalendarDays(today.year, today.month, today.day, offset);
+    if (weekdayOfCalendarDate(date.year, date.month, date.day) !== SATURDAY) continue;
+    const instant = shopInstant(date.year, date.month, date.day, SATURDAY_OPEN_MINUTES);
+    if (instant.getTime() > now.getTime()) return instant;
+  }
+  return new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+}
+
 /** The next time the shop opens or closes after `now`. */
 export function nextRetailBoundary(now: Date): Date {
   const today = zonedDateParts(now);

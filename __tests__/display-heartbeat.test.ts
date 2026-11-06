@@ -9,12 +9,13 @@ vi.mock("@/lib/db", () => ({
 
 import { POST } from "@/app/api/displays/[slug]/heartbeat/route";
 import { clearDisplayHeartbeatThrottle, HEARTBEAT_WRITE_INTERVAL_MS } from "@/lib/display-heartbeat";
+import { clearDisplayPayloadCache, rememberDisplayPayload } from "@/lib/display-payload-cache";
 
-function post(slug = "studio-vertical") {
-  return POST(new Request(`http://localhost/api/displays/${slug}/heartbeat`, {
+function post(slug = "studio-vertical", body: Record<string, unknown> = { appVersion: "phase1" }, query = "") {
+  return POST(new Request(`http://localhost/api/displays/${slug}/heartbeat${query}`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ appVersion: "phase1" }),
+    body: JSON.stringify(body),
   }), {
     params: Promise.resolve({ slug }),
   });
@@ -23,11 +24,13 @@ function post(slug = "studio-vertical") {
 describe("POST /api/displays/:slug/heartbeat", () => {
   beforeEach(() => {
     clearDisplayHeartbeatThrottle();
+    clearDisplayPayloadCache();
     mockTouch.mockReset();
   });
 
   afterEach(() => {
     clearDisplayHeartbeatThrottle();
+    clearDisplayPayloadCache();
     vi.restoreAllMocks();
   });
 
@@ -56,6 +59,40 @@ describe("POST /api/displays/:slug/heartbeat", () => {
     const again = await post("missing-screen");
     expect(again.status).toBe(404);
     expect(mockTouch).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not write last_seen for a film-menu heartbeat between refreshes", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(1_000_000);
+    const first = await post("studio-vertical", { appVersion: "phase1", mode: "film_menu" });
+    const later = await post("studio-vertical", { appVersion: "phase1", mode: "film_menu" });
+    expect(first.status).toBe(200);
+    expect(later.status).toBe(200);
+    expect(mockTouch).not.toHaveBeenCalled();
+
+    vi.mocked(Date.now).mockReturnValue(1_000_000 + HEARTBEAT_WRITE_INTERVAL_MS);
+    const afterWindow = await post("studio-vertical", { appVersion: "phase1", mode: "film_stats" });
+    expect(afterWindow.status).toBe(200);
+    expect(mockTouch).not.toHaveBeenCalled();
+  });
+
+  it("writes last_seen when a slow screen is actually refreshing", async () => {
+    mockTouch.mockResolvedValue(true);
+    const response = await post("studio-vertical", { appVersion: "phase1", mode: "film_menu" }, "?refresh=1");
+    expect(response.status).toBe(200);
+    expect(mockTouch).toHaveBeenCalledTimes(1);
+  });
+
+  it("drops a heartbeat when the saved payload is still a film menu", async () => {
+    rememberDisplayPayload("studio-vertical", {
+      mode: "film_menu",
+      theme: "crt-green",
+      refreshSeconds: 30,
+      buildId: "dev",
+      data: {},
+    }, new Date());
+    const response = await post();
+    expect(response.status).toBe(200);
+    expect(mockTouch).not.toHaveBeenCalled();
   });
 
   it("keeps the response private", async () => {

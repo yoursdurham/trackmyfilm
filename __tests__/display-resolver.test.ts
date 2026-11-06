@@ -4,6 +4,7 @@ import {
   DISPLAY_ONLINE_WINDOW_MS,
   DISPLAY_PRIORITY,
   displayBuildId,
+  displayOnlineWindowMs,
   isDisplayOnline,
   publicPayloadForDisplay,
   resolveDisplayState,
@@ -11,6 +12,7 @@ import {
   toPublicDisplayPayload,
   type DisplayResolveInput,
 } from "../lib/display";
+import { toAdminDisplay } from "../lib/display-admin";
 import { DEFAULT_STUDIO_CHECKOUT_LINES, DEFAULT_STUDIO_INFO_LINES } from "../lib/studio-info";
 
 const display = {
@@ -416,5 +418,41 @@ describe("isDisplayOnline", () => {
     expect(isDisplayOnline(new Date(now - DISPLAY_ONLINE_WINDOW_MS).toISOString(), now)).toBe(true);
     expect(isDisplayOnline(new Date(now - DISPLAY_ONLINE_WINDOW_MS - 1).toISOString(), now)).toBe(false);
     expect(isDisplayOnline(null, now)).toBe(false);
+  });
+
+  it("keeps a weekly film menu and a six-hour film stats screen online for their schedule", () => {
+    const now = Date.parse("2026-10-08T16:00:00.000Z");
+    const menuWindow = displayOnlineWindowMs("film_menu");
+    const statsWindow = displayOnlineWindowMs("film_stats");
+    expect(menuWindow).toBeGreaterThan(7 * 24 * 60 * 60 * 1000);
+    expect(statsWindow).toBeGreaterThan(6 * 60 * 60 * 1000);
+    expect(isDisplayOnline(new Date(now - menuWindow).toISOString(), now, "film_menu")).toBe(true);
+    expect(isDisplayOnline(new Date(now - menuWindow - 1).toISOString(), now, "film_menu")).toBe(false);
+    expect(isDisplayOnline(new Date(now - 60 * 60 * 1000).toISOString(), now, "film_stats")).toBe(true);
+    expect(isDisplayOnline(new Date(now - 60 * 60 * 1000).toISOString(), now, "idle")).toBe(false);
+  });
+
+  it("keeps a film-menu screen online for the week even if a booking would win right now", () => {
+    const now = Date.parse("2026-10-08T16:00:00.000Z");
+    const admin = toAdminDisplay({
+      id: "display-1",
+      slug: "studio-vertical",
+      name: "Studio Vertical",
+      location: "Studio",
+      orientation: "portrait",
+      resolution: "1080x3840",
+      mode: "film_menu",
+      playlist_id: null,
+      theme: "yours-clean",
+      is_enabled: true,
+      last_seen: new Date(now - 2 * 24 * 60 * 60 * 1000).toISOString(),
+      last_client: null,
+      override_mode: null,
+      override_payload: null,
+    }, now, {
+      studio: { welcome: { firstName: "Ada", sessionType: "Studio", start: "12:00 PM", end: "1:00 PM" } },
+    });
+    expect(admin.resolvedMode).toBe("studio_welcome");
+    expect(admin.online).toBe(true);
   });
 });

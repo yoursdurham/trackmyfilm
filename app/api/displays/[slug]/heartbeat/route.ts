@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { touchDisplayHeartbeat } from "@/lib/db";
-import { isDisplaySlug, parseHeartbeatClient } from "@/lib/display";
+import { isDisplaySlug, isKnownDisplayMode, parseHeartbeatClient } from "@/lib/display";
 import { heartbeatWriteDue, rememberHeartbeatWrite } from "@/lib/display-heartbeat";
+import { readFreshDisplayPayload } from "@/lib/display-payload-cache";
+import { DISPLAY_REFRESH_QUERY, isSlowDisplayMode } from "@/lib/display-schedule";
 
 const WINDOW_MS = 60_000;
 const MAX_PER_WINDOW = 20;
@@ -20,6 +22,14 @@ function json(body: unknown, status = 200) {
 function clientIp(req: Request) {
   const forwarded = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
   return forwarded || req.headers.get("x-real-ip") || "unknown";
+}
+
+function heartbeatMode(body: unknown): string | null {
+  if (!body || typeof body !== "object" || !("mode" in body)) return null;
+  const mode = (body as { mode?: unknown }).mode;
+  if (typeof mode !== "string") return null;
+  const clean = mode.trim();
+  return isKnownDisplayMode(clean) ? clean : null;
 }
 
 function limited(key: string) {
@@ -60,6 +70,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
   }
 
   const client = parseHeartbeatClient(body, req.headers.get("user-agent"));
+  const force = new URL(req.url).searchParams.get(DISPLAY_REFRESH_QUERY) === "1";
+  const mode = heartbeatMode(body);
+  const saved = readFreshDisplayPayload(slug, Date.now());
+  // Film menu and film stats only write last_seen on a real refresh.
+  // A warm saved payload also drops heartbeats from a screen that is still polling.
+  if (!force && (isSlowDisplayMode(mode) || isSlowDisplayMode(saved?.mode))) {
+    return json({ ok: true });
+  }
 
   if (!heartbeatWriteDue(slug)) return json({ ok: true });
 

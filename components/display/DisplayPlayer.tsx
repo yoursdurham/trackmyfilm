@@ -1,6 +1,14 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { cachedDisplaySnapshot, readDisplayCache, subscribeDisplayCache, writeDisplayCache } from "@/lib/display-cache";
+import {
+  DISPLAY_REFRESH_QUERY,
+  DISPLAY_REFRESH_RETRY_MS,
+  displayRefreshPolicy,
+  planDisplaySync,
+  type DisplaySyncPlan,
+} from "@/lib/display-schedule";
 import {
   DISPLAY_RELOAD_STORAGE_KEY,
   clampRefreshSeconds,
@@ -49,6 +57,33 @@ function rememberReload(now: number) {
   }
 }
 
+function browserStorage(): Storage | null {
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
+}
+
+function forceRefreshRequested(): boolean {
+  try {
+    return new URLSearchParams(window.location.search).get(DISPLAY_REFRESH_QUERY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function stripForceRefresh() {
+  try {
+    const url = new URL(window.location.href);
+    if (!url.searchParams.has(DISPLAY_REFRESH_QUERY)) return;
+    url.searchParams.delete(DISPLAY_REFRESH_QUERY);
+    window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+  } catch {
+    // The next load still has the flag and will fetch once more.
+  }
+}
+
 export default function DisplayPlayer({
   slug,
   initial,
@@ -63,10 +98,12 @@ export default function DisplayPlayer({
   preview?: boolean;
   orientation?: DisplayOrientation;
 }) {
-  const [payload, setPayload] = useState<DisplayPayload | null>(initial);
+  const [fetched, setFetched] = useState<DisplayPayload | null>(initial);
+  const stored = useSyncExternalStore(subscribeDisplayCache, () => cachedDisplaySnapshot(slug), () => null);
+  const payload = fetched ?? (preview ? null : stored?.payload ?? null);
   const [missing, setMissing] = useState(false);
   const payloadRef = useRef(payload);
-  const refreshSeconds = clampRefreshSeconds(payload?.refreshSeconds ?? initial?.refreshSeconds);
+  const initialRef = useRef(initial);
 
   useEffect(() => {
     payloadRef.current = payload;
@@ -75,60 +112,153 @@ export default function DisplayPlayer({
   useEffect(() => {
     const controller = new AbortController();
     let timer = 0;
+    let interval = 0;
+    let cancelled = false;
+    let reloading = false;
 
-    async function tick() {
+    const storage = browserStorage();
+    const cached = !preview && storage ? readDisplayCache(storage, slug) : null;
+    if (cached) payloadRef.current = cached.payload;
+    let pollMs = clampRefreshSeconds(
+      cached?.payload.refreshSeconds ?? initialRef.current?.refreshSeconds,
+    ) * 1000;
+
+    function clearTimers() {
+      window.clearTimeout(timer);
+      window.clearInterval(interval);
+      timer = 0;
+      interval = 0;
+    }
+
+    async function pull(plan: DisplaySyncPlan): Promise<DisplayPayload | null> {
       try {
-        const previewQuery = preview ? "?preview=1" : "";
-        const response = await fetch(`/api/displays/${encodeURIComponent(slug)}${previewQuery}`, {
+        const params = new URLSearchParams();
+        if (preview) params.set("preview", "1");
+        if (plan.bypassCache) params.set(DISPLAY_REFRESH_QUERY, "1");
+        const query = params.toString();
+        const response = await fetch(`/api/displays/${encodeURIComponent(slug)}${query ? `?${query}` : ""}`, {
           cache: "no-store",
           signal: controller.signal,
         });
+        if (cancelled) return null;
         if (response.ok) {
           const body: unknown = await response.json();
           if (isDisplayPayload(body)) {
             const next = toPublicDisplayPayload(body);
-            const now = Date.now();
-            if (displayNeedsReload({
+            const fetchedAt = Date.now();
+            if (!preview && storage) writeDisplayCache(storage, slug, { fetchedAt, payload: next });
+            if (plan.checkReload && displayNeedsReload({
               loadedBuildId,
               payloadBuildId: next.buildId,
               mode: next.mode,
-              now,
+              now: fetchedAt,
               lastReloadAt: lastReloadAt(),
             })) {
-              rememberReload(now);
+              rememberReload(fetchedAt);
+              reloading = true;
               window.location.reload();
-              return;
+              return null;
             }
-            setPayload(next);
+            payloadRef.current = next;
+            setFetched(next);
             setMissing(false);
+            if (plan.heartbeat) {
+              const heartbeat = new URLSearchParams();
+              if (plan.bypassCache) heartbeat.set(DISPLAY_REFRESH_QUERY, "1");
+              const heartbeatQuery = heartbeat.toString();
+              try {
+                await fetch(`/api/displays/${encodeURIComponent(slug)}/heartbeat${heartbeatQuery ? `?${heartbeatQuery}` : ""}`, {
+                  method: "POST",
+                  headers: { "content-type": "application/json" },
+                  body: JSON.stringify({ appVersion: "phase1", mode: next.mode }),
+                  signal: controller.signal,
+                });
+              } catch {
+                // The next refresh will try again.
+              }
+            }
+            return next;
           }
         } else if (response.status === 404 && !payloadRef.current) {
           setMissing(true);
         }
       } catch {
-        // Keep the last good screen. A failed poll must not blank the kiosk.
+        // Keep the last good screen. A failed fetch must not blank the kiosk.
+      }
+      return null;
+    }
+
+    function arm(mode: string | null, fetchedAt: number | null, force: boolean) {
+      if (cancelled || reloading) return;
+      clearTimers();
+      const plan = planDisplaySync({
+        mode,
+        fetchedAt,
+        now: new Date(),
+        force,
+        preview,
+        pollMs,
+      });
+
+      if (plan.action === "wait") {
+        timer = window.setTimeout(() => arm(mode, fetchedAt, false), plan.waitMs);
+        return;
       }
 
-      if (preview || controller.signal.aborted) return;
-      try {
-        await fetch(`/api/displays/${encodeURIComponent(slug)}/heartbeat`, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ appVersion: "phase1" }),
-          signal: controller.signal,
-        });
-      } catch {
-        // The next poll will try again.
+      if (plan.action === "poll") {
+        pollMs = plan.pollMs;
+        const run = () => { void pollOnce(); };
+        void run();
+        interval = window.setInterval(run, pollMs);
+        return;
+      }
+
+      void (async () => {
+        const next = await pull(plan);
+        if (cancelled || reloading) return;
+        if (!next) {
+          timer = window.setTimeout(() => arm(mode, fetchedAt, force), DISPLAY_REFRESH_RETRY_MS);
+          return;
+        }
+        if (force) stripForceRefresh();
+        pollMs = clampRefreshSeconds(next.refreshSeconds) * 1000;
+        arm(next.mode, Date.now(), false);
+      })();
+    }
+
+    async function pollOnce() {
+      if (cancelled || reloading) return;
+      const next = await pull({
+        action: "fetch",
+        waitMs: 0,
+        pollMs,
+        heartbeat: !preview,
+        checkReload: true,
+        bypassCache: false,
+      });
+      if (cancelled || reloading || !next) return;
+      if (displayRefreshPolicy(next.mode) !== "poll") {
+        arm(next.mode, Date.now(), false);
+        return;
+      }
+      const nextPoll = clampRefreshSeconds(next.refreshSeconds) * 1000;
+      if (nextPoll !== pollMs) {
+        pollMs = nextPoll;
+        window.clearInterval(interval);
+        interval = window.setInterval(() => { void pollOnce(); }, pollMs);
       }
     }
 
-    void tick();
-    timer = window.setInterval(() => { void tick(); }, refreshSeconds * 1000);
+    const bootMode = cached?.payload.mode ?? (preview ? initialRef.current?.mode ?? null : null);
+    const bootFetchedAt = cached?.fetchedAt ?? (preview && initialRef.current ? Date.now() : null);
+    arm(bootMode, bootFetchedAt, forceRefreshRequested());
+
     return () => {
+      cancelled = true;
       controller.abort();
-      window.clearInterval(timer);
+      clearTimers();
     };
-  }, [slug, refreshSeconds, preview, loadedBuildId]);
+  }, [slug, preview, loadedBuildId]);
 
   const screen = payload ?? IDLE;
   const notice = missing && !payload ? "This screen is not set up yet." : null;

@@ -6,6 +6,7 @@ import {
   type DisplayResolveInput,
   type DisplayRow,
 } from "@/lib/display";
+import { isSlowDisplayMode } from "@/lib/display-schedule";
 import type { StudioCalendarStatus } from "@/lib/studio-calendar-config";
 import { resolveOpenSignMode, type OpenSignMode } from "@/lib/shop-hours";
 import { studioCheckoutLinesFromRow, studioInfoLinesFromRow } from "@/lib/studio-info";
@@ -66,7 +67,9 @@ export function toAdminDisplay(
     resolvedMode: payload.mode,
     isEnabled: row.is_enabled,
     lastSeen: row.last_seen,
-    online: isDisplayOnline(row.last_seen, now),
+    // A film-menu default can still be on the TV while a booking wins here.
+    // Keep the longer check-in window so that screen does not look offline all week.
+    online: isDisplayOnline(row.last_seen, now, isSlowDisplayMode(row.mode) ? row.mode : payload.mode),
     overrideMessage,
     refreshSeconds: payload.refreshSeconds,
     showStudioBookings: row.show_studio_bookings !== false,

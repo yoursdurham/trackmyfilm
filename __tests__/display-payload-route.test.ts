@@ -44,6 +44,9 @@ vi.mock("@/lib/studio-calendar-cache", () => ({
 
 import { GET, PATCH } from "@/app/api/displays/[slug]/route";
 import { displayBuildId } from "@/lib/display";
+import { clearDisplayPayloadCache, rememberDisplayPayload } from "@/lib/display-payload-cache";
+import { FILM_STATS_REFRESH_MS } from "@/lib/display-schedule";
+import { nextSaturdayOpening } from "@/lib/shop-hours";
 
 const row = {
   id: "display-1",
@@ -71,6 +74,7 @@ const row = {
 describe("GET /api/displays/:slug", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    clearDisplayPayloadCache();
     clock.now = new Date("2026-10-08T19:00:00.000Z");
     mockGetDisplayBySlug.mockResolvedValue(row);
     mockGetCachedStudioAgenda.mockResolvedValue({
@@ -85,8 +89,8 @@ describe("GET /api/displays/:slug", () => {
     });
   });
 
-  function get(slug = "studio-vertical") {
-    return GET(new Request(`http://localhost/api/displays/${slug}`), {
+  function get(slug = "studio-vertical", query = "") {
+    return GET(new Request(`http://localhost/api/displays/${slug}${query}`), {
       params: Promise.resolve({ slug }),
     });
   }
@@ -455,6 +459,86 @@ describe("GET /api/displays/:slug", () => {
     expect((await soon.json()).refreshSeconds).toBe(30);
   });
 
+  it("answers a second film-menu poll from memory and skips Supabase", async () => {
+    mockGetDisplayBySlug.mockResolvedValue({
+      ...row,
+      mode: "film_menu",
+      override_mode: null,
+      override_payload: null,
+    });
+    mockGetCachedFilmMenu.mockResolvedValue({
+      title: "YOUR'S FILM MENU",
+      subtitle: "Durham",
+      banner: [],
+      sections: [{ title: "35MM FILM", items: [{ name: "Kodak Gold", price: "$12" }] }],
+      notes: [],
+    });
+
+    const first = await get();
+    const firstBody = await first.json();
+    expect(first.status).toBe(200);
+    expect(firstBody.mode).toBe("film_menu");
+    expect(firstBody.data.menu.sections[0].items[0].name).toBe("Kodak Gold");
+
+    const second = await get();
+    expect(second.status).toBe(200);
+    expect(await second.json()).toEqual(firstBody);
+    expect(mockGetDisplayBySlug).toHaveBeenCalledTimes(1);
+    expect(mockGetCachedFilmMenu).toHaveBeenCalledTimes(1);
+
+    const forced = await get("studio-vertical", "?refresh=1");
+    expect(forced.status).toBe(200);
+    expect(mockGetDisplayBySlug).toHaveBeenCalledTimes(2);
+    expect(mockGetCachedFilmMenu).toHaveBeenCalledTimes(2);
+
+    const afterForce = await get();
+    expect(await afterForce.json()).toEqual(firstBody);
+    expect(mockGetDisplayBySlug).toHaveBeenCalledTimes(2);
+
+    const preview = await get("studio-vertical", "?preview=1");
+    expect(preview.headers.get("cache-control")).toBe("private, no-store");
+    expect(mockGetDisplayBySlug).toHaveBeenCalledTimes(3);
+
+    clock.now = nextSaturdayOpening(clock.now);
+    const nextWeek = await get();
+    expect(nextWeek.status).toBe(200);
+    expect(mockGetDisplayBySlug).toHaveBeenCalledTimes(4);
+    expect(mockGetCachedFilmMenu).toHaveBeenCalledTimes(4);
+  });
+
+  it("reuses film stats for six hours and then reads again", async () => {
+    mockGetDisplayBySlug.mockResolvedValue({
+      ...row,
+      mode: "film_stats",
+      override_mode: null,
+      override_payload: null,
+    });
+    mockGetCachedFilmMetrics.mockResolvedValue({ rollsProcessing: 4, nextLabRun: "Friday 12:00 PM" });
+
+    expect((await get()).status).toBe(200);
+    expect((await get()).status).toBe(200);
+    expect(mockGetDisplayBySlug).toHaveBeenCalledTimes(1);
+    expect(mockGetCachedFilmMetrics).toHaveBeenCalledTimes(1);
+
+    clock.now = new Date(clock.now.getTime() + FILM_STATS_REFRESH_MS);
+    expect((await get()).status).toBe(200);
+    expect(mockGetDisplayBySlug).toHaveBeenCalledTimes(2);
+    expect(mockGetCachedFilmMetrics).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps reading live modes on every poll", async () => {
+    mockGetDisplayBySlug.mockResolvedValue({
+      ...row,
+      mode: "idle",
+      override_mode: null,
+      override_payload: null,
+    });
+    await get();
+    await get();
+    expect(mockGetDisplayBySlug).toHaveBeenCalledTimes(2);
+    expect(mockGetCachedStudioAgenda).toHaveBeenCalledTimes(2);
+  });
+
   it("does not look up a malformed slug", async () => {
     const response = await get("../film_orders");
     expect(response.status).toBe(404);
@@ -465,6 +549,7 @@ describe("GET /api/displays/:slug", () => {
 describe("PATCH /api/displays/:slug", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    clearDisplayPayloadCache();
     mockRequireAuth.mockResolvedValue({ id: "user-1" });
     mockUpdateDisplay.mockImplementation(async (_slug: string, patch: Record<string, unknown>) => ({
       ...row,
@@ -483,6 +568,32 @@ describe("PATCH /api/displays/:slug", () => {
       params: Promise.resolve({ slug: "studio-vertical" }),
     });
   }
+
+  it("forgets a saved film-menu payload when staff change the screen", async () => {
+    rememberDisplayPayload("studio-vertical", {
+      mode: "film_menu",
+      theme: "crt-green",
+      refreshSeconds: 30,
+      buildId: "dev",
+      data: {},
+    }, new Date("2026-10-08T19:00:00.000Z"));
+    mockGetDisplayBySlug.mockResolvedValue({
+      ...row,
+      mode: "custom_message",
+      override_mode: "custom_message",
+      override_payload: { message: "Back soon" },
+    });
+
+    const saved = await patch({ overrideMessage: "Back soon" });
+    expect(saved.status).toBe(200);
+
+    const response = await GET(new Request("http://localhost/api/displays/studio-vertical"), {
+      params: Promise.resolve({ slug: "studio-vertical" }),
+    });
+    expect(response.status).toBe(200);
+    expect((await response.json()).mode).toBe("custom_message");
+    expect(mockGetDisplayBySlug).toHaveBeenCalledTimes(1);
+  });
 
   it("requires a staff session", async () => {
     mockRequireAuth.mockResolvedValue(NextResponse.json({ error: "Unauthorized" }, { status: 401 }));
