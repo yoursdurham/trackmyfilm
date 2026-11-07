@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { isStaffEmail } from "@/lib/staff-auth";
+import { isAdminUser, isStaffEmail } from "@/lib/staff-auth";
 import { NextResponse } from "next/server";
 
 export const STAFF_FORBIDDEN_MESSAGE = "This account does not have staff access.";
@@ -25,4 +25,17 @@ export async function requireAuth(): Promise<{ id: string; email?: string } | Ne
     return NextResponse.json({ error: STAFF_FORBIDDEN_MESSAGE }, { status: 403 });
   }
   return { id: user.id, email: user.email };
+}
+
+/** Same admin check as /numbers: app_metadata.role or ADMIN_EMAILS. */
+export async function requireAdmin(): Promise<{ id: string; email?: string } | NextResponse> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if (!isAdminUser(user)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  return { id: user.id, email: user.email ?? undefined };
 }
