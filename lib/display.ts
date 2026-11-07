@@ -702,7 +702,7 @@ export function publicPayloadForDisplay(
   return toPublicDisplayPayload(resolveDisplayState({ display: row, ...extras }));
 }
 
-/** Film menu checks in weekly and film stats every six hours, so "online" lasts as long as that schedule. */
+/** Film menu checks in weekly and film stats every two hours, so "online" lasts as long as that schedule. */
 export function displayOnlineWindowMs(mode?: string | null): number {
   if (mode === "film_menu") return 8 * 24 * 60 * 60 * 1000;
   if (mode === "film_stats") return FILM_STATS_REFRESH_MS + 30 * 60 * 1000;

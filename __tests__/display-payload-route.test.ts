@@ -506,7 +506,7 @@ describe("GET /api/displays/:slug", () => {
     expect(mockGetCachedFilmMenu).toHaveBeenCalledTimes(4);
   });
 
-  it("reuses film stats for six hours and then reads again", async () => {
+  it("reuses film stats for two hours and then reads again", async () => {
     mockGetDisplayBySlug.mockResolvedValue({
       ...row,
       mode: "film_stats",

@@ -8,7 +8,7 @@ import { lastSaturdayOpening, nextSaturdayOpening } from "@/lib/shop-hours";
  * the default saved on the display row.
  *
  *   film_menu   once a week, Saturdays at 11:00 AM America/New_York
- *   film_stats  every six hours
+ *   film_stats  every two hours
  *   everything else keeps the saved poll interval (about 30 seconds)
  *
  * While a screen is waiting, it does not call the payload route, does not
@@ -16,7 +16,7 @@ import { lastSaturdayOpening, nextSaturdayOpening } from "@/lib/shop-hours";
  * different mode adopts that mode's schedule immediately.
  */
 
-export const FILM_STATS_REFRESH_MS = 6 * 60 * 60 * 1000;
+export const FILM_STATS_REFRESH_MS = 2 * 60 * 60 * 1000;
 /** Try a failed film-menu or film-stats fetch again, without falling back to the 30-second poll. */
 export const DISPLAY_REFRESH_RETRY_MS = 15 * 60 * 1000;
 /** Query flag. Open `/display/<slug>?refresh=1` on the TV to fetch once immediately. */
@@ -26,11 +26,11 @@ const MIN_WAIT_MS = 1_000;
 /** Browsers clamp setTimeout above this. A week fits; the player replans if it does not. */
 const MAX_WAIT_MS = 2_147_483_647;
 
-export type DisplayRefreshPolicy = "weekly" | "six-hour" | "poll";
+export type DisplayRefreshPolicy = "weekly" | "two-hour" | "poll";
 
 export function displayRefreshPolicy(mode: string | null | undefined): DisplayRefreshPolicy {
   if (mode === "film_menu") return "weekly";
-  if (mode === "film_stats") return "six-hour";
+  if (mode === "film_stats") return "two-hour";
   return "poll";
 }
 
@@ -46,7 +46,7 @@ export function displayContentFresh(input: {
   if (!Number.isFinite(input.fetchedAt)) return false;
   const policy = displayRefreshPolicy(input.mode);
   if (policy === "weekly") return input.fetchedAt >= lastSaturdayOpening(input.now).getTime();
-  if (policy === "six-hour") return input.now.getTime() - input.fetchedAt < FILM_STATS_REFRESH_MS;
+  if (policy === "two-hour") return input.now.getTime() - input.fetchedAt < FILM_STATS_REFRESH_MS;
   return false;
 }
 
@@ -54,7 +54,7 @@ function waitUntilNext(mode: string, fetchedAt: number, now: Date): number {
   const policy = displayRefreshPolicy(mode);
   let due = now.getTime() + MIN_WAIT_MS;
   if (policy === "weekly") due = nextSaturdayOpening(now).getTime();
-  else if (policy === "six-hour") due = fetchedAt + FILM_STATS_REFRESH_MS;
+  else if (policy === "two-hour") due = fetchedAt + FILM_STATS_REFRESH_MS;
   const wait = due - now.getTime();
   if (wait <= MIN_WAIT_MS) return MIN_WAIT_MS;
   return Math.min(wait, MAX_WAIT_MS);

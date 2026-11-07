@@ -72,7 +72,7 @@ function refreshHref(slug: string) {
 
 function refreshHelp(mode: string) {
   if (mode === "film_menu") return "Saves the price list and reads the database again on Saturday at 11:00 AM Eastern.";
-  if (mode === "film_stats") return "Saves the stats and reads the database again every six hours.";
+  if (mode === "film_stats") return "Saves the stats and reads the database again every two hours.";
   return "Still checks about every 30 seconds.";
 }
 
@@ -125,10 +125,10 @@ export default function DisplaysPage() {
       <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
         <p className="mb-6 max-w-2xl text-sm text-slate-500">
           Each screen opens one address and shows whatever you set here.
-          The film menu waits until Saturday at 11:00 AM Eastern before it reads the database again, and film stats wait six hours.
+          The film menu waits until Saturday at 11:00 AM Eastern before it reads the database again, and film stats wait two hours.
           A booking or a custom message updates within about 30 seconds only while the screen is already showing that kind of mode.
           A price list stays up until Saturday, or until you open its refresh address on that TV.
-          Film menu can say Online for about a week after Saturday. Film stats stay Online for about six hours. Other screens go offline after a few quiet minutes.
+          Film menu can say Online for about a week after Saturday. Film stats stay Online for about two hours. Other screens go offline after a few quiet minutes.
         </p>
 
         {isLoading ? (

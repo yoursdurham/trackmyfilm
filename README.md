@@ -117,7 +117,7 @@ Open [http://localhost:3000](http://localhost:3000) → redirects to the public 
 It depends on the mode the screen is showing right now, not the default saved in Displays.
 
 - **Film menu** (the price list) reads once a week, Saturdays at 11:00 AM Eastern, when the shop opens. Between those times it shows the last copy, saved in the browser, including after a reboot.
-- **Film stats** reads every six hours and shows the saved copy in between.
+- **Film stats** reads every two hours and shows the saved copy in between.
 - **Every other mode** (idle, the airport board, studio bookings, a custom message) still checks about every 30 seconds, or every five minutes while the shop is closed overnight.
 
 A screen will not notice a mode change until its next read. A price list stays up through a new booking or a custom message until Saturday, or until someone refreshes that TV. When a read comes back as a booking or a message, the screen starts the 30-second check, so that session can update and then end. When the price list returns, the weekly wait starts again. The Open sign still follows the shop clock from the saved settings. Its numbers are as old as the last read, and a change to Auto / On / Off waits for that read too.
@@ -129,9 +129,9 @@ To fetch sooner, open this once **on the TV**:
 
 The page drops `refresh=1` after a successful load. Do not leave it as the TV’s home address, or every reboot hits the database. Opening the link on a staff computer updates that browser only.
 
-Check-ins follow the same schedule. A film-menu screen can look Online for about a week after Saturday, and film stats for about six hours. Other screens still look offline after a few quiet minutes.
+Check-ins follow the same schedule. A film-menu screen can look Online for about a week after Saturday, and film stats for about two hours. Other screens still look offline after a few quiet minutes.
 
-The payload route keeps the last film-menu response until the next Saturday 11:00 AM, and the last film-stats response for six hours. Another poll in that window does not read Supabase. `?refresh=1` and the Displays preview skip that saved copy. The preview is for staff and is not the TV.
+The payload route keeps the last film-menu response until the next Saturday 11:00 AM, and the last film-stats response for two hours. Another poll in that window does not read Supabase. `?refresh=1` and the Displays preview skip that saved copy. The preview is for staff and is not the TV.
 
 ## Scripts
 
