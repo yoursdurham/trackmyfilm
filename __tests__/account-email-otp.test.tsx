@@ -55,7 +55,18 @@ describe("account email code", () => {
   it("shows the code step only after a link is requested", () => {
     const request = renderToStaticMarkup(<AccountLoginForm linkError={false} />);
     expect(request).toContain("Email me a link");
+    expect(request).toContain("This also creates your free account");
+    expect(request).toContain("film stocks");
+    expect(request).toContain('value=""');
     expect(request).not.toContain(ACCOUNT_EMAIL_OTP_LABEL);
+
+    const prefilled = renderToStaticMarkup(
+      <AccountLoginForm linkError={false} initialEmail="ada@example.com" />,
+    );
+    expect(prefilled).toContain('value="ada@example.com"');
+    expect(prefilled).toContain("Email me a link");
+    expect(prefilled).not.toContain("Sending the link");
+    expect(prefilled).not.toContain(ACCOUNT_EMAIL_OTP_LABEL);
 
     const step = renderToStaticMarkup(
       <AccountEmailCodeStep

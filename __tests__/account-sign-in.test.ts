@@ -8,9 +8,11 @@ const generateLink = vi.hoisted(() => vi.fn(async (): Promise<{
   error: null,
 })));
 const from = vi.hoisted(() => vi.fn());
+const rpc = vi.hoisted(() => vi.fn());
 const createClient = vi.hoisted(() => vi.fn(() => ({
   auth: { admin: { generateLink } },
   from,
+  rpc,
 })));
 const fetchMock = vi.hoisted(() => vi.fn(async () => new Response(JSON.stringify({ id: "email_1" }), { status: 200 })));
 
@@ -81,6 +83,12 @@ describe("POST /api/account/sign-in", () => {
     });
     createClient.mockClear();
     from.mockClear();
+    rpc.mockReset();
+    rpc.mockResolvedValue({
+      data: null,
+      error: { code: "PGRST202", message: "Could not find the function" },
+    });
+    vi.spyOn(console, "error").mockImplementation(() => {});
     fetchMock.mockClear();
     fetchMock.mockResolvedValue(new Response(JSON.stringify({ id: "email_1" }), { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
@@ -97,6 +105,7 @@ describe("POST /api/account/sign-in", () => {
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     vi.unstubAllGlobals();
     restoreAccountEnv();
   });
@@ -196,6 +205,73 @@ describe("POST /api/account/sign-in", () => {
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
+  it("asks the shared limiter once for the IP and the normalized email", async () => {
+    rpc.mockResolvedValue({ data: false, error: null });
+    const res = await POST(request("  Ada@Example.com ", "203.0.113.81"));
+    expect(await res.json()).toEqual({ success: true, message: ACCOUNT_SIGN_IN_MESSAGE });
+    expect(rpc).toHaveBeenCalledTimes(1);
+    expect(rpc).toHaveBeenCalledWith("consume_account_sign_in_rate_limit", {
+      p_ip_bucket: "ip:203.0.113.81",
+      p_email_bucket: "email:ada@example.com",
+      p_window_seconds: 60,
+      p_max: 3,
+    });
+    expect(generateLink).toHaveBeenCalledTimes(1);
+    expect(from).not.toHaveBeenCalled();
+  });
+
+  it("does not open an email bucket for an address that cannot receive mail", async () => {
+    rpc.mockResolvedValue({ data: false, error: null });
+    const res = await POST(request("not-an-email", "203.0.113.82"));
+    expect(await res.json()).toEqual({ success: true, message: ACCOUNT_SIGN_IN_MESSAGE });
+    expect(rpc).toHaveBeenCalledWith("consume_account_sign_in_rate_limit", {
+      p_ip_bucket: "ip:203.0.113.82",
+      p_email_bucket: "",
+      p_window_seconds: 60,
+      p_max: 3,
+    });
+    expect(generateLink).not.toHaveBeenCalled();
+  });
+
+  it("keeps the same response when the shared rate limit refuses, and does not send", async () => {
+    rpc.mockResolvedValue({ data: true, error: null });
+    const res = await POST(request("ada@example.com", "203.0.113.80"));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ success: true, message: ACCOUNT_SIGN_IN_MESSAGE });
+    expect(generateLink).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("stops mailing one address after three sends from different IPs", async () => {
+    const counts = new Map<string, number>();
+    rpc.mockImplementation(async (_name: string, args: {
+      p_ip_bucket: string;
+      p_email_bucket: string;
+      p_max: number;
+    }) => {
+      const bump = (bucket: string) => {
+        if (!bucket) return false;
+        const next = (counts.get(bucket) ?? 0) + 1;
+        counts.set(bucket, next);
+        return next > args.p_max;
+      };
+      const limited = bump(args.p_ip_bucket) || bump(args.p_email_bucket);
+      return { data: limited, error: null };
+    });
+
+    for (let i = 0; i < 3; i += 1) {
+      const res = await POST(request("Ada@Example.com", `198.51.100.${i}`));
+      expect(await res.json()).toEqual({ success: true, message: ACCOUNT_SIGN_IN_MESSAGE });
+    }
+    expect(generateLink).toHaveBeenCalledTimes(3);
+
+    const limited = await POST(request("ada@example.com", "198.51.100.20"));
+    expect(limited.status).toBe(200);
+    expect(await limited.json()).toEqual({ success: true, message: ACCOUNT_SIGN_IN_MESSAGE });
+    expect(generateLink).toHaveBeenCalledTimes(3);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
   it("prefers NEXT_PUBLIC_APP_URL for the magic-link redirect", async () => {
     process.env.NEXT_PUBLIC_APP_URL = "https://trackmyfilm.com/";
     await POST(request("ada@example.com", "203.0.113.14"));
@@ -244,6 +320,12 @@ describe("POST /api/account/sign-in while accounts are hidden", () => {
       data: { properties: { hashed_token: "hashed-token", email_otp: "482913" } },
       error: null,
     });
+    rpc.mockReset();
+    rpc.mockResolvedValue({
+      data: null,
+      error: { code: "PGRST202", message: "Could not find the function" },
+    });
+    vi.spyOn(console, "error").mockImplementation(() => {});
     fetchMock.mockClear();
     fetchMock.mockResolvedValue(new Response(JSON.stringify({ id: "email_1" }), { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
@@ -259,6 +341,7 @@ describe("POST /api/account/sign-in while accounts are hidden", () => {
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     vi.unstubAllGlobals();
     restoreAccountEnv();
   });
