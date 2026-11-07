@@ -6,8 +6,8 @@
 import { KNOWN_ORDER_STATUSES, ORDER_STATUS, STATUS_FLOW } from "./constants";
 import type { FilmType, OrderStatus, RollDetail } from "./types";
 
-/** Staff-selectable film formats for new drop-offs (excludes legacy-only types). */
-export const DROP_OFF_FILM_TYPES = ["35mm", "120", "110"] as const satisfies readonly FilmType[];
+/** Staff-selectable film formats for new drop-offs, including disposable cameras. */
+export const DROP_OFF_FILM_TYPES = ["35mm", "120", "110", "Disposable Camera"] as const satisfies readonly FilmType[];
 
 /** All film types stored on orders and customer defaults. */
 export const FILM_TYPES = ["35mm", "120", "110", "Disposable Camera"] as const satisfies readonly FilmType[];

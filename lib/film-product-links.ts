@@ -51,6 +51,9 @@ export const FILM_PRODUCT_LINKS: readonly FilmProductLink[] = [
   { stock: "Cinestill 800T", format: "120", url: "https://www.yoursdurham.com/shopping/p/cinestill-800t-120" },
   { stock: "Cinestill 400D", format: "35mm", url: "https://www.yoursdurham.com/shopping/p/cinestill-400d-35mm" },
   { stock: "Cinestill 400D", format: "120", url: "https://www.yoursdurham.com/shopping/p/cinestill-400d-120" },
+  { stock: "Reflx Labs 100D", format: "35mm", url: "https://www.yoursdurham.com/shopping/p/reflx-lab-100d-35mm" },
+  { stock: "Reflx Labs 400D", format: "35mm", url: "https://www.yoursdurham.com/shopping/p/reflx-labs-400d-35mm" },
+  { stock: "Reflx Labs 800T", format: "35mm", url: "https://www.yoursdurham.com/shopping/p/reflx-lab-800t-35mm" },
   { stock: "Lomography Color 400", format: "35mm", url: "https://www.yoursdurham.com/shopping/p/lomography-color-negative-400-35mm-3-pack-36-exp" },
   { stock: "Lomography LomoChrome Metropolis", format: "35mm", url: "https://www.yoursdurham.com/shopping/p/lomography-lomochrome-metropolis-35mm-xr-100400-36-exp" },
   { stock: "Fujifilm Superia 200", format: "35mm", url: FUJI_200_35 },
@@ -143,6 +146,17 @@ const EXTRA_COMPACT_KEYS: readonly { format: FilmShopFormat; compact: string; ur
   { format: "120", compact: "harmanswitchazure", url: "https://www.yoursdurham.com/shopping/p/harman-switch-azure-125" },
   { format: "35mm", compact: "switchazure125", url: "https://www.yoursdurham.com/shopping/p/harman-switch-azure-125-35mm" },
   { format: "120", compact: "switchazure125", url: "https://www.yoursdurham.com/shopping/p/harman-switch-azure-125" },
+  { format: "35mm", compact: "reflxlabs100d", url: "https://www.yoursdurham.com/shopping/p/reflx-lab-100d-35mm" },
+  { format: "35mm", compact: "reflx100d", url: "https://www.yoursdurham.com/shopping/p/reflx-lab-100d-35mm" },
+  { format: "35mm", compact: "reflex100", url: "https://www.yoursdurham.com/shopping/p/reflx-lab-100d-35mm" },
+  { format: "35mm", compact: "reflxlabs400d", url: "https://www.yoursdurham.com/shopping/p/reflx-labs-400d-35mm" },
+  { format: "35mm", compact: "reflx400d", url: "https://www.yoursdurham.com/shopping/p/reflx-labs-400d-35mm" },
+  { format: "35mm", compact: "reflex400", url: "https://www.yoursdurham.com/shopping/p/reflx-labs-400d-35mm" },
+  { format: "35mm", compact: "reflxlabs800t", url: "https://www.yoursdurham.com/shopping/p/reflx-lab-800t-35mm" },
+  { format: "35mm", compact: "reflxlab800t", url: "https://www.yoursdurham.com/shopping/p/reflx-lab-800t-35mm" },
+  { format: "35mm", compact: "reflx800t", url: "https://www.yoursdurham.com/shopping/p/reflx-lab-800t-35mm" },
+  { format: "35mm", compact: "reflex800", url: "https://www.yoursdurham.com/shopping/p/reflx-lab-800t-35mm" },
+  { format: "35mm", compact: "reflx800", url: "https://www.yoursdurham.com/shopping/p/reflx-lab-800t-35mm" },
 ];
 
 for (const extra of EXTRA_COMPACT_KEYS) {

@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { User, Calendar, Hash, Layers, Loader2, Film, Mail } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
-import { applyFilmListingToRolls, mergeCustomerFilmNote } from "@/lib/film-stock-match";
+import { applyFilmListingToRolls, formatStockMatchLabel, mergeCustomerFilmNote } from "@/lib/film-stock-match";
 import { correctFilmStockSpelling, FILM_STOCKS } from "@/lib/film-stocks";
 import type { Customer, FilmType, FilmProcess, IncomingSquarespaceDraft, RollDetail } from "@/lib/types";
 import { DROP_OFF_FILM_TYPES, isValidEmail, normalizeEmail } from "@/lib/validation";
@@ -43,6 +43,7 @@ const FILM_TYPE_DOM_ID: Record<(typeof FILM_TYPES)[number], string> = {
   "35mm": "fmt-35mm",
   "120": "fmt-120",
   "110": "fmt-110",
+  "Disposable Camera": "fmt-disposable",
 };
 const FILM_PROCESS_DOM_ID: Record<FilmProcess, string> = {
   Color: "proc-color",
@@ -108,7 +109,9 @@ export default function NewDropoffForm({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [showSuggestions, setShowSuggestions] = useState(false);
-  const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(selectedCustomer?.id ?? null);
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(
+    incomingDraft?.customer_id ?? selectedCustomer?.id ?? null,
+  );
   const [sendEmail, setSendEmail] = useState(true);
   const draftState = incomingDraft ? formStateFromDraft(incomingDraft) : null;
   const [formData, setFormData] = useState(draftState?.formData ?? {
@@ -118,6 +121,23 @@ export default function NewDropoffForm({
   });
   const [rolls, setRolls] = useState<DropoffRollState[]>(draftState?.rolls ?? [createEmptyDropoffRoll()]);
   const [customStocks, setCustomStocks] = useState<string[]>([]);
+  const [appliedLinkId, setAppliedLinkId] = useState<string | null>(null);
+  const linkedCustomer = incomingDraft?.customer_id
+    ? customers.find((customer) => customer.id === incomingDraft.customer_id) ?? null
+    : null;
+  if (
+    linkedCustomer
+    && linkedCustomer.id !== appliedLinkId
+    && !formData.customer_name.trim()
+  ) {
+    setAppliedLinkId(linkedCustomer.id);
+    setSelectedCustomerId(linkedCustomer.id);
+    setFormData((prev) => ({
+      ...prev,
+      customer_name: `${linkedCustomer.first_name} ${linkedCustomer.last_name || ""}`.trim(),
+      customer_email: prev.customer_email || linkedCustomer.email || "",
+    }));
+  }
 
   useEffect(() => {
     if (!open) return;
@@ -499,6 +519,19 @@ export default function NewDropoffForm({
                     ))}
                     <option value="__other__">Other (specify below)</option>
                   </select>
+                  {(() => {
+                    const matchLabel = incomingDraft?.roll_details[i]
+                      ? formatStockMatchLabel(incomingDraft.roll_details[i])
+                      : null;
+                    if (!matchLabel) return null;
+                    const wrote = incomingDraft?.squarespace_film_listing;
+                    return (
+                      <p className="text-xs text-slate-500">
+                        {matchLabel}
+                        {wrote ? `. Wrote "${wrote}".` : "."}
+                      </p>
+                    );
+                  })()}
                   {roll.film_stock === "__other__" && (
                     <Input
                       value={roll.custom_stock}

@@ -12,7 +12,11 @@
 
 import {
   applyFilmListingToRolls,
+  customerFilmNote,
+  FILM_STOCK_MATCH_THRESHOLD,
   mergeCustomerFilmNote,
+  scoreFilmStock,
+  splitFilmListing,
 } from "./film-stock-match";
 import { parseIncomingDraftPayload, type IncomingDraftInput, MAX_INCOMING_DRAFT_ROLLS } from "./incoming-drafts";
 import type { RollDetail } from "./types";
@@ -257,13 +261,44 @@ function readString(value: unknown): string | null {
 }
 
 /**
+ * Disposable cameras, FunSaver, and single-use cameras.
+ * "not a disposable" does not match.
+ */
+export function isDisposableCameraText(value: string): boolean {
+  if (/\b(?:not|no|non)[\s-]+disposab/i.test(value)) return false;
+  return /\bdisposables?\b|\bfun\s*savers?\b|\bsingle[\s-]*use(?:\s+cameras?)?\b/i.test(value);
+}
+
+/** A short label that names the camera, not a film stock. */
+export function isDisposableCameraLabel(value: string): boolean {
+  const compact = value.toLowerCase().replace(/[^a-z0-9]/g, "");
+  return [
+    "disposable",
+    "disposables",
+    "disposablecamera",
+    "disposablecameras",
+    "funsaver",
+    "funsavers",
+    "kodakfunsaver",
+    "singleuse",
+    "singleusecamera",
+  ].includes(compact) || (
+    value.trim().split(/\s+/).length <= 4 && isDisposableCameraText(value)
+  );
+}
+
+/**
  * A film-processing service, not a shop sale.
- * Product names look like "C41 (color) - 35mm Development" or
- * "Black & White - 120 Development" / "Black and White - 110 Development".
+ * Product names look like "C41 (color) - 35mm Development",
+ * "Black & White - 120 Development", "B&W - 35mm Development",
+ * or "Disposable Dev/Scan Package".
+ * Online and POS receipts use these same products. "Dev" counts as development.
  * Film rolls and cameras do not match because they are not development.
  */
 export function isFilmProcessingProductName(productName: string): boolean {
-  if (!/develop/i.test(productName)) return false;
+  const develops = /\bdevelop|\bdev\b/i.test(productName);
+  if (isDisposableCameraText(productName) && (develops || /\bscan/i.test(productName))) return true;
+  if (!develops) return false;
   return filmTypeFromProductName(productName) !== null || processFromProductName(productName) !== null;
 }
 
@@ -381,7 +416,7 @@ function orderFilmTypeListing(order: Record<string, unknown>): string {
 function scanSizeFromOptions(options: NamedValue[]): RollDetail["scan_size"] {
   for (const option of options) {
     const haystack = `${option.label} ${option.value}`.toLowerCase();
-    if (!/process|scan/i.test(haystack)) continue;
+    if (!/process|scan|develop|\bdev\b/i.test(haystack)) continue;
     if (
       haystack.includes("scans only") ||
       haystack.includes("scan only") ||
@@ -392,7 +427,13 @@ function scanSizeFromOptions(options: NamedValue[]): RollDetail["scan_size"] {
     const value = option.value.toLowerCase();
     if (value.includes("high res") || value.includes("high-res")) return "High-Res";
     if (value.includes("tiff")) return "TIFF";
-    if (value.includes("process only")) return "Process Only";
+    if (
+      value.includes("process only")
+      || /develop(?:ment)?\s+only/.test(value)
+      || /\bdev\s+only\b/.test(value)
+    ) {
+      return "Process Only";
+    }
     if (value.includes("standard")) return "Standard";
   }
   return "Standard";
@@ -444,18 +485,6 @@ function stockFromOptions(options: NamedValue[]): string | undefined {
     return option.value.slice(0, 200);
   }
   return undefined;
-}
-
-function customerNameFromOrder(order: Record<string, unknown>): string | null {
-  for (const key of ["billingAddress", "shippingAddress"] as const) {
-    const address = asRecord(order[key]);
-    if (!address) continue;
-    const first = readString(address.firstName)?.trim() ?? "";
-    const last = readString(address.lastName)?.trim() ?? "";
-    const name = `${first} ${last}`.trim();
-    if (name) return name;
-  }
-  return null;
 }
 
 function orderNumberFrom(order: Record<string, unknown>): string | undefined {
@@ -515,18 +544,79 @@ export function selectSquarespaceOrdersForIntake(
   return { orders: eligible, invalid };
 }
 
+function lineProductName(line: Record<string, unknown>): string {
+  return readString(line.productName)?.trim()
+    || readString(line.title)?.trim()
+    || readString(line.name)?.trim()
+    || "";
+}
+
+/**
+ * POS receipts and online orders both put the service in productName, with
+ * the scan choice on a variant such as "Develop Only - $11" or
+ * "Dev + High Res Scan - $23". Custom POS lines may use title instead.
+ */
+function lineServiceText(line: Record<string, unknown>, productName: string): string {
+  const options = lineItemOptions(line)
+    .map((option) => [option.label, option.value].filter(Boolean).join(" "))
+    .join(" ");
+  return `${productName} ${options}`.replace(/\s+/g, " ").trim();
+}
+
+function serviceFilmType(productName: string, serviceText: string): RollDetail["film_type"] | null {
+  if (isDisposableCameraText(productName)) return "Disposable Camera";
+  return filmTypeFromProductName(serviceText) ?? filmTypeFromProductName(productName);
+}
+
+function listingForStocks(listing: string): string | null {
+  const parts = splitFilmListing(listing).filter((part) => !isDisposableCameraLabel(part));
+  return parts.length > 0 ? parts.join("\n") : null;
+}
+
+/**
+ * Merchant notes on the order (`internalNotes[].content`).
+ * Only pieces that match a catalog stock, or that name a disposable, are
+ * used as the film list. A pickup reminder is left out.
+ */
+function filmListingFromInternalNotes(text: string): string {
+  const trimmed = text.trim();
+  if (!trimmed) return "";
+  const kept = splitFilmListing(trimmed).filter((part) => {
+    if (isDisposableCameraLabel(part)) return true;
+    const scored = scoreFilmStock(part);
+    return Boolean(scored.stock) && !scored.created && scored.confidence >= FILM_STOCK_MATCH_THRESHOLD;
+  });
+  return kept.join("\n");
+}
+
+function internalNoteText(order: Record<string, unknown>): string {
+  const notes = order.internalNotes;
+  if (typeof notes === "string") return notes.trim();
+  if (!Array.isArray(notes)) return "";
+  return notes
+    .map((entry) => {
+      if (typeof entry === "string") return entry.trim();
+      const record = asRecord(entry);
+      return readString(record?.content)?.trim() ?? "";
+    })
+    .filter(Boolean)
+    .join("\n");
+}
+
 function mapFilmLine(line: Record<string, unknown>, index: number):
   | { ok: true; rolls: RollDetail[]; note?: string }
   | { ok: false; error: string } {
-  const productName = readString(line.productName)?.trim() ?? "";
-  const scansOnlyProduct = isFilmScanningOnlyProductName(productName);
-  const filmType = filmTypeFromProductName(productName);
+  const productName = lineProductName(line);
+  const serviceText = lineServiceText(line, productName);
+  const scansOnlyProduct = isFilmScanningOnlyProductName(productName) || isFilmScanningOnlyProductName(serviceText);
+  const filmType = serviceFilmType(productName, serviceText);
   if (!filmType) {
-    return { ok: false, error: `Film service item "${productName || `line ${index + 1}`}" is missing a film type (35mm, 120, or 110)` };
+    return { ok: false, error: `Film service item "${productName || `line ${index + 1}`}" is missing a film type (35mm, 120, 110, or disposable)` };
   }
   const options = lineItemOptions(line);
-  const filmProcess = processFromProductName(productName) ?? processFromOptions(options);
-  if (!filmProcess && !scansOnlyProduct) {
+  const filmProcess = processFromProductName(serviceText) ?? processFromOptions(options);
+  const disposable = filmType === "Disposable Camera";
+  if (!filmProcess && !scansOnlyProduct && !disposable) {
     return { ok: false, error: `Film processing item "${productName}" is missing C41/color or black and white` };
   }
   const quantity = line.quantity;
@@ -557,7 +647,7 @@ export function classifySquarespaceOrder(order: unknown): ClassifiedSquarespaceO
   if (!record) return { kind: "error", message: "Squarespace order was not an object" };
 
   const orderNumber = orderNumberFrom(record);
-  if (isSquarespacePosOrder(record)) return { kind: "skip_pos", orderNumber };
+  const posOrder = isSquarespacePosOrder(record);
   const lineItems = Array.isArray(record.lineItems) ? record.lineItems : [];
   const rolls: RollDetail[] = [];
   const problems: string[] = [];
@@ -566,11 +656,15 @@ export function classifySquarespaceOrder(order: unknown): ClassifiedSquarespaceO
   let sawFilm = false;
   let usedOrderListing = false;
   const orderListing = orderFilmTypeListing(record);
+  const merchantNotes = internalNoteText(record);
+  const noteListing = orderListing ? "" : filmListingFromInternalNotes(merchantNotes);
 
   lineItems.forEach((line, index) => {
     const item = asRecord(line);
-    const productName = item ? readString(item.productName)?.trim() ?? "" : "";
-    if (!item || !isFilmServiceProductName(productName)) return;
+    if (!item) return;
+    const productName = lineProductName(item);
+    const serviceText = lineServiceText(item, productName);
+    if (!isFilmServiceProductName(productName) && !isFilmServiceProductName(serviceText)) return;
     sawFilm = true;
     const mapped = mapFilmLine(item, index);
     if (!mapped.ok) {
@@ -578,16 +672,27 @@ export function classifySquarespaceOrder(order: unknown): ClassifiedSquarespaceO
       return;
     }
     const lineListing = filmTypeListing(lineItemOptions(item));
-    const listing = lineListing || orderListing;
+    const listing = lineListing || orderListing || noteListing;
     if (lineListing) collectedListings.push(lineListing);
     else if (orderListing) usedOrderListing = true;
-    const applied = applyFilmListingToRolls(mapped.rolls, listing || null);
+    else if (noteListing) usedOrderListing = true;
+    const stockListing = listing ? listingForStocks(listing) : null;
+    const applied = applyFilmListingToRolls(mapped.rolls, stockListing);
     rolls.push(...applied.rolls);
-    notes = mergeCustomerFilmNote(notes, applied.unmatchedNote);
+    if (listing) notes = mergeCustomerFilmNote(notes, customerFilmNote(listing));
     notes = mergeCustomerFilmNote(notes, mapped.note);
   });
   if (usedOrderListing && orderListing) collectedListings.push(orderListing);
+  if (usedOrderListing && !orderListing && noteListing) collectedListings.push(noteListing);
   const squarespaceFilmListing = joinUnique(collectedListings).slice(0, MAX_SQUARESPACE_FILM_LISTING);
+
+  if (isDisposableCameraText(squarespaceFilmListing) || isDisposableCameraText(merchantNotes)) {
+    for (const roll of rolls) {
+      if (roll.film_type === "35mm" || roll.film_type === "Disposable Camera") {
+        roll.film_type = "Disposable Camera";
+      }
+    }
+  }
 
   if (!sawFilm) return { kind: "skip_no_film" };
   if (problems.length > 0) {
@@ -605,10 +710,6 @@ export function classifySquarespaceOrder(order: unknown): ClassifiedSquarespaceO
   if (!externalOrderId) {
     return { kind: "error", orderNumber, message: "Squarespace order is missing an id" };
   }
-  const customerName = customerNameFromOrder(record);
-  if (!customerName) {
-    return { kind: "error", orderNumber, message: "Squarespace order is missing a customer name" };
-  }
 
   let dropoffDate: string | null = null;
   const createdOn = readString(record.createdOn);
@@ -621,7 +722,7 @@ export function classifySquarespaceOrder(order: unknown): ClassifiedSquarespaceO
     squarespace_order_number: orderNumber ?? "",
     external_order_id: externalOrderId,
     import_source: "squarespace",
-    customer_name: customerName,
+    customer_name: "",
     customer_email: email || null,
     dropoff_date: dropoffDate,
     roll_count: rolls.length,
@@ -633,8 +734,10 @@ export function classifySquarespaceOrder(order: unknown): ClassifiedSquarespaceO
   }
   return {
     kind: "import",
-    draft: squarespaceFilmListing
-      ? { ...parsed.value, squarespace_film_listing: squarespaceFilmListing }
-      : parsed.value,
+    draft: {
+      ...parsed.value,
+      squarespace_channel: posOrder ? "pos" : "web",
+      ...(squarespaceFilmListing ? { squarespace_film_listing: squarespaceFilmListing } : {}),
+    },
   };
 }

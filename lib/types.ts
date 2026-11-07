@@ -12,6 +12,10 @@ export interface RollDetail {
   film_type: FilmType;
   film_process: FilmProcess;
   film_stock?: string;
+  /** 0–100 confidence of the Squarespace note match. Omitted on film orders. */
+  film_stock_confidence?: number;
+  /** True when the written name was saved because it did not match the dropdown. */
+  film_stock_created?: boolean;
   prints_4x6?: boolean;
   scan_size?: "Standard" | "High-Res" | "TIFF" | "Process Only" | "Scans Only";
   /** Lab returned this individual roll blank. Omitted when the roll is not blank. */
@@ -64,6 +68,8 @@ export interface IncomingSquarespaceDraft {
   squarespace_order_number: string;
   external_order_id: string;
   customer_name: string;
+  /** Set when the Squarespace email matches an existing customer. The staged name stays blank. */
+  customer_id?: string | null;
   customer_email: string | null;
   dropoff_date: string | null;
   roll_count: number;
@@ -71,6 +77,8 @@ export interface IncomingSquarespaceDraft {
   notes: string | null;
   /** Raw film-type answer from Squarespace. Absent until migration 022 has been run. */
   squarespace_film_listing?: string | null;
+  /** Squarespace Orders API `channel`: web for the shop, pos for in-person. */
+  squarespace_channel?: "web" | "pos" | null;
   import_source: string;
   status: IncomingDraftStatus;
   /** Set when Approve & Receive creates the film order. Deleting that order cascades. */
