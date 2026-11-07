@@ -50,7 +50,7 @@ describe("Saturday shop-open instants", () => {
 describe("display refresh policy", () => {
   it("slows only the film menu and film stats", () => {
     expect(displayRefreshPolicy("film_menu")).toBe("weekly");
-    expect(displayRefreshPolicy("film_stats")).toBe("six-hour");
+    expect(displayRefreshPolicy("film_stats")).toBe("two-hour");
     for (const mode of ["idle", "film_status", "film_departures", "custom_message", "studio_active", "studio_welcome", "studio_upcoming", "studio_ending_soon"]) {
       expect(displayRefreshPolicy(mode)).toBe("poll");
     }
@@ -65,7 +65,7 @@ describe("display refresh policy", () => {
     expect(displayContentFresh({ mode: "film_menu", fetchedAt: saturday.getTime(), now: saturday })).toBe(true);
   });
 
-  it("treats film stats as fresh for six hours", () => {
+  it("treats film stats as fresh for two hours", () => {
     const now = new Date("2026-10-08T19:00:00.000Z");
     const fetchedAt = now.getTime() - FILM_STATS_REFRESH_MS + 1;
     expect(displayContentFresh({ mode: "film_stats", fetchedAt, now })).toBe(true);
@@ -113,7 +113,7 @@ describe("planDisplaySync", () => {
     });
   });
 
-  it("waits inside six hours of film stats and fetches after that", () => {
+  it("waits inside two hours of film stats and fetches after that", () => {
     expect(plan({ mode: "film_stats", fetchedAt: now.getTime() - 60 * 60 * 1000, now }).action).toBe("wait");
     expect(plan({ mode: "film_stats", fetchedAt: now.getTime() - FILM_STATS_REFRESH_MS, now })).toMatchObject({
       action: "fetch",
