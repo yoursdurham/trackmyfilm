@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { clampRefreshSeconds } from "@/lib/display";
 import {
+  DISPLAY_CONFIG_POLL_MS,
   DISPLAY_REFRESH_QUERY,
   displayContentFresh,
   displayRefreshPolicy,
@@ -48,6 +49,10 @@ describe("Saturday shop-open instants", () => {
 });
 
 describe("display refresh policy", () => {
+  it("checks the display row about once a minute", () => {
+    expect(DISPLAY_CONFIG_POLL_MS).toBe(60_000);
+  });
+
   it("slows only the film menu and film stats", () => {
     expect(displayRefreshPolicy("film_menu")).toBe("weekly");
     expect(displayRefreshPolicy("film_stats")).toBe("two-hour");

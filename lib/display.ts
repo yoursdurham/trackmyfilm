@@ -16,7 +16,6 @@
  * function runs, so the clock and the calendar stay outside the renderer.
  */
 
-import { FILM_STATS_REFRESH_MS } from "@/lib/display-schedule";
 import { sanitizeFilmDepartures } from "@/lib/film-departures";
 import { FRONT_WINDOW_SLUG, isOpenSignMode, openSignForceUntil, resolveOpenSignMode, type OpenSignMode } from "@/lib/shop-hours";
 import { sanitizeFilmMenu } from "@/lib/film-menu";
@@ -702,10 +701,13 @@ export function publicPayloadForDisplay(
   return toPublicDisplayPayload(resolveDisplayState({ display: row, ...extras }));
 }
 
-/** Film menu checks in weekly and film stats every two hours, so "online" lasts as long as that schedule. */
+/**
+ * Every screen reads its config about once a minute and last_seen is written
+ * every few minutes, including while the film menu or film stats stay cached.
+ * `mode` is accepted so older callers keep compiling.
+ */
 export function displayOnlineWindowMs(mode?: string | null): number {
-  if (mode === "film_menu") return 8 * 24 * 60 * 60 * 1000;
-  if (mode === "film_stats") return FILM_STATS_REFRESH_MS + 30 * 60 * 1000;
+  void mode;
   return DISPLAY_ONLINE_WINDOW_MS;
 }
 

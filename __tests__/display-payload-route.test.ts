@@ -459,7 +459,7 @@ describe("GET /api/displays/:slug", () => {
     expect((await soon.json()).refreshSeconds).toBe(30);
   });
 
-  it("answers a second film-menu poll from memory and skips Supabase", async () => {
+  it("reuses a film menu while the row matches and skips the menu query", async () => {
     mockGetDisplayBySlug.mockResolvedValue({
       ...row,
       mode: "film_menu",
@@ -483,27 +483,61 @@ describe("GET /api/displays/:slug", () => {
     const second = await get();
     expect(second.status).toBe(200);
     expect(await second.json()).toEqual(firstBody);
-    expect(mockGetDisplayBySlug).toHaveBeenCalledTimes(1);
+    expect(mockGetDisplayBySlug).toHaveBeenCalledTimes(2);
     expect(mockGetCachedFilmMenu).toHaveBeenCalledTimes(1);
 
     const forced = await get("studio-vertical", "?refresh=1");
     expect(forced.status).toBe(200);
-    expect(mockGetDisplayBySlug).toHaveBeenCalledTimes(2);
+    expect(mockGetDisplayBySlug).toHaveBeenCalledTimes(3);
     expect(mockGetCachedFilmMenu).toHaveBeenCalledTimes(2);
 
     const afterForce = await get();
     expect(await afterForce.json()).toEqual(firstBody);
-    expect(mockGetDisplayBySlug).toHaveBeenCalledTimes(2);
+    expect(mockGetDisplayBySlug).toHaveBeenCalledTimes(4);
+    expect(mockGetCachedFilmMenu).toHaveBeenCalledTimes(2);
 
     const preview = await get("studio-vertical", "?preview=1");
     expect(preview.headers.get("cache-control")).toBe("private, no-store");
-    expect(mockGetDisplayBySlug).toHaveBeenCalledTimes(3);
+    expect(mockGetDisplayBySlug).toHaveBeenCalledTimes(5);
+    expect(mockGetCachedFilmMenu).toHaveBeenCalledTimes(3);
 
     clock.now = nextSaturdayOpening(clock.now);
     const nextWeek = await get();
     expect(nextWeek.status).toBe(200);
-    expect(mockGetDisplayBySlug).toHaveBeenCalledTimes(4);
+    expect(mockGetDisplayBySlug).toHaveBeenCalledTimes(6);
     expect(mockGetCachedFilmMenu).toHaveBeenCalledTimes(4);
+  });
+
+  it("does not serve a saved film menu after the row mode changes", async () => {
+    mockGetDisplayBySlug.mockResolvedValue({
+      ...row,
+      mode: "film_menu",
+      override_mode: null,
+      override_payload: null,
+      show_studio_bookings: false,
+    });
+    mockGetCachedFilmMenu.mockResolvedValue({
+      title: "YOUR'S FILM MENU",
+      subtitle: "Durham",
+      banner: [],
+      sections: [],
+      notes: [],
+    });
+
+    expect((await get()).status).toBe(200);
+    expect(mockGetCachedFilmMenu).toHaveBeenCalledTimes(1);
+
+    mockGetDisplayBySlug.mockResolvedValue({
+      ...row,
+      mode: "idle",
+      override_mode: null,
+      override_payload: null,
+      show_studio_bookings: false,
+    });
+    const switched = await get();
+    expect(switched.status).toBe(200);
+    expect((await switched.json()).mode).toBe("idle");
+    expect(mockGetCachedFilmMenu).toHaveBeenCalledTimes(1);
   });
 
   it("reuses film stats for two hours and then reads again", async () => {
@@ -517,12 +551,12 @@ describe("GET /api/displays/:slug", () => {
 
     expect((await get()).status).toBe(200);
     expect((await get()).status).toBe(200);
-    expect(mockGetDisplayBySlug).toHaveBeenCalledTimes(1);
+    expect(mockGetDisplayBySlug).toHaveBeenCalledTimes(2);
     expect(mockGetCachedFilmMetrics).toHaveBeenCalledTimes(1);
 
     clock.now = new Date(clock.now.getTime() + FILM_STATS_REFRESH_MS);
     expect((await get()).status).toBe(200);
-    expect(mockGetDisplayBySlug).toHaveBeenCalledTimes(2);
+    expect(mockGetDisplayBySlug).toHaveBeenCalledTimes(3);
     expect(mockGetCachedFilmMetrics).toHaveBeenCalledTimes(2);
   });
 

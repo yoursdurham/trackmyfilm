@@ -3,6 +3,13 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { cachedDisplaySnapshot, readDisplayCache, subscribeDisplayCache, writeDisplayCache } from "@/lib/display-cache";
 import {
+  displayConfigContentKey,
+  isDisplayConfig,
+  reconcileDisplayConfig,
+  type ReconcileDisplayResult,
+} from "@/lib/display-config";
+import {
+  DISPLAY_CONFIG_POLL_MS,
   DISPLAY_REFRESH_QUERY,
   DISPLAY_REFRESH_RETRY_MS,
   displayRefreshPolicy,
@@ -113,6 +120,7 @@ export default function DisplayPlayer({
     const controller = new AbortController();
     let timer = 0;
     let interval = 0;
+    let configTimer = 0;
     let cancelled = false;
     let reloading = false;
 
@@ -122,6 +130,25 @@ export default function DisplayPlayer({
     let pollMs = clampRefreshSeconds(
       cached?.payload.refreshSeconds ?? initialRef.current?.refreshSeconds,
     ) * 1000;
+    let contentFetchedAt = cached?.fetchedAt ?? (preview && initialRef.current ? Date.now() : null);
+    let modes: NonNullable<typeof cached>["modes"] = { ...(cached?.modes ?? {}) };
+    let openSignStats = cached?.openSignStats ?? null;
+    let previousConfig = cached?.config ?? null;
+    const forcedLoad = forceRefreshRequested();
+    let requestId = 0;
+    let contentRetryNotBefore = 0;
+    let bypassNext = false;
+    let inFlight: { id: number; bypass: boolean; promise: Promise<"ok" | "failed" | "stale"> } | null = null;
+
+    if (payloadRef.current && contentFetchedAt !== null) {
+      const seed = payloadRef.current;
+      if (seed.mode === "film_menu" || seed.mode === "film_stats") {
+        modes = { ...modes, [seed.mode]: { fetchedAt: contentFetchedAt, data: seed.data } };
+      }
+      if (seed.openSignStats && (!openSignStats || contentFetchedAt >= openSignStats.fetchedAt)) {
+        openSignStats = { fetchedAt: contentFetchedAt, stats: seed.openSignStats };
+      }
+    }
 
     function clearTimers() {
       window.clearTimeout(timer);
@@ -130,65 +157,116 @@ export default function DisplayPlayer({
       interval = 0;
     }
 
-    async function pull(plan: DisplaySyncPlan): Promise<DisplayPayload | null> {
-      try {
-        const params = new URLSearchParams();
-        if (preview) params.set("preview", "1");
-        if (plan.bypassCache) params.set(DISPLAY_REFRESH_QUERY, "1");
-        const query = params.toString();
-        const response = await fetch(`/api/displays/${encodeURIComponent(slug)}${query ? `?${query}` : ""}`, {
-          cache: "no-store",
-          signal: controller.signal,
-        });
-        if (cancelled) return null;
-        if (response.ok) {
-          const body: unknown = await response.json();
-          if (isDisplayPayload(body)) {
-            const next = toPublicDisplayPayload(body);
-            const fetchedAt = Date.now();
-            if (!preview && storage) writeDisplayCache(storage, slug, { fetchedAt, payload: next });
-            if (plan.checkReload && displayNeedsReload({
-              loadedBuildId,
-              payloadBuildId: next.buildId,
-              mode: next.mode,
-              now: fetchedAt,
-              lastReloadAt: lastReloadAt(),
-            })) {
-              rememberReload(fetchedAt);
-              reloading = true;
-              window.location.reload();
-              return null;
-            }
-            payloadRef.current = next;
-            setFetched(next);
-            setMissing(false);
-            if (plan.heartbeat) {
-              const heartbeat = new URLSearchParams();
-              if (plan.bypassCache) heartbeat.set(DISPLAY_REFRESH_QUERY, "1");
-              const heartbeatQuery = heartbeat.toString();
-              try {
-                await fetch(`/api/displays/${encodeURIComponent(slug)}/heartbeat${heartbeatQuery ? `?${heartbeatQuery}` : ""}`, {
-                  method: "POST",
-                  headers: { "content-type": "application/json" },
-                  body: JSON.stringify({ appVersion: "phase1", mode: next.mode }),
-                  signal: controller.signal,
-                });
-              } catch {
-                // The next refresh will try again.
-              }
-            }
-            return next;
-          }
-        } else if (response.status === 404 && !payloadRef.current) {
-          setMissing(true);
-        }
-      } catch {
-        // Keep the last good screen. A failed fetch must not blank the kiosk.
+    function rememberContent(next: DisplayPayload, fetchedAt: number) {
+      if (next.mode === "film_menu" || next.mode === "film_stats") {
+        modes = { ...modes, [next.mode]: { fetchedAt, data: next.data } };
       }
-      return null;
+      if (next.openSignStats && (!openSignStats || fetchedAt >= openSignStats.fetchedAt)) {
+        openSignStats = { fetchedAt, stats: next.openSignStats };
+      }
     }
 
-    function arm(mode: string | null, fetchedAt: number | null, force: boolean) {
+    function persist(next: DisplayPayload, fetchedAt: number) {
+      if (preview || !storage) return;
+      writeDisplayCache(storage, slug, {
+        fetchedAt,
+        payload: next,
+        modes,
+        openSignStats,
+        config: previousConfig,
+      });
+    }
+
+    function showPayload(next: DisplayPayload, fetchedAt: number) {
+      payloadRef.current = next;
+      contentFetchedAt = fetchedAt;
+      rememberContent(next, fetchedAt);
+      setFetched(next);
+      setMissing(false);
+      persist(next, fetchedAt);
+      pollMs = clampRefreshSeconds(next.refreshSeconds) * 1000;
+    }
+
+    async function pull(plan: DisplaySyncPlan, source: "schedule" | "config"): Promise<"ok" | "failed" | "stale"> {
+      if (cancelled || reloading) return "stale";
+      if (source === "config" && Date.now() < contentRetryNotBefore) return "failed";
+      const bypass = plan.bypassCache || bypassNext;
+      bypassNext = false;
+      if (inFlight && inFlight.id === requestId && (inFlight.bypass || !bypass)) {
+        return inFlight.promise;
+      }
+
+      const id = ++requestId;
+      const promise = (async (): Promise<"ok" | "failed" | "stale"> => {
+        try {
+          const params = new URLSearchParams();
+          if (preview) params.set("preview", "1");
+          if (bypass) params.set(DISPLAY_REFRESH_QUERY, "1");
+          const query = params.toString();
+          const response = await fetch(`/api/displays/${encodeURIComponent(slug)}${query ? `?${query}` : ""}`, {
+            cache: "no-store",
+            signal: controller.signal,
+          });
+          if (cancelled || id !== requestId) return "stale";
+          if (!response.ok) {
+            if (response.status === 404 && !payloadRef.current) setMissing(true);
+            contentRetryNotBefore = Date.now() + DISPLAY_REFRESH_RETRY_MS;
+            return "failed";
+          }
+          const body: unknown = await response.json();
+          if (!isDisplayPayload(body) || cancelled || id !== requestId) {
+            if (!cancelled && id === requestId) contentRetryNotBefore = Date.now() + DISPLAY_REFRESH_RETRY_MS;
+            return id === requestId ? "failed" : "stale";
+          }
+          const next = toPublicDisplayPayload(body);
+          const fetchedAt = Date.now();
+          if (plan.checkReload && displayNeedsReload({
+            loadedBuildId,
+            payloadBuildId: next.buildId,
+            mode: next.mode,
+            now: fetchedAt,
+            lastReloadAt: lastReloadAt(),
+          })) {
+            rememberReload(fetchedAt);
+            reloading = true;
+            window.location.reload();
+            return "stale";
+          }
+          showPayload(next, fetchedAt);
+          contentRetryNotBefore = 0;
+          if (forcedLoad) stripForceRefresh();
+          if (plan.heartbeat) {
+            const heartbeat = new URLSearchParams();
+            if (bypass) heartbeat.set(DISPLAY_REFRESH_QUERY, "1");
+            const heartbeatQuery = heartbeat.toString();
+            try {
+              await fetch(`/api/displays/${encodeURIComponent(slug)}/heartbeat${heartbeatQuery ? `?${heartbeatQuery}` : ""}`, {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({ appVersion: "phase1", mode: next.mode }),
+                signal: controller.signal,
+              });
+            } catch {
+              // The config poll checks in again within a minute.
+            }
+          }
+          return "ok";
+        } catch {
+          if (cancelled || controller.signal.aborted) return "stale";
+          contentRetryNotBefore = Date.now() + DISPLAY_REFRESH_RETRY_MS;
+          return "failed";
+        }
+      })();
+
+      const slot = { id, bypass, promise };
+      inFlight = slot;
+      void promise.finally(() => {
+        if (inFlight === slot) inFlight = null;
+      });
+      return promise;
+    }
+
+    function arm(mode: string | null, fetchedAt: number | null, force: boolean, immediate = true) {
       if (cancelled || reloading) return;
       clearTimers();
       const plan = planDisplaySync({
@@ -208,40 +286,43 @@ export default function DisplayPlayer({
       if (plan.action === "poll") {
         pollMs = plan.pollMs;
         const run = () => { void pollOnce(); };
-        void run();
+        if (immediate) void run();
         interval = window.setInterval(run, pollMs);
         return;
       }
 
       void (async () => {
-        const next = await pull(plan);
-        if (cancelled || reloading) return;
-        if (!next) {
+        const outcome = await pull(plan, "schedule");
+        if (cancelled || reloading || outcome === "stale") return;
+        if (outcome === "failed") {
           timer = window.setTimeout(() => arm(mode, fetchedAt, force), DISPLAY_REFRESH_RETRY_MS);
           return;
         }
         if (force) stripForceRefresh();
-        pollMs = clampRefreshSeconds(next.refreshSeconds) * 1000;
-        arm(next.mode, Date.now(), false);
+        const shown = payloadRef.current;
+        if (!shown) return;
+        arm(shown.mode, Date.now(), false);
       })();
     }
 
     async function pollOnce() {
       if (cancelled || reloading) return;
-      const next = await pull({
+      const outcome = await pull({
         action: "fetch",
         waitMs: 0,
         pollMs,
         heartbeat: !preview,
         checkReload: true,
         bypassCache: false,
-      });
-      if (cancelled || reloading || !next) return;
-      if (displayRefreshPolicy(next.mode) !== "poll") {
-        arm(next.mode, Date.now(), false);
+      }, "schedule");
+      if (cancelled || reloading || outcome !== "ok") return;
+      const shown = payloadRef.current;
+      if (!shown) return;
+      if (displayRefreshPolicy(shown.mode) !== "poll") {
+        arm(shown.mode, Date.now(), false);
         return;
       }
-      const nextPoll = clampRefreshSeconds(next.refreshSeconds) * 1000;
+      const nextPoll = clampRefreshSeconds(shown.refreshSeconds) * 1000;
       if (nextPoll !== pollMs) {
         pollMs = nextPoll;
         window.clearInterval(interval);
@@ -249,14 +330,111 @@ export default function DisplayPlayer({
       }
     }
 
+    function followConfig(result: ReconcileDisplayResult) {
+      if (!result.payload || result.fetchedAt === null) return;
+      requestId += 1;
+      showPayload(result.payload, result.fetchedAt);
+      if (!result.reschedule) return;
+      const slow = result.payload.mode === "film_menu" || result.payload.mode === "film_stats";
+      if (result.fetchContent && !slow) bypassNext = true;
+      arm(result.payload.mode, result.fetchedAt, false, result.fetchContent && !slow);
+    }
+
+    async function configOnce() {
+      if (cancelled || reloading) return;
+      try {
+        const params = new URLSearchParams();
+        if (preview) params.set("preview", "1");
+        const query = params.toString();
+        const response = await fetch(
+          `/api/displays/${encodeURIComponent(slug)}/config${query ? `?${query}` : ""}`,
+          { cache: "no-store", signal: controller.signal },
+        );
+        if (cancelled) return;
+        if (!response.ok) {
+          if (response.status === 404 && !payloadRef.current) setMissing(true);
+          return;
+        }
+        const body: unknown = await response.json();
+        if (!isDisplayConfig(body)) return;
+        const nowMs = Date.now();
+        if (displayNeedsReload({
+          loadedBuildId,
+          payloadBuildId: body.buildId,
+          mode: payloadRef.current?.mode ?? body.mode,
+          now: nowMs,
+          lastReloadAt: lastReloadAt(),
+        })) {
+          rememberReload(nowMs);
+          reloading = true;
+          window.location.reload();
+          return;
+        }
+        if (previousConfig && displayConfigContentKey(previousConfig) !== displayConfigContentKey(body)) {
+          contentRetryNotBefore = 0;
+        }
+        const currentPayload = payloadRef.current;
+        const result = reconcileDisplayConfig({
+          slug,
+          config: body,
+          now: new Date(),
+          current: currentPayload && contentFetchedAt !== null
+            ? { payload: currentPayload, fetchedAt: contentFetchedAt }
+            : null,
+          previousConfig,
+          modes: modes ?? {},
+          openSignStats,
+        });
+        const slowPayload = result.payload?.mode === "film_menu" || result.payload?.mode === "film_stats";
+        const willFetch = result.fetchContent && (!result.payload || slowPayload);
+        if (result.payload || !result.fetchContent) previousConfig = body;
+        followConfig(result);
+        if (willFetch) {
+          bypassNext = true;
+          const outcome = await pull({
+            action: "fetch",
+            waitMs: 0,
+            pollMs,
+            heartbeat: !preview,
+            checkReload: true,
+            bypassCache: true,
+          }, "config");
+          if (outcome === "ok") {
+            previousConfig = body;
+            const shown = payloadRef.current;
+            if (shown && !cancelled && !reloading) arm(shown.mode, contentFetchedAt, false, false);
+          }
+        }
+        if (previousConfig && payloadRef.current && contentFetchedAt !== null) {
+          persist(payloadRef.current, contentFetchedAt);
+        }
+      } catch {
+        // A missed check keeps the last screen up. The next minute tries again.
+      }
+    }
+
+    async function configLoop() {
+      while (!cancelled && !reloading) {
+        const started = Date.now();
+        await configOnce();
+        if (cancelled || reloading) return;
+        const wait = Math.max(0, DISPLAY_CONFIG_POLL_MS - (Date.now() - started));
+        await new Promise<void>((resolve) => {
+          configTimer = window.setTimeout(resolve, wait);
+        });
+      }
+    }
+
     const bootMode = cached?.payload.mode ?? (preview ? initialRef.current?.mode ?? null : null);
     const bootFetchedAt = cached?.fetchedAt ?? (preview && initialRef.current ? Date.now() : null);
     arm(bootMode, bootFetchedAt, forceRefreshRequested());
+    void configLoop();
 
     return () => {
       cancelled = true;
       controller.abort();
       clearTimers();
+      window.clearTimeout(configTimer);
     };
   }, [slug, preview, loadedBuildId]);
 

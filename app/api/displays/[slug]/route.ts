@@ -2,10 +2,12 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/api-auth";
 import { getDisplayBySlug, updateDisplay } from "@/lib/db";
 import { displayNow } from "@/lib/display-clock";
+import { displayConfigFingerprint, toDisplayConfig } from "@/lib/display-config";
 import { forgetDisplayPayload, readFreshDisplayPayload, rememberDisplayPayload } from "@/lib/display-payload-cache";
 import { publicPayloadWithFilm } from "@/lib/display-screen";
 import { DISPLAY_REFRESH_QUERY } from "@/lib/display-schedule";
 import {
+  displayBuildId,
   isDisplaySlug,
   isSelectableDefaultMode,
   isSelectableDisplayTheme,
@@ -44,16 +46,19 @@ export async function GET(req: Request, { params }: { params: Promise<{ slug: st
   const preview = url.searchParams.get("preview") === "1";
   const force = url.searchParams.get(DISPLAY_REFRESH_QUERY) === "1";
   const now = displayNow();
-  if (!preview && !force) {
-    const saved = readFreshDisplayPayload(slug, now.getTime());
-    if (saved) return json(saved, 200, publicCacheControl(req));
-  }
 
   try {
+    // The row is small. The saved payload is reused only while that row still
+    // matches, so a mode change cannot be served from the film-menu copy.
     const row = await getDisplayBySlug(slug);
     if (!row) return json({ error: "Unknown screen" }, 404);
+    const fingerprint = displayConfigFingerprint(toDisplayConfig(row, displayBuildId()));
+    if (!preview && !force) {
+      const saved = readFreshDisplayPayload(slug, now.getTime(), fingerprint);
+      if (saved) return json(saved, 200, publicCacheControl(req));
+    }
     const payload = await publicPayloadWithFilm(row);
-    if (!preview) rememberDisplayPayload(slug, payload, now);
+    if (!preview) rememberDisplayPayload(slug, payload, now, fingerprint);
     return json(payload, 200, publicCacheControl(req));
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Unknown error";

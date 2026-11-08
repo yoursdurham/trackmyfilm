@@ -9,7 +9,7 @@ vi.mock("@/lib/db", () => ({
 
 import { POST } from "@/app/api/displays/[slug]/heartbeat/route";
 import { clearDisplayHeartbeatThrottle, HEARTBEAT_WRITE_INTERVAL_MS } from "@/lib/display-heartbeat";
-import { clearDisplayPayloadCache, rememberDisplayPayload } from "@/lib/display-payload-cache";
+import { clearDisplayPayloadCache } from "@/lib/display-payload-cache";
 
 function post(slug = "studio-vertical", body: Record<string, unknown> = { appVersion: "phase1" }, query = "") {
   return POST(new Request(`http://localhost/api/displays/${slug}/heartbeat${query}`, {
@@ -61,38 +61,19 @@ describe("POST /api/displays/:slug/heartbeat", () => {
     expect(mockTouch).toHaveBeenCalledTimes(2);
   });
 
-  it("does not write last_seen for a film-menu heartbeat between refreshes", async () => {
+  it("writes last_seen for a film-menu screen and still waits five minutes", async () => {
+    mockTouch.mockResolvedValue(true);
     vi.spyOn(Date, "now").mockReturnValue(1_000_000);
     const first = await post("studio-vertical", { appVersion: "phase1", mode: "film_menu" });
     const later = await post("studio-vertical", { appVersion: "phase1", mode: "film_menu" });
     expect(first.status).toBe(200);
     expect(later.status).toBe(200);
-    expect(mockTouch).not.toHaveBeenCalled();
+    expect(mockTouch).toHaveBeenCalledTimes(1);
 
     vi.mocked(Date.now).mockReturnValue(1_000_000 + HEARTBEAT_WRITE_INTERVAL_MS);
     const afterWindow = await post("studio-vertical", { appVersion: "phase1", mode: "film_stats" });
     expect(afterWindow.status).toBe(200);
-    expect(mockTouch).not.toHaveBeenCalled();
-  });
-
-  it("writes last_seen when a slow screen is actually refreshing", async () => {
-    mockTouch.mockResolvedValue(true);
-    const response = await post("studio-vertical", { appVersion: "phase1", mode: "film_menu" }, "?refresh=1");
-    expect(response.status).toBe(200);
-    expect(mockTouch).toHaveBeenCalledTimes(1);
-  });
-
-  it("drops a heartbeat when the saved payload is still a film menu", async () => {
-    rememberDisplayPayload("studio-vertical", {
-      mode: "film_menu",
-      theme: "crt-green",
-      refreshSeconds: 30,
-      buildId: "dev",
-      data: {},
-    }, new Date());
-    const response = await post();
-    expect(response.status).toBe(200);
-    expect(mockTouch).not.toHaveBeenCalled();
+    expect(mockTouch).toHaveBeenCalledTimes(2);
   });
 
   it("keeps the response private", async () => {

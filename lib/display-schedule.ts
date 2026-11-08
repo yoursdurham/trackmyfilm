@@ -11,10 +11,14 @@ import { lastSaturdayOpening, nextSaturdayOpening } from "@/lib/shop-hours";
  *   film_stats  every two hours
  *   everything else keeps the saved poll interval (about 30 seconds)
  *
- * While a screen is waiting, it does not call the payload route, does not
- * write a heartbeat, and does not reload. A later fetch that comes back as a
+ * While a screen is waiting, it does not call the heavy payload route.
+ * It still reads the small display-row config about once a minute, and that
+ * check-in is what updates last_seen. A later fetch that comes back as a
  * different mode adopts that mode's schedule immediately.
  */
+
+/** How often a screen reads its row (mode, Open sign, theme, override). */
+export const DISPLAY_CONFIG_POLL_MS = 60_000;
 
 export const FILM_STATS_REFRESH_MS = 2 * 60 * 60 * 1000;
 /** Try a failed film-menu or film-stats fetch again, without falling back to the 30-second poll. */

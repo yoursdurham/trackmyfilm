@@ -114,13 +114,15 @@ Open [http://localhost:3000](http://localhost:3000) → redirects to the public 
 
 ### How often the TVs read the database
 
-It depends on the mode the screen is showing right now, not the default saved in Displays.
+Each screen reads its settings (mode, Open sign, theme, override) about once a minute. That check is a small row, not the film stats or the price list. A change on this page shows up within about a minute, and the screen keeps its last picture if the check fails.
 
-- **Film menu** (the price list) reads once a week, Saturdays at 11:00 AM Eastern, when the shop opens. Between those times it shows the last copy, saved in the browser, including after a reboot.
-- **Film stats** reads every two hours and shows the saved copy in between.
+The heavy data stays on the old schedule. The decision follows the mode the screen is showing right now, not the default saved in Displays.
+
+- **Film menu** (the price list) reads once a week, Saturdays at 11:00 AM Eastern, when the shop opens. Between those times it shows the last copy, saved in the browser. A restart with no saved copy fetches once.
+- **Film stats** reads every two hours and shows the saved copy in between. Switching to film stats sooner uses that copy when it is still fresh, and fetches when it is missing or older than two hours.
 - **Every other mode** (idle, the airport board, studio bookings, a custom message) still checks about every 30 seconds, or every five minutes while the shop is closed overnight.
 
-A screen will not notice a mode change until its next read. A price list stays up through a new booking or a custom message until Saturday, or until someone refreshes that TV. When a read comes back as a booking or a message, the screen starts the 30-second check, so that session can update and then end. When the price list returns, the weekly wait starts again. The Open sign still follows the shop clock from the saved settings. Its numbers are as old as the last read, and a change to Auto / On / Off waits for that read too.
+The Open sign follows the shop clock on the TV: Thursday 5:00–7:00 PM and Saturday 11:00 AM–2:00 PM Eastern. Auto flips at those times. On now lasts until the saved end time, then returns to Auto. The sign's numbers use the film-stats schedule, so the front window fetches them about every two hours even while a price list is on screen. Only the front window shows the sign. Names on the screens stay first name and last initial.
 
 To fetch sooner, open this once **on the TV**:
 
@@ -129,9 +131,9 @@ To fetch sooner, open this once **on the TV**:
 
 The page drops `refresh=1` after a successful load. Do not leave it as the TV’s home address, or every reboot hits the database. Opening the link on a staff computer updates that browser only.
 
-Check-ins follow the same schedule. A film-menu screen can look Online for about a week after Saturday, and film stats for about two hours. Other screens still look offline after a few quiet minutes.
+Check-ins ride the once-a-minute settings read. last_seen is written at most every five minutes, so a screen looks Online for a few minutes after its last check and Offline after that. A film menu left running does not stay Online all week.
 
-The payload route keeps the last film-menu response until the next Saturday 11:00 AM, and the last film-stats response for two hours. Another poll in that window does not read Supabase. `?refresh=1` and the Displays preview skip that saved copy. The preview is for staff and is not the TV.
+The payload route keeps the last film-menu response until the next Saturday 11:00 AM, and the last film-stats response for two hours, but only while the display row still matches that copy. A mode change misses the saved copy and reads again. `?refresh=1` and the Displays preview skip that saved copy. The preview is for staff and is not the TV.
 
 ## Scripts
 

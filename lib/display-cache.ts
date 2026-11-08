@@ -1,3 +1,11 @@
+import {
+  readCachedConfig,
+  readModeCache,
+  readOpenSignStatsCache,
+  type DisplayConfig,
+  type ModeCacheEntry,
+  type OpenSignStatsCache,
+} from "@/lib/display-config";
 import { isDisplayPayload, type DisplayPayload } from "@/lib/display";
 
 /** Per-screen copy of the last payload, so a reboot can paint without a request. */
@@ -6,6 +14,11 @@ export const DISPLAY_CACHE_PREFIX = "tmf-display-cache:v1:";
 export interface CachedDisplay {
   fetchedAt: number;
   payload: DisplayPayload;
+  /** Film menu and film stats kept across a mode change. */
+  modes?: Partial<Record<string, ModeCacheEntry>>;
+  openSignStats?: OpenSignStatsCache | null;
+  /** Row the screen last accepted, so the next poll can see what changed. */
+  config?: DisplayConfig | null;
 }
 
 export function displayCacheKey(slug: string): string {
@@ -53,11 +66,26 @@ export function readDisplayCache(storage: Pick<Storage, "getItem">, slug: string
     if (!raw) return null;
     const parsed: unknown = JSON.parse(raw);
     if (!parsed || typeof parsed !== "object") return null;
-    const record = parsed as { fetchedAt?: unknown; payload?: unknown };
+    const record = parsed as {
+      fetchedAt?: unknown;
+      payload?: unknown;
+      modes?: unknown;
+      openSignStats?: unknown;
+      config?: unknown;
+    };
     const fetchedAt = record.fetchedAt;
     if (typeof fetchedAt !== "number" || !Number.isFinite(fetchedAt)) return null;
     if (!isDisplayPayload(record.payload)) return null;
-    return { fetchedAt, payload: record.payload };
+    const modes = readModeCache(record.modes);
+    const openSignStats = readOpenSignStatsCache(record.openSignStats);
+    const config = readCachedConfig(record.config);
+    return {
+      fetchedAt,
+      payload: record.payload,
+      ...(Object.keys(modes).length ? { modes } : {}),
+      ...(openSignStats ? { openSignStats } : {}),
+      ...(config ? { config } : {}),
+    };
   } catch {
     return null;
   }
@@ -67,6 +95,9 @@ export function writeDisplayCache(storage: CacheStorage, slug: string, entry: Ca
   const body = JSON.stringify({
     fetchedAt: entry.fetchedAt,
     payload: entry.payload,
+    ...(entry.modes && Object.keys(entry.modes).length ? { modes: entry.modes } : {}),
+    ...(entry.openSignStats ? { openSignStats: entry.openSignStats } : {}),
+    ...(entry.config ? { config: entry.config } : {}),
   });
   try {
     storage.setItem(displayCacheKey(slug), body);
