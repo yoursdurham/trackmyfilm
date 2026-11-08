@@ -96,9 +96,15 @@ export function AccountEmailCodeStep({
   );
 }
 
-export default function AccountLoginForm({ linkError }: { linkError: boolean }) {
+export default function AccountLoginForm({
+  linkError,
+  initialEmail = "",
+}: {
+  linkError: boolean;
+  initialEmail?: string;
+}) {
   const router = useRouter();
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(initialEmail);
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [resending, setResending] = useState(false);
@@ -195,7 +201,7 @@ export default function AccountLoginForm({ linkError }: { linkError: boolean }) 
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <p className="font-jetbrains text-base leading-relaxed text-neutral-900">
+      <p id="account-login-how" className="font-jetbrains text-base leading-relaxed text-neutral-900">
         We&apos;ll email you a link and a 6-digit code. No password to remember.
       </p>
       {linkError ? (
@@ -212,6 +218,7 @@ export default function AccountLoginForm({ linkError }: { linkError: boolean }) 
           placeholder="you@example.com"
           value={email}
           onChange={(event) => setEmail(event.target.value)}
+          aria-describedby="account-login-how"
           required
           className={fieldClass}
         />

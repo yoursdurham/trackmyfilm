@@ -109,6 +109,15 @@ function shouldSkipEmail(template: TemplateName, lastSent: string | undefined) {
 
   return isWithinDedupWindow(lastSent);
 }
+/** Sign-in page for the drop-off email. The address is only a query param; the page does not send a link on its own. */
+export function filmDropAccountUrl(email: string): string {
+  const url = `https://trackmyfilm.com/account/login?email=${encodeURIComponent(email)}`;
+  // Resend string variables are capped at 2,000 characters. A link that does
+  // not fit still opens sign-in, without a prefilled address.
+  if (url.length <= 2000) return url;
+  return "https://trackmyfilm.com/account/login";
+}
+
 function escapeHtml(text: string): string {
   return text
     .replace(/&/g, "&amp;")
@@ -284,6 +293,7 @@ const variables: Record<string, string> = {
 
   if (template === "film_drop_received") {
     variables.notes = order.notes?.trim() ?? "";
+    variables.account_url = filmDropAccountUrl(recipientEmail);
   }
 
   if (template === "scans_sent" || template === "scans_only_ready") {

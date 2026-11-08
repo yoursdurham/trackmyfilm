@@ -120,6 +120,7 @@ The system automatically fills in these placeholders when sending. The names mus
 | `{{order_number}}` | The order number (e.g. "JE1234") |
 | `{{roll_count}}` | Number of rolls (e.g. "3") |
 | `{{notes}}` | Drop-off notes from the New Film Drop-off form (film_drop_received only; empty if none) |
+| `{{{account_url}}}` | Drop-off email only. Opens `/account/login` with this customer's email filled in. The published `film_drop_received` template uses three braces, same as `{{{tracking_url}}}`. Paste `docs/resend-email-templates/film-drop-received-account-block.html` after the Track / F.A.Q. / Shop buttons. |
 | `{{wetransfer_link}}` | The WeTransfer download URL (`scans_sent` and `scans_only_ready`) |
 | `{{scan_notes}}` | Plain-text scan note (`scans_sent` and `scans_only_ready`; empty if none) |
 | `{{scan_notes_html}}` | Same note as HTML (`scans_sent` and `scans_only_ready`; empty if none) |

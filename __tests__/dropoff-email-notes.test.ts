@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { sendOrderEmail } from "../lib/email-service";
+import { filmDropAccountUrl, sendOrderEmail } from "../lib/email-service";
 import type { FilmOrder } from "../lib/types";
 
 const mockGetOrderById = vi.fn();
@@ -62,6 +62,32 @@ describe("sendOrderEmail film_drop_received — notes variable", () => {
       template: { variables: Record<string, string> };
     };
     expect(body.template.variables.notes).toBe("Please handle with care.");
+    expect(body.template.variables.account_url).toBe(
+      "https://trackmyfilm.com/account/login?email=jane%40example.com",
+    );
+  });
+
+  it("encodes a plus-address and a capitalised mailbox in account_url", async () => {
+    mockGetOrderById.mockResolvedValue(makeOrder({
+      customer_email: " Jane+Drop@Example.com ",
+      received_email_sent_at: undefined,
+    }));
+
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ id: "email-plus" }),
+    });
+    global.fetch = fetchMock as typeof fetch;
+
+    await sendOrderEmail("order-1", "film_drop_received");
+
+    const body = JSON.parse(String(fetchMock.mock.calls[0][1]?.body)) as {
+      template: { variables: Record<string, string> };
+    };
+    expect(body.template.variables.account_url).toBe(filmDropAccountUrl("jane+drop@example.com"));
+    expect(body.template.variables.account_url).toBe(
+      "https://trackmyfilm.com/account/login?email=jane%2Bdrop%40example.com",
+    );
   });
 
   it("sends empty notes when none on the order", async () => {
@@ -105,6 +131,7 @@ describe("sendOrderEmail film_drop_received — notes variable", () => {
       template: { variables: Record<string, string> };
     };
     expect(body.template.variables.notes).toBeUndefined();
+    expect(body.template.variables.account_url).toBeUndefined();
     expect(body.template.variables.scan_notes).toBeDefined();
   });
 });

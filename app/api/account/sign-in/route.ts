@@ -1,48 +1,29 @@
 import { NextResponse } from "next/server";
 import { ACCOUNT_SIGN_IN_MESSAGE } from "@/lib/account-email-otp";
 import { sendAccountSignInEmail } from "@/lib/account-sign-in-email";
+import {
+  isAccountSignInRateLimited,
+  resetAccountSignInRateLimitForTests,
+} from "@/lib/account-sign-in-rate-limit";
 import { customerAccountsEnabled, customerAccountTestAllowed } from "@/lib/customer-accounts";
 import { staffEmailAllowlist } from "@/lib/staff-auth";
 import { isValidEmail, normalizeEmail } from "@/lib/validation";
 
-const RATE_LIMIT_WINDOW_MS = 60_000;
-const MAX_REQUESTS_PER_WINDOW = 3;
-
 export { ACCOUNT_SIGN_IN_MESSAGE };
-
-type RateLimitEntry = {
-  count: number;
-  resetAt: number;
-};
-
-const rateLimit = new Map<string, RateLimitEntry>();
 
 function genericResponse() {
   return NextResponse.json({ success: true, message: ACCOUNT_SIGN_IN_MESSAGE });
 }
 
-/** Clears in-memory rate-limit state. Tests only. */
+/** Clears the per-instance rate-limit fallback. Tests only. */
 export function resetAccountSignInStateForTests() {
-  rateLimit.clear();
+  resetAccountSignInRateLimitForTests();
 }
 
 function getClientIp(req: Request) {
   const forwardedFor = req.headers.get("x-forwarded-for");
   const forwardedIp = forwardedFor?.split(",")[0]?.trim();
   return forwardedIp || req.headers.get("x-real-ip") || "unknown";
-}
-
-function isRateLimited(ip: string) {
-  const now = Date.now();
-  const existing = rateLimit.get(ip);
-  if (!existing || existing.resetAt <= now) {
-    rateLimit.set(ip, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
-    return false;
-  }
-  if (existing.count >= MAX_REQUESTS_PER_WINDOW) return true;
-  existing.count += 1;
-  rateLimit.set(ip, existing);
-  return false;
 }
 
 function appOrigin(req: Request) {
@@ -80,10 +61,14 @@ async function readEmail(req: Request) {
  * While CUSTOMER_ACCOUNTS_ENABLED is off, mail goes out only for
  * CUSTOMER_ACCOUNT_TESTERS and STAFF_EMAILS. Every other address gets the
  * same sentence and no mail, so the response does not reveal who is allowed.
+ *
+ * The attempt cap is shared across instances (migration 031), per IP and per
+ * target email. A store that cannot be reached falls back to this instance's
+ * memory. Either way the response stays the sentence above.
  */
 export async function POST(req: Request) {
   const email = await readEmail(req);
-  if (isRateLimited(getClientIp(req))) return genericResponse();
+  if (await isAccountSignInRateLimited(getClientIp(req), email)) return genericResponse();
   if (!customerAccountsEnabled() && !customerAccountTestAllowed(email)) return genericResponse();
   return sendMagicLink(req, email);
 }

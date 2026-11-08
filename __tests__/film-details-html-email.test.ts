@@ -87,6 +87,7 @@ describe("sendOrderEmail film_details_html stock links", () => {
     expect(body.template.variables.roll_count).toBe("4");
     expect(body.template.variables.first_name).toBe("Jane");
     expect(body.template.variables.notes).toBeUndefined();
+    expect(body.template.variables.account_url).toBeUndefined();
     expect(body.template.variables.scan_notes).toBeUndefined();
     expect(body.template.variables.film_details).toBeUndefined();
   });
