@@ -204,9 +204,6 @@ export default function AccountLoginForm({
       <p id="account-login-how" className="font-jetbrains text-base leading-relaxed text-neutral-900">
         We&apos;ll email you a link and a 6-digit code. No password to remember.
       </p>
-      <p id="account-login-first" className="font-jetbrains text-sm leading-relaxed text-neutral-900">
-        First time here? This also creates your free account, and shows your orders and the film stocks you&apos;ve shot.
-      </p>
       {linkError ? (
         <p className="rounded-xl bg-[#DDB1B1] px-3 py-2 font-jetbrains text-sm leading-relaxed text-neutral-900" role="alert">
           That sign-in link is invalid or has expired. Request a new one.
@@ -221,7 +218,7 @@ export default function AccountLoginForm({
           placeholder="you@example.com"
           value={email}
           onChange={(event) => setEmail(event.target.value)}
-          aria-describedby="account-login-how account-login-first"
+          aria-describedby="account-login-how"
           required
           className={fieldClass}
         />

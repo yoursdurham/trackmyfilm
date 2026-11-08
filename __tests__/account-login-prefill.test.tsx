@@ -36,8 +36,13 @@ describe("account login email prefill", () => {
     });
     const html = renderToStaticMarkup(element);
     expect(html).toContain('value="ada@example.com"');
-    expect(html).toContain("This also creates your free account");
-    expect(html).toContain("film stocks you&#x27;ve shot");
+    expect(html).toContain("Your film, all together");
+    expect(html).toContain("dropped off at Yours,");
+    expect(html).toContain("the film stocks you&#x27;ve shot");
+    expect(html).toContain("No password needed.");
+    expect(html).toContain("Your past orders show up as soon as you sign in.");
+    expect(html).not.toContain("First time here");
+    expect(html).not.toContain("free Track My Film account");
     expect(html).toContain("Email me a link");
     expect(html).not.toContain("Check your email");
     expect(html).not.toContain("Sending the link");
