@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format, parseISO } from "date-fns";
 import { Inbox, Loader2 } from "lucide-react";
@@ -13,6 +14,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import type { SquarespaceCheckSummary } from "@/lib/squarespace-orders";
+import { formatStockMatchLabel } from "@/lib/film-stock-match";
 import { correctFilmStockSpelling } from "@/lib/film-stocks";
 import type { IncomingSquarespaceDraft, RollDetail } from "@/lib/types";
 
@@ -29,7 +31,11 @@ function summarizeRoll(roll: RollDetail) {
   const parts: string[] = [roll.film_type, roll.film_process];
   if (roll.scan_size) parts.push(roll.scan_size);
   if (roll.prints_4x6) parts.push("4x6 prints");
-  if (roll.film_stock) parts.push(correctFilmStockSpelling(roll.film_stock));
+  if (roll.film_stock) {
+    const match = formatStockMatchLabel(roll);
+    const stock = correctFilmStockSpelling(roll.film_stock);
+    parts.push(match ? `${stock} (${match})` : stock);
+  }
   return parts.join(" · ");
 }
 
@@ -44,7 +50,7 @@ function CheckSummary({ summary }: { summary: SquarespaceCheckSummary }) {
   return (
     <div className="mt-3 rounded-lg bg-stone-50 px-3 py-2 text-sm text-slate-700">
       <p>
-        Imported {summary.imported}. Skipped {summary.skippedDuplicate} already in the system. Skipped {summary.skippedNoFilm} with no film processing. Skipped {summary.skippedPos} (POS).
+        Imported {summary.imported}. Skipped {summary.skippedDuplicate} already in the system. Skipped {summary.skippedNoFilm} with no film service. In-person POS orders are included.
       </p>
       {summary.importedOrderNumbers.length > 0 ? (
         <p className="mt-1 text-xs text-slate-500">
@@ -194,10 +200,27 @@ export default function IncomingSquarespaceQueue() {
                 <p className="font-medium text-slate-800">
                   <span className="mr-2 rounded-full bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700">Pending Intake</span>
                   {draft.squarespace_order_number}
-                  <span className="font-normal text-slate-500"> · {draft.customer_name}</span>
+                  {draft.squarespace_channel === "pos" ? (
+                    <span className="ml-2 rounded-full bg-stone-100 px-2 py-0.5 text-xs font-semibold text-slate-600">POS</span>
+                  ) : null}
+                  {draft.roll_details.some((roll) => roll.film_type === "Disposable Camera") ? (
+                    <span className="ml-2 rounded-full bg-stone-100 px-2 py-0.5 text-xs font-semibold text-slate-600">Disposable</span>
+                  ) : null}
+                  <span className="font-normal text-slate-500">
+                    {" · "}
+                    {draft.customer_name.trim() ? draft.customer_name : "No name yet"}
+                  </span>
                 </p>
                 <p className="truncate text-sm text-slate-500">
                   {draft.customer_email || "No email"}
+                  {draft.customer_id ? (
+                    <>
+                      {" · "}
+                      <Link href={`/customers/${draft.customer_id}`} className="text-amber-700 underline">
+                        Linked customer
+                      </Link>
+                    </>
+                  ) : null}
                   {" · "}
                   {formatDraftDate(draft.dropoff_date)}
                   {" · "}
@@ -271,7 +294,7 @@ export default function IncomingSquarespaceQueue() {
             <AlertDialogTitle>Dismiss this Squarespace order?</AlertDialogTitle>
             <AlertDialogDescription>
               {dismissTarget
-                ? `${dismissTarget.squarespace_order_number} for ${dismissTarget.customer_name} will stay dismissed. It will not become a drop-off, and later imports will skip it.`
+                ? `${dismissTarget.squarespace_order_number}${dismissTarget.customer_name.trim() ? ` for ${dismissTarget.customer_name}` : ""} will stay dismissed. It will not become a drop-off, and later imports will skip it.`
                 : "It will stay dismissed and will not become a drop-off. Later imports will skip it."}
             </AlertDialogDescription>
           </AlertDialogHeader>

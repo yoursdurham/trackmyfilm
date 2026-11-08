@@ -34,6 +34,8 @@ export interface IncomingDraftInput {
   squarespace_order_number: string;
   external_order_id: string;
   customer_name: string;
+  /** Existing customer matched by the order email. Null when there is no match. */
+  customer_id?: string | null;
   customer_email: string | null;
   dropoff_date: string | null;
   roll_count: number;
@@ -44,22 +46,27 @@ export interface IncomingDraftInput {
    * customer did not answer. The column is added in migration 022.
    */
   squarespace_film_listing?: string | null;
+  /** web for online checkout, pos for an in-person Squarespace order. */
+  squarespace_channel?: "web" | "pos" | null;
   import_source: string;
 }
 
 /** Row written on import. Status is always Pending Intake — never a received order. */
 export function buildIncomingDraftInsert(input: IncomingDraftInput) {
   const listing = input.squarespace_film_listing?.trim();
+  const customerId = input.customer_id?.trim();
   return {
     squarespace_order_number: input.squarespace_order_number,
     external_order_id: input.external_order_id,
     customer_name: input.customer_name,
+    ...(customerId ? { customer_id: customerId } : {}),
     customer_email: input.customer_email,
     dropoff_date: input.dropoff_date,
     roll_count: input.roll_count,
     roll_details: input.roll_details,
     notes: input.notes,
     ...(listing ? { squarespace_film_listing: listing } : {}),
+    ...(input.squarespace_channel ? { squarespace_channel: input.squarespace_channel } : {}),
     import_source: input.import_source,
     status: PENDING_INTAKE_STATUS,
   };
@@ -128,12 +135,23 @@ export function parseIncomingDraftPayload(body: unknown): IncomingDraftParseResu
     return { ok: false, error: "external_order_id is invalid" };
   }
 
-  if (typeof record.customer_name !== "string" || !record.customer_name.trim()) {
-    return { ok: false, error: "customer_name is required" };
+  let customerName = "";
+  if (record.customer_name !== undefined && record.customer_name !== null && record.customer_name !== "") {
+    if (typeof record.customer_name !== "string") {
+      return { ok: false, error: "customer_name is invalid" };
+    }
+    customerName = record.customer_name.trim();
+    if (customerName.length > MAX_NAME_LENGTH) {
+      return { ok: false, error: "customer_name is too long" };
+    }
   }
-  const customerName = record.customer_name.trim();
-  if (customerName.length > MAX_NAME_LENGTH) {
-    return { ok: false, error: "customer_name is too long" };
+
+  let customerId: string | null = null;
+  if (record.customer_id !== undefined && record.customer_id !== null && record.customer_id !== "") {
+    if (typeof record.customer_id !== "string" || !UUID_PATTERN.test(record.customer_id.trim())) {
+      return { ok: false, error: "customer_id is invalid" };
+    }
+    customerId = record.customer_id.trim();
   }
 
   let customerEmail: string | null = null;
@@ -189,6 +207,14 @@ export function parseIncomingDraftPayload(body: unknown): IncomingDraftParseResu
     notes = trimmedNotes || null;
   }
 
+  let squarespaceChannel: "web" | "pos" | null = null;
+  if (record.squarespace_channel !== undefined && record.squarespace_channel !== null && record.squarespace_channel !== "") {
+    if (record.squarespace_channel !== "web" && record.squarespace_channel !== "pos") {
+      return { ok: false, error: "squarespace_channel is invalid" };
+    }
+    squarespaceChannel = record.squarespace_channel;
+  }
+
   const rawSource = record.import_source ?? record.source;
   let importSource = "squarespace";
   if (rawSource !== undefined && rawSource !== null && rawSource !== "") {
@@ -204,11 +230,13 @@ export function parseIncomingDraftPayload(body: unknown): IncomingDraftParseResu
       squarespace_order_number: squarespaceOrderNumber,
       external_order_id: externalOrderId,
       customer_name: customerName,
+      ...(customerId ? { customer_id: customerId } : {}),
       customer_email: customerEmail,
       dropoff_date: dropoffDate,
       roll_count: record.roll_count,
       roll_details: rollDetails,
       notes,
+      ...(squarespaceChannel ? { squarespace_channel: squarespaceChannel } : {}),
       import_source: importSource,
     },
   };
@@ -266,6 +294,13 @@ function parseRoll(
     if (trimmedStock) filmStock = trimmedStock;
   }
 
+  let filmStockConfidence: number | undefined;
+  if (typeof roll.film_stock_confidence === "number" && Number.isFinite(roll.film_stock_confidence)) {
+    const rounded = Math.round(roll.film_stock_confidence);
+    if (rounded >= 0 && rounded <= 100) filmStockConfidence = rounded;
+  }
+  const filmStockCreated = roll.film_stock_created === true;
+
   return {
     ok: true,
     roll: {
@@ -274,6 +309,8 @@ function parseRoll(
       scan_size: scanSize,
       prints_4x6: roll.prints_4x6 === true,
       ...(filmStock ? { film_stock: filmStock } : {}),
+      ...(filmStock && filmStockConfidence !== undefined ? { film_stock_confidence: filmStockConfidence } : {}),
+      ...(filmStock && filmStockCreated ? { film_stock_created: true } : {}),
     },
   };
 }
@@ -287,6 +324,19 @@ export const DISMISSED_STATUS_NOT_READY = "dismissed_status_not_ready";
 
 export const DISMISSED_STATUS_MIGRATION_ERROR =
   "Dismiss is not saved yet. Run migration 021_keep_dismissed_squarespace_orders.sql, then try again.";
+
+export const BLANK_CUSTOMER_NAME_MIGRATION_ERROR =
+  "Squarespace import needs a blank customer name. Run migration 031_squarespace_pos_customer_link.sql in the Supabase SQL editor, then check again.";
+
+/** True when the pre-031 check constraint still rejects an empty customer name. */
+export function isBlankCustomerNameConstraint(
+  error: { message?: string; code?: string | null } | null | undefined
+): boolean {
+  if (!error) return false;
+  const message = (error.message ?? "").toLowerCase();
+  if (message.includes("incoming_squarespace_drafts_customer_name_present")) return true;
+  return String(error.code ?? "") === "23514" && message.includes("customer_name");
+}
 
 export function isDismissedStatusNotReady(err: unknown): boolean {
   return Boolean(

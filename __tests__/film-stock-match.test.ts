@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   applyFilmListingToRolls,
   CUSTOMER_FILM_NOTE_PREFIX,
+  FILM_STOCK_MATCH_THRESHOLD,
   matchFilmStock,
   mergeCustomerFilmNote,
   parseFilmListing,
+  scoreFilmStock,
 } from "../lib/film-stock-match";
 
 function stocks(listing: string, rollCount: number, existing: Array<string | undefined> = []) {
@@ -41,6 +43,37 @@ describe("matchFilmStock", () => {
     expect(matchFilmStock("superia")).toBeNull();
     expect(matchFilmStock("400")).toBeNull();
     expect(matchFilmStock("not a film")).toBeNull();
+  });
+
+  it("scores shorthand and typos against one catalog stock", () => {
+    const ultramax = scoreFilmStock("Ultramax 400");
+    expect(ultramax).toMatchObject({ stock: "Kodak UltraMax 400", created: false });
+    expect(ultramax.confidence).toBeGreaterThanOrEqual(FILM_STOCK_MATCH_THRESHOLD);
+
+    const hp5 = scoreFilmStock("HP5");
+    expect(hp5).toMatchObject({ stock: "Ilford HP5 Plus 400", created: false });
+    expect(hp5.confidence).toBeGreaterThanOrEqual(FILM_STOCK_MATCH_THRESHOLD);
+
+    const reflex = scoreFilmStock("Reflex 800");
+    expect(reflex).toMatchObject({ stock: "Reflx Labs 800T", created: false });
+    expect(reflex.confidence).toBeGreaterThanOrEqual(FILM_STOCK_MATCH_THRESHOLD);
+    expect(scoreFilmStock("Reflx Lab 800T").stock).toBe("Reflx Labs 800T");
+    expect(scoreFilmStock("Reflex 400").stock).toBe("Reflx Labs 400D");
+    expect(scoreFilmStock("800T").stock).toBe("Cinestill 800T");
+  });
+
+  it("creates a new stock when nothing is close enough", () => {
+    const created = scoreFilmStock("mystery emulsion");
+    expect(created).toMatchObject({
+      stock: "mystery emulsion",
+      created: true,
+      confidence: expect.any(Number),
+    });
+    expect(created.confidence).toBeLessThan(FILM_STOCK_MATCH_THRESHOLD);
+
+    const ambiguous = scoreFilmStock("portra");
+    expect(ambiguous.created).toBe(true);
+    expect(ambiguous.stock).toBe("portra");
   });
 });
 
@@ -87,7 +120,9 @@ describe("applyFilmListingToRolls", () => {
       "Kodak UltraMax 400",
       "Kodak UltraMax 400",
     ]);
-    expect(applied.unmatchedNote).toBeNull();
+    expect(applied.unmatchedNote).toBe(`${CUSTOMER_FILM_NOTE_PREFIX} Ultramax 400`);
+    expect(applied.rolls[0].film_stock_created).toBeUndefined();
+    expect(applied.rolls[0].film_stock_confidence).toBeGreaterThanOrEqual(FILM_STOCK_MATCH_THRESHOLD);
   });
 
   it("assigns stocks in order and leaves extra rolls blank when more than one was listed", () => {
@@ -97,7 +132,7 @@ describe("applyFilmListingToRolls", () => {
       "Kodak UltraMax 400",
       "",
     ]);
-    expect(applied.unmatchedNote).toBeNull();
+    expect(applied.unmatchedNote).toBe(`${CUSTOMER_FILM_NOTE_PREFIX} Portra 400, Ultramax 400`);
   });
 
   it("does not repeat past an explicit quantity", () => {
@@ -123,16 +158,19 @@ describe("applyFilmListingToRolls", () => {
     ]);
   });
 
-  it("puts an unmatched answer in the notes", () => {
+  it("creates a new stock and still keeps the original note", () => {
     const applied = stocks("mystery emulsion", 2);
-    expect(applied.rolls.every((roll) => !roll.film_stock)).toBe(true);
+    expect(applied.rolls.map((roll) => roll.film_stock)).toEqual(["mystery emulsion", "mystery emulsion"]);
+    expect(applied.rolls.every((roll) => roll.film_stock_created === true)).toBe(true);
     expect(applied.unmatchedNote).toBe(`${CUSTOMER_FILM_NOTE_PREFIX} mystery emulsion`);
   });
 
   it("keeps the raw text when only part of the list matches", () => {
     const applied = stocks("Ultramax 400, mystery emulsion", 2);
     expect(applied.rolls[0].film_stock).toBe("Kodak UltraMax 400");
-    expect(applied.rolls[1].film_stock).toBeUndefined();
+    expect(applied.rolls[0].film_stock_created).toBeUndefined();
+    expect(applied.rolls[1].film_stock).toBe("mystery emulsion");
+    expect(applied.rolls[1].film_stock_created).toBe(true);
     expect(applied.unmatchedNote).toBe(`${CUSTOMER_FILM_NOTE_PREFIX} Ultramax 400, mystery emulsion`);
   });
 

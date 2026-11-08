@@ -39,6 +39,11 @@ export interface SquarespaceImportDeps {
   createIncomingDraft: (data: IncomingDraftInput) => Promise<unknown>;
   /** Fills a Pending Intake row. Omitted in tests that only cover new imports. */
   updatePendingIncomingDraft?: (id: string, patch: PendingDraftFilmPatch) => Promise<unknown>;
+  /**
+   * Matches the order email to an existing customer. Omitted when the caller
+   * does not look customers up. A miss leaves customer_id unset.
+   */
+  findCustomerIdByEmail?: (email: string) => Promise<string | null>;
 }
 
 function customerFilmNoteLine(notes: string | null | undefined): string | null {
@@ -60,6 +65,19 @@ function mergeBackfillRolls(existingRolls: unknown, incomingRolls: RollDetail[])
     if (!stock && incoming?.film_stock) {
       roll.film_stock = incoming.film_stock;
       changed = true;
+    }
+    if (incoming?.film_stock && roll.film_stock === incoming.film_stock) {
+      if (
+        typeof incoming.film_stock_confidence === "number"
+        && roll.film_stock_confidence !== incoming.film_stock_confidence
+      ) {
+        roll.film_stock_confidence = incoming.film_stock_confidence;
+        changed = true;
+      }
+      if (incoming.film_stock_created === true && roll.film_stock_created !== true) {
+        roll.film_stock_created = true;
+        changed = true;
+      }
     }
     const incomingPrints = incoming?.prints_4x6 === true;
     const existingPrints = roll.prints_4x6 === true;
@@ -152,11 +170,26 @@ export async function importSquarespaceOrders(
 
     const draft = classified.draft;
     try {
-      const [orderExists, draftByNumber, draftByExternalId] = await Promise.all([
+      const emailLookup = (async () => {
+        if (!draft.customer_email || !deps.findCustomerIdByEmail) return null;
+        try {
+          return await deps.findCustomerIdByEmail(draft.customer_email);
+        } catch (err: unknown) {
+          const message = err instanceof Error ? err.message : "Customer lookup failed";
+          summary.errors.push({
+            orderNumber: draft.squarespace_order_number,
+            message: `Customer email was not linked: ${message}`,
+          });
+          return null;
+        }
+      })();
+      const [orderExists, draftByNumber, draftByExternalId, customerId] = await Promise.all([
         deps.orderNumberExists(draft.squarespace_order_number),
         deps.getIncomingDraftByOrderNumber(draft.squarespace_order_number),
         deps.getIncomingDraftByExternalId(draft.external_order_id),
+        emailLookup,
       ]);
+      const staged = customerId ? { ...draft, customer_id: customerId } : draft;
       const blockedByDraft = squarespaceDraftBlocksImport(draftByNumber, draft)
         || squarespaceDraftBlocksImport(draftByExternalId, draft);
       if (orderExists || blockedByDraft) {
@@ -180,7 +213,7 @@ export async function importSquarespaceOrders(
         summary.skippedDuplicate += 1;
         continue;
       }
-      await deps.createIncomingDraft(draft);
+      await deps.createIncomingDraft(staged);
       summary.imported += 1;
       summary.importedOrderNumbers.push(draft.squarespace_order_number);
     } catch (err: unknown) {

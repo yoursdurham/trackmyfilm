@@ -8,6 +8,7 @@ const {
   mockGetIncomingDraftByExternalId,
   mockCreateIncomingDraft,
   mockUpdatePendingIncomingDraft,
+  mockGetCustomerByEmail,
   mockCreateOrder,
   mockSendOrderEmail,
 } = vi.hoisted(() => ({
@@ -17,6 +18,7 @@ const {
   mockGetIncomingDraftByExternalId: vi.fn(),
   mockCreateIncomingDraft: vi.fn(),
   mockUpdatePendingIncomingDraft: vi.fn(),
+  mockGetCustomerByEmail: vi.fn(),
   mockCreateOrder: vi.fn(),
   mockSendOrderEmail: vi.fn(),
 }));
@@ -31,6 +33,7 @@ vi.mock("@/lib/db", () => ({
   getIncomingDraftByExternalId: (...args: unknown[]) => mockGetIncomingDraftByExternalId(...args),
   createIncomingDraft: (...args: unknown[]) => mockCreateIncomingDraft(...args),
   updatePendingIncomingDraft: (...args: unknown[]) => mockUpdatePendingIncomingDraft(...args),
+  getCustomerByEmail: (...args: unknown[]) => mockGetCustomerByEmail(...args),
   createOrder: (...args: unknown[]) => mockCreateOrder(...args),
 }));
 
@@ -126,7 +129,8 @@ describe("classifySquarespaceOrder", () => {
       squarespace_order_number: "01050",
       external_order_id: ORDER_ID,
       import_source: "squarespace",
-      customer_name: "Justin Eisner",
+      customer_name: "",
+      squarespace_channel: "web",
       customer_email: "contact@justineisner.com",
       dropoff_date: "2026-10-01",
       roll_count: 1,
@@ -306,14 +310,17 @@ describe("classifySquarespaceOrder", () => {
     expect(result.kind).toBe("import");
     if (result.kind !== "import") return;
     expect(result.draft.squarespace_film_listing).toBe("Ultramax 400");
-    expect(result.draft.notes).toBeNull();
-    expect(result.draft.roll_details).toEqual([{
+    expect(result.draft.notes).toBe("Customer listed film: Ultramax 400");
+    expect(result.draft.customer_name).toBe("");
+    expect(result.draft.roll_details[0]).toMatchObject({
       film_type: "35mm",
       film_process: "Color",
       scan_size: "Standard",
       prints_4x6: true,
       film_stock: "Kodak UltraMax 400",
-    }]);
+    });
+    expect(result.draft.roll_details[0].film_stock_confidence).toBeGreaterThanOrEqual(72);
+    expect(result.draft.roll_details[0].film_stock_created).toBeUndefined();
   });
 
   it("reads the film-type answer from the order form when the line has none", () => {
@@ -379,7 +386,8 @@ describe("classifySquarespaceOrder", () => {
     }));
     expect(unmatched.kind).toBe("import");
     if (unmatched.kind !== "import") return;
-    expect(unmatched.draft.roll_details[0].film_stock).toBeUndefined();
+    expect(unmatched.draft.roll_details[0].film_stock).toBe("some weird film");
+    expect(unmatched.draft.roll_details[0].film_stock_created).toBe(true);
     expect(unmatched.draft.notes).toBe("Customer listed film: some weird film");
     expect(unmatched.draft.squarespace_film_listing).toBe("some weird film");
   });
@@ -398,12 +406,13 @@ describe("classifySquarespaceOrder", () => {
     expect(result.draft.roll_details[0].film_process).toBe("Black & White");
   });
 
-  it("skips Point of Sale orders even when they include film development", () => {
+  it("detects POS from channel or channelName and imports the same film service", () => {
     expect(isSquarespacePosOrder({ channel: "pos" })).toBe(true);
     expect(isSquarespacePosOrder({ channel: "POS" })).toBe(true);
     expect(isSquarespacePosOrder({ channel: "web", channelName: "Point of Sale" })).toBe(true);
     expect(isSquarespacePosOrder({ channelName: "point-of-sale" })).toBe(true);
     expect(isSquarespacePosOrder({ channel: "web", channelName: "Squarespace" })).toBe(false);
+    expect(isSquarespacePosOrder({ channel: "web", channelName: "Faire Wholesale" })).toBe(false);
 
     for (const overrides of [
       { channel: "pos", channelName: "Point of Sale" },
@@ -411,13 +420,121 @@ describe("classifySquarespaceOrder", () => {
       { channel: "web", channelName: "Point of Sale" },
     ]) {
       const result = classifySquarespaceOrder(filmOrder(overrides));
-      expect(result.kind).toBe("skip_pos");
+      expect(result.kind).toBe("import");
+      if (result.kind !== "import") return;
+      expect(result.draft.squarespace_channel).toBe("pos");
+      expect(result.draft.customer_name).toBe("");
+      expect(result.draft.roll_details[0]).toMatchObject({
+        film_type: "35mm",
+        film_process: "Color",
+        scan_size: "High-Res",
+      });
     }
 
     const web = classifySquarespaceOrder(filmOrder({ channel: "web" }));
     expect(web.kind).toBe("import");
     if (web.kind !== "import") return;
     expect(web.draft.squarespace_order_number).toBe("01050");
+    expect(web.draft.squarespace_channel).toBe("web");
+    expect(web.draft.customer_name).toBe("");
+  });
+
+  it("maps a POS receipt to Develop Only, a note stock, and a blank name", () => {
+    const result = classifySquarespaceOrder(filmOrder({
+      id: "pos-counter",
+      orderNumber: "01088",
+      channel: "pos",
+      channelName: "Point of Sale",
+      customerEmail: "ada@example.com",
+      billingAddress: { firstName: "Walk", lastName: "In" },
+      internalNotes: [{ content: "Reflex 800" }],
+      lineItems: [{
+        productName: "C41 (color) - 35mm Development",
+        quantity: 1,
+        variantOptions: [
+          { optionName: "Processing", value: "Develop Only - $11" },
+          { optionName: '4x6" Prints', value: "No" },
+        ],
+      }],
+    }));
+    expect(result.kind).toBe("import");
+    if (result.kind !== "import") return;
+    expect(result.draft.customer_name).toBe("");
+    expect(result.draft.customer_email).toBe("ada@example.com");
+    expect(result.draft.squarespace_channel).toBe("pos");
+    expect(result.draft.squarespace_film_listing).toBe("Reflex 800");
+    expect(result.draft.notes).toBe("Customer listed film: Reflex 800");
+    expect(result.draft.roll_details[0]).toMatchObject({
+      film_type: "35mm",
+      film_process: "Color",
+      scan_size: "Process Only",
+      prints_4x6: false,
+      film_stock: "Reflx Labs 800T",
+    });
+    expect(result.draft.roll_details[0].film_stock_confidence).toBeGreaterThanOrEqual(72);
+  });
+
+  it("labels a disposable dev/scan package and keeps scans-only and process-only", () => {
+    const disposable = classifySquarespaceOrder(filmOrder({
+      id: "disposable-order",
+      orderNumber: "01089",
+      lineItems: [{
+        productName: "Disposable Dev/Scan Package",
+        quantity: 2,
+        variantOptions: [
+          { optionName: "Processing", value: "Dev + High Res Scan - $23" },
+          { optionName: '4x6" Prints', value: "Yes - $7" },
+        ],
+        customizations: [{
+          label: "PLEASE LIST WHAT FILM TYPE(S) YOU ARE DROPPING OFF",
+          value: "Ultramax 400",
+        }],
+      }],
+    }));
+    expect(disposable.kind).toBe("import");
+    if (disposable.kind !== "import") return;
+    expect(disposable.draft.roll_details).toHaveLength(2);
+    expect(disposable.draft.roll_details.every((roll) => roll.film_type === "Disposable Camera")).toBe(true);
+    expect(disposable.draft.roll_details[0]).toMatchObject({
+      film_process: "Color",
+      scan_size: "High-Res",
+      prints_4x6: true,
+      film_stock: "Kodak UltraMax 400",
+    });
+    expect(disposable.draft.notes).toContain("Ultramax 400");
+
+    const developOnly = classifySquarespaceOrder(filmOrder({
+      id: "develop-only",
+      orderNumber: "01090",
+      lineItems: [{
+        productName: "B&W - 120 Development",
+        quantity: 1,
+        variantOptions: [{ optionName: "Processing", value: "Develop Only - $15" }],
+      }],
+    }));
+    expect(developOnly.kind).toBe("import");
+    if (developOnly.kind !== "import") return;
+    expect(developOnly.draft.roll_details[0]).toMatchObject({
+      film_type: "120",
+      film_process: "Black & White",
+      scan_size: "Process Only",
+    });
+
+    const fromNote = classifySquarespaceOrder(filmOrder({
+      id: "note-disposable",
+      orderNumber: "01091",
+      internalNotes: [{ content: "Kodak FunSaver" }],
+      lineItems: [{
+        productName: "C41 (color) - 35mm Development",
+        quantity: 1,
+        variantOptions: [{ optionName: "Processing", value: "Dev + Standard Scan - $19" }],
+      }],
+    }));
+    expect(fromNote.kind).toBe("import");
+    if (fromNote.kind !== "import") return;
+    expect(fromNote.draft.roll_details[0].film_type).toBe("Disposable Camera");
+    expect(fromNote.draft.roll_details[0].scan_size).toBe("Standard");
+    expect(fromNote.draft.squarespace_film_listing).toBe("Kodak FunSaver");
   });
 
   it("skips an order that is only a shop sale", () => {
@@ -479,6 +596,7 @@ describe("importSquarespaceOrders", () => {
     getIncomingDraftByExternalId: vi.fn(),
     createIncomingDraft: vi.fn(),
     updatePendingIncomingDraft: vi.fn(),
+    findCustomerIdByEmail: undefined as undefined | ((email: string) => Promise<string | null>),
   };
 
   beforeEach(() => {
@@ -487,6 +605,7 @@ describe("importSquarespaceOrders", () => {
     deps.getIncomingDraftByOrderNumber.mockResolvedValue(null);
     deps.getIncomingDraftByExternalId.mockResolvedValue(null);
     deps.createIncomingDraft.mockImplementation(async (data: unknown) => data);
+    deps.findCustomerIdByEmail = undefined;
   });
 
   it("imports a new film order and skips shop sales, duplicates, and save races", async () => {
@@ -514,13 +633,13 @@ describe("importSquarespaceOrders", () => {
       filmOrder({ id: "race", orderNumber: "01062" }),
     ], deps, CHECK_NOW);
 
-    expect(summary.imported).toBe(1);
-    expect(summary.importedOrderNumbers).toEqual(["01050"]);
+    expect(summary.imported).toBe(2);
+    expect(summary.importedOrderNumbers).toEqual(["01050", "01058"]);
     expect(summary.skippedNoFilm).toBe(1);
-    expect(summary.skippedPos).toBe(1);
+    expect(summary.skippedPos).toBe(0);
     expect(summary.skippedDuplicate).toBe(4);
     expect(summary.errors).toEqual([]);
-    expect(deps.createIncomingDraft).toHaveBeenCalledTimes(2);
+    expect(deps.createIncomingDraft).toHaveBeenCalledTimes(3);
     const inserted = deps.createIncomingDraft.mock.calls[0][0];
     expect(inserted.external_order_id).toBe(ORDER_ID);
     expect(inserted.roll_details[0].film_process).toBe("Color");
@@ -592,6 +711,25 @@ describe("importSquarespaceOrders", () => {
     expect(deps.createIncomingDraft).toHaveBeenCalledTimes(1);
     expect(deps.createIncomingDraft.mock.calls[0][0].squarespace_order_number).toBe("1041");
     expect(deps.createIncomingDraft.mock.calls[0][0].external_order_id).toBe("fresh-order");
+  });
+
+  it("links an existing customer when the order email matches and still leaves the name blank", async () => {
+    deps.findCustomerIdByEmail = vi.fn(async (email: string) => (
+      email === "contact@justineisner.com" ? "cust-ada" : null
+    ));
+    const summary = await importSquarespaceOrders([
+      filmOrder({ id: "linked", orderNumber: "01077" }),
+      filmOrder({ id: "unlinked", orderNumber: "01076", customerEmail: "new@example.com" }),
+    ], deps, CHECK_NOW);
+    expect(summary.imported).toBe(2);
+    expect(summary.errors).toEqual([]);
+    expect(deps.createIncomingDraft.mock.calls[0][0]).toMatchObject({
+      customer_name: "",
+      customer_email: "contact@justineisner.com",
+      customer_id: "cust-ada",
+    });
+    expect(deps.createIncomingDraft.mock.calls[1][0].customer_id).toBeUndefined();
+    expect(deps.createIncomingDraft.mock.calls[1][0].customer_name).toBe("");
   });
 
   it("keeps orders placed in the last 7 days and skips an older order that was only modified recently", async () => {
@@ -721,7 +859,9 @@ describe("importSquarespaceOrders", () => {
         scan_size: "Standard",
         prints_4x6: true,
         film_stock: "Kodak UltraMax 400",
+        film_stock_confidence: 100,
       }],
+      notes: "Customer listed film: Ultramax 400",
     });
 
     const again = pendingDraftFilmBackfill(
@@ -815,6 +955,7 @@ describe("POST /api/incoming-drafts/check", () => {
     mockOrderNumberExists.mockResolvedValue(false);
     mockGetIncomingDraftByOrderNumber.mockResolvedValue(null);
     mockGetIncomingDraftByExternalId.mockResolvedValue(null);
+    mockGetCustomerByEmail.mockResolvedValue(null);
     mockCreateIncomingDraft.mockImplementation(async (data: unknown) => ({ id: "draft-1", status: "Pending Intake", ...data as object }));
   });
 
@@ -881,11 +1022,11 @@ describe("POST /api/incoming-drafts/check", () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.configured).toBe(true);
-    expect(body.imported).toBe(2);
+    expect(body.imported).toBe(3);
     expect(body.skippedNoFilm).toBe(1);
-    expect(body.skippedPos).toBe(1);
+    expect(body.skippedPos).toBe(0);
     expect(body.skippedDuplicate).toBe(0);
-    expect(body.importedOrderNumbers).toEqual(["01050", "01070"]);
+    expect(body.importedOrderNumbers).toEqual(["01050", "01080", "01070"]);
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
     const first = fetchMock.mock.calls[0];
@@ -903,11 +1044,13 @@ describe("POST /api/incoming-drafts/check", () => {
     expect(secondUrl.searchParams.has("modifiedAfter")).toBe(false);
     expect(secondUrl.searchParams.has("fulfillmentStatus")).toBe(false);
 
-    expect(mockCreateIncomingDraft).toHaveBeenCalledTimes(2);
+    expect(mockCreateIncomingDraft).toHaveBeenCalledTimes(3);
     expect(mockCreateOrder).not.toHaveBeenCalled();
     expect(mockSendOrderEmail).not.toHaveBeenCalled();
     const created = mockCreateIncomingDraft.mock.calls.map((call) => call[0].squarespace_order_number);
-    expect(created).toEqual(["01050", "01070"]);
+    expect(created).toEqual(["01050", "01080", "01070"]);
+    expect(mockCreateIncomingDraft.mock.calls[0][0].customer_name).toBe("");
+    expect(mockCreateIncomingDraft.mock.calls[1][0].squarespace_channel).toBe("pos");
     expect(mockOrderNumberExists).toHaveBeenCalledWith("01050");
     expect(mockOrderNumberExists).not.toHaveBeenCalledWith("01099");
   });

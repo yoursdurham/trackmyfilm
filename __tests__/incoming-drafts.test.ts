@@ -147,7 +147,10 @@ describe("parseIncomingDraftPayload", () => {
     expect(parseIncomingDraftPayload(null).ok).toBe(false);
     expect(parseIncomingDraftPayload([]).ok).toBe(false);
     expect(parseIncomingDraftPayload({ ...validBody, squarespace_order_number: "  " }).ok).toBe(false);
-    expect(parseIncomingDraftPayload({ ...validBody, customer_name: " " }).ok).toBe(false);
+    const blankName = parseIncomingDraftPayload({ ...validBody, customer_name: " " });
+    expect(blankName.ok).toBe(true);
+    if (!blankName.ok) return;
+    expect(blankName.value.customer_name).toBe("");
     expect(parseIncomingDraftPayload({ ...validBody, customer_email: "not-an-email" }).ok).toBe(false);
   });
 
@@ -161,10 +164,17 @@ describe("parseIncomingDraftPayload", () => {
     expect(missing.ok).toBe(false);
   });
 
-  it("rejects film types, processes, and scan sizes the drop-off form cannot save", () => {
-    expect(parseIncomingDraftPayload({
+  it("accepts a disposable camera and rejects film types the drop-off form cannot save", () => {
+    const disposable = parseIncomingDraftPayload({
       ...validBody,
       roll_details: [{ ...validRoll, film_type: "Disposable Camera" }],
+    });
+    expect(disposable.ok).toBe(true);
+    if (!disposable.ok) return;
+    expect(disposable.value.roll_details[0].film_type).toBe("Disposable Camera");
+    expect(parseIncomingDraftPayload({
+      ...validBody,
+      roll_details: [{ ...validRoll, film_type: "Polaroid" }],
     }).ok).toBe(false);
     expect(parseIncomingDraftPayload({
       ...validBody,

@@ -8,12 +8,15 @@
  * drafts stay as they are. A Pending Intake row can be updated with the
  * customer's film-type answer and a Yes print choice. Dismissed orders are
  * skipped by Squarespace order id and normalized order number.
+ * Button only. Do not add a cron or call this from the Squarespace assistant.
+ * Automatic staging stays off.
  */
 
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/api-auth";
 import {
   createIncomingDraft,
+  getCustomerByEmail,
   getIncomingDraftByExternalId,
   getIncomingDraftByOrderNumber,
   orderNumberExists,
@@ -45,6 +48,10 @@ export async function POST() {
       getIncomingDraftByExternalId,
       createIncomingDraft,
       updatePendingIncomingDraft,
+      findCustomerIdByEmail: async (email) => {
+        const customer = await getCustomerByEmail(email);
+        return customer?.id ?? null;
+      },
     }, now);
     summary.truncated = fetched.truncated;
     if (!fetched.ok) {

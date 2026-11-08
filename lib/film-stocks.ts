@@ -10,6 +10,7 @@ export const FILM_STOCKS: readonly string[] = [
   "Fujifilm Velvia 50", "Fujifilm Provia 100F",
   "Ilford HP5 Plus 400", "Ilford Delta 400", "Ilford XP2 Super 400",
   "Cinestill 800T", "Cinestill 400D",
+  "Reflx Labs 100D", "Reflx Labs 400D", "Reflx Labs 800T",
   "Lomography Color 400", "Lomography Color '92", "Lomography LomoChrome Metropolis",
   "Candido 400", "Candido 800",
   "Phoenix 125", "Phoenix 200 - Blue", "Harman Azure 125",

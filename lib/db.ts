@@ -14,10 +14,12 @@ import { FILM_METRICS_ORDER_SELECT, filmMetricsOrderOrFilter, rollsProcessedOrde
 import { ORDER_STATUS } from "./constants";
 import { FILM_MENU_SLUG, type FilmMenu } from "./film-menu";
 import {
+  BLANK_CUSTOMER_NAME_MIGRATION_ERROR,
   buildIncomingDraftInsert,
   DISMISSED_STATUS_MIGRATION_ERROR,
   DISMISSED_STATUS_NOT_READY,
   incomingDraftDeleteMatch,
+  isBlankCustomerNameConstraint,
   isDismissedStatusCheckViolation,
   type IncomingDraftInput,
   PENDING_INTAKE_STATUS,
@@ -379,39 +381,57 @@ export async function getIncomingDraftByExternalId(
   return data as IncomingSquarespaceDraft | null;
 }
 
-function isMissingSquarespaceFilmListingColumn(error: { message?: string; code?: string }): boolean {
-  const message = (error.message ?? "").toLowerCase();
-  if (!message.includes("squarespace_film_listing")) return false;
-  return error.code === "42703"
+const OPTIONAL_DRAFT_COLUMNS = ["squarespace_film_listing", "squarespace_channel", "customer_id"] as const;
+
+function missingOptionalDraftColumn(error: { message?: string; code?: string }): (typeof OPTIONAL_DRAFT_COLUMNS)[number] | null {
+  const message = error.message ?? "";
+  const lowered = message.toLowerCase();
+  const missingSchema = error.code === "42703"
     || error.code === "PGRST204"
-    || message.includes("schema cache")
-    || message.includes("does not exist");
+    || lowered.includes("schema cache")
+    || lowered.includes("does not exist");
+  if (!missingSchema) return null;
+  return OPTIONAL_DRAFT_COLUMNS.find((column) => message.includes(column)) ?? null;
 }
 
-function withoutFilmListing<T extends { squarespace_film_listing?: string }>(row: T): Omit<T, "squarespace_film_listing"> {
+function withoutDraftColumn<T extends Record<string, unknown>>(
+  row: T,
+  column: (typeof OPTIONAL_DRAFT_COLUMNS)[number],
+): T {
   const rest = { ...row };
-  delete rest.squarespace_film_listing;
+  delete rest[column];
   return rest;
 }
 
 export async function createIncomingDraft(data: IncomingDraftInput): Promise<IncomingSquarespaceDraft> {
-  const inserted = buildIncomingDraftInsert(data);
-  const write = (includeListing: boolean) => getSupabase()
-    .from("incoming_squarespace_drafts")
-    .insert(includeListing ? inserted : withoutFilmListing(inserted))
-    .select()
-    .single();
+  let row: Record<string, unknown> = buildIncomingDraftInsert(data);
+  let lastError: { message?: string; code?: string } | null = null;
 
-  let { data: created, error } = await write(true);
-  if (error && inserted.squarespace_film_listing && isMissingSquarespaceFilmListingColumn(error)) {
-    ({ data: created, error } = await write(false));
+  for (let attempt = 0; attempt <= OPTIONAL_DRAFT_COLUMNS.length; attempt += 1) {
+    const { data: created, error } = await getSupabase()
+      .from("incoming_squarespace_drafts")
+      .insert(row)
+      .select()
+      .single();
+    if (!error) return created as IncomingSquarespaceDraft;
+    lastError = error;
+    if (isBlankCustomerNameConstraint(error)) {
+      const err = new Error(BLANK_CUSTOMER_NAME_MIGRATION_ERROR) as Error & { code?: string };
+      err.code = error.code;
+      throw err;
+    }
+    const missing = missingOptionalDraftColumn(error);
+    if (!missing || !Object.prototype.hasOwnProperty.call(row, missing)) break;
+    row = withoutDraftColumn(row, missing);
   }
-  if (error) {
-    const err = new Error(error.message) as Error & { code?: string };
-    err.code = error.code;
-    throw err;
-  }
-  return created as IncomingSquarespaceDraft;
+
+  const err = new Error(lastError?.message ?? "Failed to create draft") as Error & { code?: string };
+  err.code = lastError?.code;
+  throw err;
+}
+
+function isMissingSquarespaceFilmListingColumn(error: { message?: string; code?: string }): boolean {
+  return missingOptionalDraftColumn(error) === "squarespace_film_listing";
 }
 
 export interface PendingIncomingDraftFilmPatch {

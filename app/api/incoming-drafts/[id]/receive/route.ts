@@ -7,8 +7,9 @@
 
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/api-auth";
-import { getIncomingDraftById, updateIncomingDraftStatus } from "@/lib/db";
+import { getCustomerById, getIncomingDraftById, updateIncomingDraftStatus } from "@/lib/db";
 import { createFilmDropoff, type DropoffRequest } from "@/lib/dropoff-service";
+import { stripRollStockMatch } from "@/lib/film-stock-match";
 import { isIncomingDraftUuid, PENDING_INTAKE_STATUS } from "@/lib/incoming-drafts";
 import type { IncomingSquarespaceDraft, RollDetail } from "@/lib/types";
 
@@ -17,7 +18,8 @@ function todayIsoDate() {
 }
 
 function receiveRequest(draft: IncomingSquarespaceDraft, body: Record<string, unknown>): DropoffRequest {
-  const rolls = (Array.isArray(body.roll_details) ? body.roll_details : draft.roll_details) as RollDetail[];
+  const rolls = ((Array.isArray(body.roll_details) ? body.roll_details : draft.roll_details) as RollDetail[])
+    .map((roll) => stripRollStockMatch(roll));
   const first = rolls[0];
   const customerEmail = typeof body.customer_email === "string"
     ? body.customer_email
@@ -82,7 +84,27 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       );
     }
 
-    const result = await createFilmDropoff(receiveRequest(draft, body));
+    let request = receiveRequest(draft, body);
+    if (!request.customer_name.trim() && draft.customer_id) {
+      const customer = await getCustomerById(draft.customer_id);
+      const linkedName = customer
+        ? `${customer.first_name} ${customer.last_name ?? ""}`.trim()
+        : "";
+      if (linkedName) {
+        request = {
+          ...request,
+          customer_name: linkedName,
+          customer_email: request.customer_email || customer?.email || undefined,
+        };
+      }
+    }
+    if (!request.customer_name.trim()) {
+      return NextResponse.json({
+        error: "Enter the customer name before approving. Squarespace checkout names are not copied onto the drop-off.",
+      }, { status: 400 });
+    }
+
+    const result = await createFilmDropoff(request);
     if (!result.ok) {
       return NextResponse.json({ error: result.error }, { status: result.status });
     }
