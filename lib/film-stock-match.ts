@@ -351,7 +351,11 @@ export function stripRollStockMatch<T extends {
 function assignStock<T extends { film_stock?: string; film_type?: string }>(
   roll: T,
   token: ParsedFilmToken,
-): T & { film_stock_confidence?: number; film_stock_created?: boolean } {
+): T & {
+  film_stock?: string;
+  film_stock_confidence?: number;
+  film_stock_created?: boolean;
+} {
   if (isDisposableFilmType(roll.film_type)) return withoutDisposableFilmStock(roll);
   if (!token.stock || roll.film_stock?.trim()) return roll;
   return {
@@ -372,13 +376,19 @@ function assignStock<T extends { film_stock?: string; film_type?: string }>(
  * The original listing is a note when it is not a confident catalog match,
  * or when every roll is a disposable camera and the stock is not shown.
  * A name that is not close to one catalog stock is stored as a new stock.
+ * Returned rolls include film_stock even when the input type omitted it.
+ * An optional field on the type constraint is not copied onto T.
  */
 export function applyFilmListingToRolls<T extends { film_stock?: string; film_type?: string }>(
   rolls: readonly T[],
   listing: string | null | undefined,
   catalog: readonly string[] = FILM_STOCKS,
 ): {
-  rolls: Array<T & { film_stock_confidence?: number; film_stock_created?: boolean }>;
+  rolls: Array<T & {
+    film_stock?: string;
+    film_stock_confidence?: number;
+    film_stock_created?: boolean;
+  }>;
   unmatchedNote: string | null;
 } {
   const next = rolls.map((roll) => withoutDisposableFilmStock({ ...roll }));
