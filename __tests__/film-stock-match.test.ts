@@ -5,6 +5,7 @@ import {
   FILM_STOCK_MATCH_THRESHOLD,
   matchFilmStock,
   mergeCustomerFilmNote,
+  orderNotesForFilmListing,
   parseFilmListing,
   scoreFilmStock,
 } from "../lib/film-stock-match";
@@ -120,7 +121,7 @@ describe("applyFilmListingToRolls", () => {
       "Kodak UltraMax 400",
       "Kodak UltraMax 400",
     ]);
-    expect(applied.unmatchedNote).toBe(`${CUSTOMER_FILM_NOTE_PREFIX} Ultramax 400`);
+    expect(applied.unmatchedNote).toBeNull();
     expect(applied.rolls[0].film_stock_created).toBeUndefined();
     expect(applied.rolls[0].film_stock_confidence).toBeGreaterThanOrEqual(FILM_STOCK_MATCH_THRESHOLD);
   });
@@ -132,7 +133,7 @@ describe("applyFilmListingToRolls", () => {
       "Kodak UltraMax 400",
       "",
     ]);
-    expect(applied.unmatchedNote).toBe(`${CUSTOMER_FILM_NOTE_PREFIX} Portra 400, Ultramax 400`);
+    expect(applied.unmatchedNote).toBeNull();
   });
 
   it("does not repeat past an explicit quantity", () => {
@@ -184,7 +185,50 @@ describe("applyFilmListingToRolls", () => {
     );
     expect(applied.rolls[0].film_stock).toBeUndefined();
     expect(applied.rolls[1].film_stock).toBe("Kodak Portra 400");
-    expect(applied.unmatchedNote).toBe(`${CUSTOMER_FILM_NOTE_PREFIX} FunSaver, Portra 400`);
+    expect(applied.unmatchedNote).toBeNull();
+  });
+
+  it("keeps the film note when a disposable roll cannot show the matched stock", () => {
+    const applied = applyFilmListingToRolls(
+      [{ film_type: "Disposable Camera" }, { film_type: "Disposable Camera" }],
+      "Ultramax 400",
+    );
+    expect(applied.rolls.every((roll) => roll.film_stock === undefined)).toBe(true);
+    expect(applied.unmatchedNote).toBe(`${CUSTOMER_FILM_NOTE_PREFIX} Ultramax 400`);
+  });
+
+  it("keeps a disposable label in the note and does not treat it as a stock", () => {
+    const applied = applyFilmListingToRolls(
+      [{ film_type: "35mm" }],
+      "Kodak FunSaver",
+    );
+    expect(applied.rolls[0].film_stock).toBeUndefined();
+    expect(applied.unmatchedNote).toBe(`${CUSTOMER_FILM_NOTE_PREFIX} Kodak FunSaver`);
+  });
+
+  it("drops a matched film line from notes and keeps other order notes", () => {
+    const rolls = [{ film_type: "35mm" }];
+    const matched = orderNotesForFilmListing(
+      "Leave the bag at the desk\nCustomer listed film: Fujifilm Superia 200",
+      "Fujifilm Superia 200",
+      rolls,
+    );
+    expect(matched).toBe("Leave the bag at the desk");
+    expect(orderNotesForFilmListing(
+      "Customer listed film: Fujifilm Superia 200",
+      "Fujifilm Superia 200",
+      rolls,
+    )).toBeNull();
+    expect(orderNotesForFilmListing(
+      "bag 4",
+      "some weird film",
+      rolls,
+    )).toBe(`bag 4\n${CUSTOMER_FILM_NOTE_PREFIX} some weird film`);
+    expect(orderNotesForFilmListing(
+      null,
+      "Kodak FunSaver",
+      [{ film_type: "Disposable Camera" }],
+    )).toBe(`${CUSTOMER_FILM_NOTE_PREFIX} Kodak FunSaver`);
   });
 
   it("does not duplicate a note that is already present", () => {

@@ -10,7 +10,7 @@ import { requireAuth } from "@/lib/api-auth";
 import { getCustomerById, getIncomingDraftById, updateIncomingDraftStatus } from "@/lib/db";
 import { createFilmDropoff, type DropoffRequest } from "@/lib/dropoff-service";
 import { withoutDisposableFilmStock } from "@/lib/disposable-roll";
-import { stripRollStockMatch } from "@/lib/film-stock-match";
+import { orderNotesForFilmListing, stripRollStockMatch } from "@/lib/film-stock-match";
 import { isIncomingDraftUuid, PENDING_INTAKE_STATUS, preferredIntakeCustomerName } from "@/lib/incoming-drafts";
 import type { IncomingSquarespaceDraft, RollDetail } from "@/lib/types";
 
@@ -45,7 +45,9 @@ function receiveRequest(draft: IncomingSquarespaceDraft, body: Record<string, un
       ? undefined
       : typeof body.film_stock === "string" ? body.film_stock : first?.film_stock,
     roll_details: rolls,
-    notes: typeof body.notes === "string" ? body.notes : draft.notes ?? undefined,
+    notes: typeof body.notes === "string"
+      ? body.notes
+      : orderNotesForFilmListing(draft.notes, draft.squarespace_film_listing, draft.roll_details) ?? undefined,
     send_email: body.send_email !== false,
   };
 }

@@ -528,6 +528,41 @@ describe("Squarespace incoming draft routes", () => {
       expect(mockCreateOrder).not.toHaveBeenCalled();
     });
 
+    it("drops a matched film line from notes and keeps other order notes", async () => {
+      mockGetIncomingDraftById.mockResolvedValue({
+        id: DRAFT_ID,
+        status: "Pending Intake",
+        squarespace_order_number: "1213",
+        external_order_id: "squarespace-1213",
+        import_source: "squarespace",
+        customer_name: "Justin Eisner",
+        customer_email: "contact@justineisner.com",
+        dropoff_date: "2026-10-03",
+        roll_count: 1,
+        squarespace_film_listing: "Fujifilm Superia 200",
+        roll_details: [{
+          film_type: "35mm",
+          film_process: "Color",
+          scan_size: "Standard",
+          prints_4x6: false,
+          film_stock: "Fujifilm Superia 200",
+          film_stock_confidence: 100,
+        }],
+        notes: "Leave the bag at the desk\nCustomer listed film: Fujifilm Superia 200",
+      });
+
+      const res = await receive({ send_email: false });
+      expect(res.status).toBe(201);
+      const order = mockCreateOrder.mock.calls[0][0];
+      expect(order.notes).toBe("Leave the bag at the desk");
+      expect(order.roll_details[0].film_stock).toBe("Fujifilm Superia 200");
+
+      mockCreateOrder.mockClear();
+      const edited = await receive({ send_email: false, notes: "Staff wrote this" });
+      expect(edited.status).toBe(201);
+      expect(mockCreateOrder.mock.calls[0][0].notes).toBe("Staff wrote this");
+    });
+
     it("skips the confirmation email when the checkbox is off", async () => {
       const res = await receive({ send_email: false });
       expect(res.status).toBe(201);
