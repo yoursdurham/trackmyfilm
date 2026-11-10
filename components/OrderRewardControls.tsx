@@ -66,7 +66,7 @@ export default function OrderRewardControls({ order }: { order: FilmOrder }) {
       <h4 className="text-xs font-semibold uppercase tracking-wide text-amber-800">Reward</h4>
       {applied.map((entry) => (
         <p key={entry.rewardId} className="text-sm font-medium text-slate-800">
-          Reward applied at Yours,: free development and high-res scan
+          Yours, applied a free development and high-res scan
           {entry.rollIndex != null ? ` on roll ${entry.rollIndex + 1}` : ""}.
         </p>
       ))}

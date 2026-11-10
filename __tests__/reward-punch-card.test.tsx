@@ -12,5 +12,7 @@ describe("reward punch card", () => {
     expect(seven).toContain('aria-label="7 of 10 — 3 more rolls until your free dev + high-res scan"');
     expect(full).toContain('aria-label="10 of 10 — your free dev + high-res scan is ready"');
     expect(full).toContain(">Free<");
+    expect(seven.match(/<svg/g)).toHaveLength(10);
+    expect(seven).not.toContain("<circle");
   });
 });

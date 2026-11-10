@@ -64,9 +64,6 @@ export default function AccountRewards({
                 <RewardPunchCard punched={rewards.progress} />
               </div>
             ) : null}
-            <p className="font-jetbrains text-sm leading-relaxed text-neutral-800">
-              Every 10 rolls on your account earns a free development and high-res scan at Yours,. 35mm, 120, and disposable cameras count. A blank roll does not.
-            </p>
             {rewards.cards.length === 0 ? (
               <p className="font-jetbrains text-sm leading-relaxed text-neutral-900">
                 No reward is waiting on your account yet.
@@ -94,7 +91,9 @@ export default function AccountRewards({
                             {copied ? "Copied" : "Copy code"}
                           </button>
                           <p className="font-jetbrains text-sm leading-relaxed text-neutral-900">
-                            {expiry ? `Good through ${expiry} at Yours,.` : "Use this at Yours,."}
+                            {expiry
+                              ? `Yours, will honor this code through ${expiry}.`
+                              : "Enter this code at checkout on the Yours, website."}
                             {" "}It takes 100% off one development and high-res scan for 35mm, 120, or a disposable camera. One code per checkout, and it applies to the subtotal.
                           </p>
                         </div>

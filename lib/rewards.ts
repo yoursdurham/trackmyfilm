@@ -4,7 +4,6 @@
  * No database and no network.
  */
 
-import { isBlankRoll } from "@/lib/blank-roll";
 import { ORDER_STATUS } from "@/lib/constants";
 import { isProcessOnlyOrder } from "@/lib/order-service";
 
@@ -71,15 +70,14 @@ export function orderEarnsRewards(order: RewardOrder): boolean {
   return false;
 }
 
-export function isQualifyingRewardRoll(roll: { film_type?: string | null; blank?: unknown }): boolean {
-  if (!roll.film_type || !QUALIFYING_FILM_TYPES.has(roll.film_type)) return false;
-  return !isBlankRoll(roll);
+/** 35mm, 120, and disposable rolls count, including rolls marked blank. 110 does not. */
+export function isQualifyingRewardRoll(roll: { film_type?: string | null }): boolean {
+  return !!roll.film_type && QUALIFYING_FILM_TYPES.has(roll.film_type);
 }
 
 /**
  * Qualifying rolls on this order. Per-roll details win. An order with no
- * roll list falls back to film_type and roll_count, because older rows
- * have no blank flag to exclude.
+ * roll list falls back to film_type and roll_count.
  */
 export function qualifyingRollCount(order: Pick<RewardOrder, "film_type" | "roll_count" | "roll_details">): number {
   const details = order.roll_details;
@@ -447,7 +445,7 @@ export function validateInStoreRoll(input: {
   }
   const roll = input.rolls[input.rollIndex];
   if (!roll || !isQualifyingRewardRoll(roll)) {
-    return { ok: false, error: "A reward covers one 35mm, 120, or disposable roll that is not marked blank." };
+    return { ok: false, error: "A reward covers one 35mm, 120, or disposable roll." };
   }
   if (input.usedRollIndexes.includes(input.rollIndex)) {
     return { ok: false, error: "That roll already has a reward on it." };
@@ -475,7 +473,7 @@ export function rewardHistoryLabel(event: {
     return `Adjustment ${sign} rolls${because}`;
   }
   if (event.kind === "redeem") {
-    return event.via === "in_store" ? "Used in the shop at Yours," : "Online code used";
+    return event.via === "in_store" ? "Yours, applied this reward in the shop." : "Online code used";
   }
   if (event.kind === "expire") return "Online code expired";
   if (event.kind === "restore") return "Reward returned to your account";

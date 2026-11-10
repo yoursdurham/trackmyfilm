@@ -167,7 +167,7 @@ function memoryRepository(legacyIds: readonly string[] = []): RewardRepository &
 }
 
 describe("qualifying rolls", () => {
-  it("counts 35mm, 120, and disposable rolls and skips blank and 110", () => {
+  it("counts 35mm, 120, and disposable rolls, including blank ones, and skips 110", () => {
     const finished = order({
       roll_count: 5,
       roll_details: [
@@ -178,8 +178,8 @@ describe("qualifying rolls", () => {
         roll({ film_type: "110" }),
       ],
     });
-    expect(qualifyingRollCount(finished)).toBe(3);
-    expect(earnRollsForOrder(finished)).toBe(3);
+    expect(qualifyingRollCount(finished)).toBe(4);
+    expect(earnRollsForOrder(finished)).toBe(4);
   });
 
   it("uses roll_count for a legacy order with no per-roll list", () => {
@@ -221,12 +221,12 @@ describe("idempotent counting", () => {
     await syncOrderEarns(repo, [finished]);
     const earns = repo.events.filter((event) => event.kind === "earn");
     expect(earns).toHaveLength(1);
-    expect(earns[0]?.rolls).toBe(2);
+    expect(earns[0]?.rolls).toBe(3);
     expect(earns[0]?.idempotencyKey).toBe(orderEarnIdempotencyKey("order-1"));
     expect(repo.rewards).toHaveLength(0);
   });
 
-  it("updates the same row when a roll is marked blank or the order leaves the finished status", async () => {
+  it("keeps a blank roll in the count and clears it when the order leaves the finished status", async () => {
     const repo = memoryRepository();
     const rolls = [roll(), roll(), roll({ film_type: "Disposable Camera" })];
     await syncOrderEarns(repo, [order({ roll_details: rolls, roll_count: 3 })]);
@@ -235,7 +235,7 @@ describe("idempotent counting", () => {
       roll_count: 3,
     })]);
     expect(repo.events.filter((event) => event.kind === "earn")).toHaveLength(1);
-    expect(repo.events[0]?.rolls).toBe(2);
+    expect(repo.events[0]?.rolls).toBe(3);
 
     await syncOrderEarns(repo, [order({ status: ORDER_STATUS.RECEIVED_AT_LAB, roll_details: rolls })]);
     expect(repo.events).toHaveLength(1);
@@ -543,7 +543,14 @@ describe("staff adjustments and intake checks", () => {
       reward: { customerId: "customer-1", status: "earned" },
       customerId: "customer-1",
       rollIndex: 0,
-      rolls: [roll({ blank: true })],
+      rolls: [roll({ film_type: "35mm", blank: true })],
+      usedRollIndexes: [],
+    }).ok).toBe(true);
+    expect(validateInStoreRoll({
+      reward: { customerId: "customer-1", status: "earned" },
+      customerId: "customer-1",
+      rollIndex: 0,
+      rolls: [roll({ film_type: "110" })],
       usedRollIndexes: [],
     }).ok).toBe(false);
   });

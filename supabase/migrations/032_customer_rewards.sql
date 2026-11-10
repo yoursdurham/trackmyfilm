@@ -11,8 +11,8 @@
 --   * Ready for Pickup, and only when every roll is Process Only
 --     (that status is the end of a process-only order; it never
 --     moves on to Scans Sent)
--- 35mm, 120, and Disposable Camera count. 110 does not.
--- A roll with blank = true does not count.
+-- 35mm, 120, and Disposable Camera count, including rolls marked
+-- blank. 110 does not.
 -- One earn row per order (idempotency_key earn:order:<id>), so a
 -- status flip or a second import updates that row instead of
 -- inserting another. Balance is the sum of earn, backfill, and
@@ -177,8 +177,7 @@ begin
       when jsonb_typeof(o.roll_details) = 'array' and jsonb_array_length(o.roll_details) > 0 then (
         select count(*)::integer
         from jsonb_array_elements(o.roll_details) as roll
-        where (roll -> 'blank') is distinct from 'true'::jsonb
-          and roll ->> 'film_type' in ('35mm', '120', 'Disposable Camera')
+        where roll ->> 'film_type' in ('35mm', '120', 'Disposable Camera')
       )
       when o.film_type in ('35mm', '120', 'Disposable Camera')
         then greatest(coalesce(o.roll_count, 0), 0)
