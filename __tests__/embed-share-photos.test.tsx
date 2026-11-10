@@ -34,7 +34,7 @@ describe("embed share photos page", () => {
     expect(html).not.toContain("Explore Our Services");
   });
 
-  it("keeps the homepage form on the cookie session client", () => {
+  it("keeps the default public form on the cookie session client", () => {
     const html = renderToStaticMarkup(<SharePhotosForm mode="public" />);
     expect(html).not.toContain("data-cookie-free-upload");
     expect(html).toContain('id="share-photos-email"');

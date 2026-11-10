@@ -20,7 +20,6 @@ import {
   Search,
 } from "lucide-react";
 import PublicHeader, { TRACKING_HOME_EVENT } from "@/components/PublicHeader";
-import SharePhotosForm from "@/components/photos/SharePhotosForm";
 import WindowFrame from "@/components/WindowFrame";
 import { Input } from "@/components/ui/input";
 import FilmProcessBadge from "@/components/FilmProcessBadge";
@@ -839,11 +838,7 @@ export default function TrackingHome({
           </div>
         </div>
 
-        <div className="mb-10 mt-12" data-testid="home-share-photos">
-          <SharePhotosForm mode="public" />
-        </div>
-
-        <div className="mt-8 flex flex-col gap-2 px-1 text-left text-base leading-relaxed text-neutral-900 sm:px-0 sm:text-center">
+        <div className="mt-12 flex flex-col gap-2 px-1 text-left text-base leading-relaxed text-neutral-900 sm:px-0 sm:text-center">
           <span className="font-semibold tracking-wide">INFO:</span>
           <a
             href="https://www.yoursdurham.com"

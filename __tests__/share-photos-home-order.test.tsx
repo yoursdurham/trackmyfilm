@@ -11,7 +11,7 @@ import AccountProfile from "@/components/account/AccountProfile";
 import { previewAccountProfile } from "@/lib/account-profile";
 
 describe("Share your photos placement", () => {
-  it("puts the public uploader below Explore Our Services", () => {
+  it("keeps the public uploader off the tracking homepage", () => {
     const client = new QueryClient();
     const html = renderToStaticMarkup(
       <QueryClientProvider client={client}>
@@ -19,11 +19,20 @@ describe("Share your photos placement", () => {
       </QueryClientProvider>,
     );
     const services = html.indexOf("Explore Our Services");
-    const share = html.indexOf('data-testid="home-share-photos"');
     const info = html.indexOf(">INFO:<");
     expect(services).toBeGreaterThan(-1);
-    expect(share).toBeGreaterThan(services);
-    expect(info).toBeGreaterThan(share);
+    expect(info).toBeGreaterThan(services);
+    expect(html).toContain("Film Developing");
+    expect(html).toContain("Shop Film");
+    expect(html).toContain("Need help?");
+    expect(html).not.toContain('data-testid="home-share-photos"');
+    expect(html).not.toContain("Share your photos");
+    expect(html).not.toContain('id="share-photos-email"');
+    expect(html).not.toContain("Choose photos");
+
+    const yours = html.indexOf('data-testid="yours-durham-link"');
+    expect(yours).toBeGreaterThan(-1);
+    expect(yours).toBeLessThan(services);
   });
 
   it("puts the account uploader after Try something new and above Contact", () => {
