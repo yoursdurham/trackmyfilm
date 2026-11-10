@@ -9,7 +9,7 @@
  */
 
 import { isDisposableFilmType, withoutDisposableFilmStock } from "./disposable-roll";
-import { CUSTOMER_FILM_NOTE_PREFIX, mergeCustomerFilmNote } from "./film-stock-match";
+import { orderNotesForFilmListing } from "./film-stock-match";
 import {
   PENDING_INTAKE_STATUS,
   squarespaceDraftBlocksImport,
@@ -47,15 +47,6 @@ export interface SquarespaceImportDeps {
    * does not look customers up. A miss leaves customer_id unset.
    */
   findCustomerIdByEmail?: (email: string) => Promise<string | null>;
-}
-
-function customerFilmNoteLine(notes: string | null | undefined): string | null {
-  if (!notes) return null;
-  const line = notes
-    .split("\n")
-    .map((part) => part.trim())
-    .find((part) => part.toLowerCase().startsWith(CUSTOMER_FILM_NOTE_PREFIX.toLowerCase()));
-  return line ?? null;
 }
 
 function mergeBackfillRolls(existingRolls: unknown, incomingRolls: RollDetail[]): RollDetail[] | null {
@@ -150,9 +141,14 @@ export function pendingDraftFilmBackfill(
   if (mergedRolls) patch.roll_details = mergedRolls;
 
   const existingNotes = typeof row.notes === "string" ? row.notes : null;
-  const mergedNotes = mergeCustomerFilmNote(existingNotes, customerFilmNoteLine(incoming.notes));
-  if (mergedNotes && mergedNotes !== (existingNotes?.trim() ?? "")) {
-    patch.notes = mergedNotes;
+  const listingForNotes = incomingListing
+    || (typeof row.squarespace_film_listing === "string" ? row.squarespace_film_listing : "");
+  const rollsForNotes = incoming.roll_details.length > 0
+    ? incoming.roll_details
+    : (Array.isArray(row.roll_details) ? row.roll_details as RollDetail[] : []);
+  const nextNotes = orderNotesForFilmListing(existingNotes, listingForNotes, rollsForNotes);
+  if ((nextNotes ?? "") !== (existingNotes?.trim() ?? "")) {
+    patch.notes = nextNotes;
   }
 
   const existingName = typeof row.customer_name === "string" ? row.customer_name.trim() : "";

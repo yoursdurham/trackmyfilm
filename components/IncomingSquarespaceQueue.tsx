@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import type { SquarespaceCheckSummary } from "@/lib/squarespace-orders";
 import { summaryFilmStock } from "@/lib/disposable-roll";
-import { formatStockMatchLabel } from "@/lib/film-stock-match";
+import { formatStockMatchLabel, orderNotesForFilmListing } from "@/lib/film-stock-match";
 import { correctFilmStockSpelling } from "@/lib/film-stocks";
 import { preferredIntakeCustomerName } from "@/lib/incoming-drafts";
 import type { Customer, IncomingSquarespaceDraft, RollDetail } from "@/lib/types";
@@ -217,6 +217,11 @@ export default function IncomingSquarespaceQueue() {
         <ul className="mt-3 divide-y divide-stone-100">
           {drafts.map((draft) => {
             const displayName = draftDisplayName(draft, customers);
+            const visibleNotes = orderNotesForFilmListing(
+              draft.notes,
+              draft.squarespace_film_listing,
+              draft.roll_details,
+            );
             return (
             <li key={draft.id} className="flex flex-col gap-3 py-3 sm:flex-row sm:items-start sm:justify-between">
               <div className="min-w-0">
@@ -259,8 +264,8 @@ export default function IncomingSquarespaceQueue() {
                     Customer listed film: {draft.squarespace_film_listing}
                   </p>
                 ) : null}
-                {draft.notes ? (
-                  <p className="mt-1 line-clamp-2 text-xs text-slate-500">Notes: {draft.notes}</p>
+                {visibleNotes ? (
+                  <p className="mt-1 line-clamp-2 text-xs text-slate-500">Notes: {visibleNotes}</p>
                 ) : null}
               </div>
               <div className="flex shrink-0 flex-col items-stretch gap-2 sm:items-end">

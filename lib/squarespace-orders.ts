@@ -18,9 +18,9 @@ import {
 } from "./disposable-roll";
 import {
   applyFilmListingToRolls,
-  customerFilmNote,
   FILM_STOCK_MATCH_THRESHOLD,
   mergeCustomerFilmNote,
+  orderNotesForFilmListing,
   scoreFilmStock,
   splitFilmListing,
 } from "./film-stock-match";
@@ -680,7 +680,6 @@ export function classifySquarespaceOrder(order: unknown): ClassifiedSquarespaceO
     const stockListing = listing ? listingForStocks(listing) : null;
     const applied = applyFilmListingToRolls(mapped.rolls, stockListing);
     rolls.push(...applied.rolls);
-    if (listing) notes = mergeCustomerFilmNote(notes, customerFilmNote(listing));
     notes = mergeCustomerFilmNote(notes, mapped.note);
   });
   if (usedOrderListing && orderListing) collectedListings.push(orderListing);
@@ -695,6 +694,7 @@ export function classifySquarespaceOrder(order: unknown): ClassifiedSquarespaceO
       }
     }
   }
+  notes = orderNotesForFilmListing(notes, squarespaceFilmListing, rolls);
 
   if (!sawFilm) return { kind: "skip_no_film" };
   if (problems.length > 0) {

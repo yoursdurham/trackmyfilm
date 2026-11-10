@@ -171,6 +171,43 @@ describe("classifySquarespaceOrder", () => {
     expect(result.draft.notes).toMatch(/Confirm the process/);
   });
 
+  it("keeps a process note and leaves a matched film line out of notes", () => {
+    const matched = classifySquarespaceOrder(filmOrder({
+      orderNumber: "01220",
+      id: "scans-matched",
+      lineItems: [{
+        productName: "35mm Scanning Only",
+        quantity: 1,
+        customizations: [{
+          label: "PLEASE LIST WHAT FILM TYPE(S) YOU ARE DROPPING OFF",
+          value: "Ultramax 400",
+        }],
+      }],
+    }));
+    expect(matched.kind).toBe("import");
+    if (matched.kind !== "import") return;
+    expect(matched.draft.roll_details[0].film_stock).toBe("Kodak UltraMax 400");
+    expect(matched.draft.notes).toMatch(/Confirm the process/);
+    expect(matched.draft.notes).not.toMatch(/Customer listed film/);
+
+    const unmatched = classifySquarespaceOrder(filmOrder({
+      orderNumber: "01221",
+      id: "scans-unmatched",
+      lineItems: [{
+        productName: "35mm Scanning Only",
+        quantity: 1,
+        customizations: [{
+          label: "PLEASE LIST WHAT FILM TYPE(S) YOU ARE DROPPING OFF",
+          value: "some weird film",
+        }],
+      }],
+    }));
+    expect(unmatched.kind).toBe("import");
+    if (unmatched.kind !== "import") return;
+    expect(unmatched.draft.notes).toMatch(/Customer listed film: some weird film/);
+    expect(unmatched.draft.notes).toMatch(/Confirm the process/);
+  });
+
   it("keeps Scans Only when a develop product's option says scanning only", () => {
     const result = classifySquarespaceOrder(filmOrder({
       lineItems: [{
@@ -311,7 +348,7 @@ describe("classifySquarespaceOrder", () => {
     expect(result.kind).toBe("import");
     if (result.kind !== "import") return;
     expect(result.draft.squarespace_film_listing).toBe("Ultramax 400");
-    expect(result.draft.notes).toBe("Customer listed film: Ultramax 400");
+    expect(result.draft.notes).toBeNull();
     expect(result.draft.customer_name).toBe("Justin Eisner");
     expect(result.draft.roll_details[0]).toMatchObject({
       film_type: "35mm",
@@ -344,6 +381,7 @@ describe("classifySquarespaceOrder", () => {
     expect(result.kind).toBe("import");
     if (result.kind !== "import") return;
     expect(result.draft.squarespace_film_listing).toBe("HP5");
+    expect(result.draft.notes).toBeNull();
     expect(result.draft.roll_details.map((roll) => roll.film_stock)).toEqual([
       "Ilford HP5 Plus 400",
       "Ilford HP5 Plus 400",
@@ -372,6 +410,7 @@ describe("classifySquarespaceOrder", () => {
       "Kodak Portra 400",
       "Kodak UltraMax 400",
     ]);
+    expect(listed.draft.notes).toBeNull();
 
     const unmatched = classifySquarespaceOrder(filmOrder({
       orderNumber: "01082",
@@ -464,7 +503,7 @@ describe("classifySquarespaceOrder", () => {
     expect(result.draft.customer_email).toBe("ada@example.com");
     expect(result.draft.squarespace_channel).toBe("pos");
     expect(result.draft.squarespace_film_listing).toBe("Reflex 800");
-    expect(result.draft.notes).toBe("Customer listed film: Reflex 800");
+    expect(result.draft.notes).toBeNull();
     expect(result.draft.roll_details[0]).toMatchObject({
       film_type: "35mm",
       film_process: "Color",
@@ -537,6 +576,7 @@ describe("classifySquarespaceOrder", () => {
     expect(fromNote.draft.roll_details[0].film_stock).toBeUndefined();
     expect(fromNote.draft.roll_details[0].scan_size).toBe("Standard");
     expect(fromNote.draft.squarespace_film_listing).toBe("Kodak FunSaver");
+    expect(fromNote.draft.notes).toBe("Customer listed film: Kodak FunSaver");
   });
 
   it("uses the billing name, then the shipping name, and stays blank when both are missing", () => {
@@ -899,7 +939,6 @@ describe("importSquarespaceOrders", () => {
         film_stock: "Kodak UltraMax 400",
         film_stock_confidence: 100,
       }],
-      notes: "Customer listed film: Ultramax 400",
     });
 
     const again = pendingDraftFilmBackfill(
@@ -937,6 +976,47 @@ describe("importSquarespaceOrders", () => {
       },
     );
     expect(again).toBeNull();
+
+    const stripped = pendingDraftFilmBackfill(
+      {
+        id: "draft-1213",
+        status: "Pending Intake",
+        customer_name: "Justin Eisner",
+        squarespace_film_listing: "Fujifilm Superia 200",
+        notes: "Leave the bag at the desk\nCustomer listed film: Fujifilm Superia 200",
+        roll_details: [{
+          film_type: "35mm",
+          film_process: "Color",
+          scan_size: "Standard",
+          prints_4x6: false,
+          film_stock: "Fujifilm Superia 200",
+          film_stock_confidence: 100,
+        }],
+      },
+      {
+        squarespace_order_number: "1213",
+        external_order_id: "order-1213",
+        customer_name: "Justin Eisner",
+        customer_email: null,
+        dropoff_date: "2026-10-01",
+        roll_count: 1,
+        roll_details: [{
+          film_type: "35mm",
+          film_process: "Color",
+          scan_size: "Standard",
+          prints_4x6: false,
+          film_stock: "Fujifilm Superia 200",
+          film_stock_confidence: 100,
+        }],
+        notes: null,
+        squarespace_film_listing: "Fujifilm Superia 200",
+        import_source: "squarespace",
+      },
+    );
+    expect(stripped).toEqual({
+      id: "draft-1213",
+      notes: "Leave the bag at the desk",
+    });
   });
 
   it("backfills 4x6 Prints to No when the Squarespace variant is No", () => {

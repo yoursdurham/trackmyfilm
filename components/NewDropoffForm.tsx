@@ -11,7 +11,7 @@ import { User, Calendar, Hash, Layers, Loader2, Film, Mail } from "lucide-react"
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { isDisposableFilmType } from "@/lib/disposable-roll";
-import { applyFilmListingToRolls, formatStockMatchLabel, mergeCustomerFilmNote } from "@/lib/film-stock-match";
+import { applyFilmListingToRolls, formatStockMatchLabel, orderNotesForFilmListing } from "@/lib/film-stock-match";
 import { correctFilmStockSpelling, FILM_STOCKS } from "@/lib/film-stocks";
 import type { Customer, FilmType, FilmProcess, IncomingSquarespaceDraft, RollDetail } from "@/lib/types";
 import { preferredIntakeCustomerName } from "@/lib/incoming-drafts";
@@ -95,7 +95,7 @@ function formStateFromDraft(draft: IncomingSquarespaceDraft) {
       order_number: draft.squarespace_order_number,
       dropoff_date: draft.dropoff_date || format(new Date(), "yyyy-MM-dd"),
       roll_count: rolls.length,
-      notes: mergeCustomerFilmNote(draft.notes, applied.unmatchedNote) ?? "",
+      notes: orderNotesForFilmListing(draft.notes, draft.squarespace_film_listing, details) ?? "",
     },
     rolls,
   };

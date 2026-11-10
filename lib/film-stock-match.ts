@@ -1,7 +1,8 @@
 /**
  * Turns a customer's free-text film list into catalog stocks for each roll.
  * A close unique name is a match with a 0–100 confidence score. A weak or
- * ambiguous name becomes a new stock, and the original wording is kept.
+ * ambiguous name becomes a new stock, and that wording stays in the order
+ * note. A confident match that a roll can show does not.
  * No database or email side effects.
  */
 
@@ -260,6 +261,71 @@ export function mergeCustomerFilmNote(
   return `${current}\n${addition}`;
 }
 
+/** Removes "Customer listed film:" lines. Other note lines stay. */
+export function stripCustomerFilmNote(notes: string | null | undefined): string | null {
+  if (!notes) return null;
+  const prefix = CUSTOMER_FILM_NOTE_PREFIX.toLowerCase();
+  const kept = notes
+    .split(/\r?\n/)
+    .filter((line) => !line.trim().toLowerCase().startsWith(prefix));
+  const result = kept.join("\n").trim();
+  return result || null;
+}
+
+function catalogTokens(text: string, catalog: readonly string[]): ParsedFilmToken[] {
+  return parseFilmListing(text, catalog).filter((token) => !isDisposableCameraLabel(token.raw));
+}
+
+function noteForTokens(
+  text: string,
+  tokens: ParsedFilmToken[],
+  rolls: readonly { film_type?: string }[],
+): string | null {
+  if (tokens.length === 0) return customerFilmNote(text);
+  const confident = tokens.every((token) => Boolean(token.stock) && !token.created);
+  const canShowStock = rolls.some((roll) => !isDisposableFilmType(roll.film_type));
+  if (confident && canShowStock) return null;
+  return customerFilmNote(text);
+}
+
+/**
+ * The customer film line for order notes, or null when every listed stock
+ * is a confident catalog match and a roll can show it.
+ * A disposable-camera label is not a stock. A listing that is only those
+ * labels, or a match that cannot be shown because every roll is a disposable
+ * camera, still returns the film line.
+ */
+export function customerFilmNoteForRolls(
+  listing: string | null | undefined,
+  rolls: readonly { film_type?: string }[],
+  catalog: readonly string[] = FILM_STOCKS,
+): string | null {
+  const text = listing?.trim() ?? "";
+  if (!text) return null;
+  return noteForTokens(text, catalogTokens(text, catalog), rolls);
+}
+
+/**
+ * Notes to store or show for a Squarespace film answer.
+ * A confident match drops the "Customer listed film" line and keeps any
+ * other note. An unmatched, low-confidence, or new stock keeps that line.
+ */
+export function orderNotesForFilmListing(
+  notes: string | null | undefined,
+  listing: string | null | undefined,
+  rolls: readonly { film_type?: string }[] = [],
+  catalog: readonly string[] = FILM_STOCKS,
+): string | null {
+  const text = listing?.trim() ?? "";
+  if (!text) {
+    const current = notes?.trim() ?? "";
+    return current || null;
+  }
+  const filmNote = customerFilmNoteForRolls(text, rolls, catalog);
+  if (filmNote) return mergeCustomerFilmNote(notes, filmNote);
+  return stripCustomerFilmNote(notes);
+}
+
 export function formatStockMatchLabel(roll: {
   film_stock_confidence?: number;
   film_stock_created?: boolean;
@@ -303,7 +369,8 @@ function assignStock<T extends { film_stock?: string; film_type?: string }>(
  * and leaves extra rolls blank.
  * Disposable Camera rolls are skipped. "Disposable" is the stock for those.
  * A disposable label in the listing (FunSaver, single-use) is not a stock.
- * The original listing is always returned as a note, matched or not.
+ * The original listing is a note when it is not a confident catalog match,
+ * or when every roll is a disposable camera and the stock is not shown.
  * A name that is not close to one catalog stock is stored as a new stock.
  */
 export function applyFilmListingToRolls<T extends { film_stock?: string; film_type?: string }>(
@@ -320,11 +387,10 @@ export function applyFilmListingToRolls<T extends { film_stock?: string; film_ty
     return { rolls: next, unmatchedNote: null };
   }
 
-  const tokens = parseFilmListing(text, catalog)
-    .filter((token) => !isDisposableCameraLabel(token.raw));
-  const originalNote = customerFilmNote(text);
+  const tokens = catalogTokens(text, catalog);
+  const unmatchedNote = noteForTokens(text, tokens, next);
   if (tokens.length === 0) {
-    return { rolls: next, unmatchedNote: originalNote };
+    return { rolls: next, unmatchedNote };
   }
 
   const singleStock = tokens.length === 1 && tokens[0].count === 1 && tokens[0].stock
@@ -334,7 +400,7 @@ export function applyFilmListingToRolls<T extends { film_stock?: string; film_ty
   if (singleStock) {
     return {
       rolls: next.map((roll) => assignStock(roll, singleStock)),
-      unmatchedNote: originalNote,
+      unmatchedNote,
     };
   }
 
@@ -348,5 +414,5 @@ export function applyFilmListingToRolls<T extends { film_stock?: string; film_ty
       index += 1;
     }
   }
-  return { rolls: next, unmatchedNote: originalNote };
+  return { rolls: next, unmatchedNote };
 }
