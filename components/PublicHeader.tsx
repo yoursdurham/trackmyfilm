@@ -13,7 +13,12 @@ type PublicHeaderProps = {
 
 const COLORS = YOURS_BLEND_COLORS;
 const WORDMARK = "Track My Film";
-export const TRACK_MY_FILM_SUBTEXT = "A Project by Yours, Durham";
+const YOURS_DURHAM = "Yours, Durham";
+const YOURS_DURHAM_URL = "https://yoursdurham.com";
+export const TRACK_MY_FILM_SUBTEXT = `A Project by ${YOURS_DURHAM}`;
+
+const TAGLINE_LINK_CLASS =
+  "rounded-sm text-neutral-800 no-underline visited:text-neutral-800 hover:text-[#A1CC93] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900 focus-visible:ring-offset-2 focus-visible:ring-offset-[#FFF6D3]";
 
 const WORDMARK_CLASS =
   "inline-flex max-w-full flex-wrap items-baseline justify-center gap-x-[0.28em] font-jetbrains text-[2.15rem] font-bold leading-none tracking-tight min-[400px]:text-[2.45rem] sm:text-5xl lg:text-6xl";
@@ -69,7 +74,10 @@ export default function PublicHeader({ heading = "h1", corner }: PublicHeaderPro
           </Link>
         </Tag>
         <p className="mt-2 font-jetbrains text-sm font-normal leading-relaxed text-neutral-800 sm:text-base">
-          {TRACK_MY_FILM_SUBTEXT}
+          A Project by{" "}
+          <a href={YOURS_DURHAM_URL} data-testid="yours-durham-link" className={TAGLINE_LINK_CLASS}>
+            {YOURS_DURHAM}
+          </a>
         </p>
       </div>
     </header>
