@@ -6,7 +6,7 @@
     },
     {
       "path": "/api/cron/reward-discounts",
-      "schedule": "20 */6 * * *"
+      "schedule": "30 8 * * *"
     }
   ]
 }

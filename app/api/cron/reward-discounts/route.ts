@@ -1,5 +1,6 @@
 /**
  * GET /api/cron/reward-discounts
+ * Daily cron (08:30 UTC). Hobby plans only allow one run per day.
  * Lists TMF reward discounts, marks used codes redeemed, deletes spent
  * and expired discounts, and returns an unused expired code to earned.
  * Does not import Squarespace orders. Protected by CRON_SECRET.
