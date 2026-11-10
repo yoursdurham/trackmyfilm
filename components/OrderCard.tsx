@@ -28,6 +28,7 @@ import StatusBadge from "./StatusBadge";
 import FilmProcessBadge from "./FilmProcessBadge";
 import CopyField from "./CopyField";
 import { ORDER_STATUS, STATUS_FLOW } from "@/lib/constants";
+import { isDisposableFilmType, summaryFilmStock, withoutDisposableFilmStock } from "@/lib/disposable-roll";
 import { correctFilmStockSpelling } from "@/lib/film-stocks";
 import { HOLD_REASON_MAX_LENGTH } from "@/lib/hold-reason";
 import { getUrgentAgeDays, isUrgent } from "@/lib/order-urgency";
@@ -229,9 +230,14 @@ export default function OrderCard({
   ) => {
     setOrderDraft((draft) => {
       if (!draft) return draft;
-      const roll_details = draft.roll_details.map((roll, rollIndex) =>
-        rollIndex === index ? { ...roll, [key]: value } : roll
-      );
+      const roll_details = draft.roll_details.map((roll, rollIndex) => {
+        if (rollIndex !== index) return roll;
+        const next = { ...roll, [key]: value };
+        if (key === "film_type" && isDisposableFilmType(String(value))) {
+          return withoutDisposableFilmStock({ ...next, film_stock: "" });
+        }
+        return next;
+      });
       const allowed = getStatusOptionsForOrder({ ...order, roll_details });
       const status = allowed.includes(draft.status) ? draft.status : ORDER_STATUS.RECEIVED_BY_YOURS;
       return { ...draft, roll_details, status };
@@ -240,7 +246,8 @@ export default function OrderCard({
 
   const handleSaveOrder = async () => {
     if (!orderDraft) return;
-    const firstRoll = orderDraft.roll_details[0];
+    const roll_details = orderDraft.roll_details.map((roll) => withoutDisposableFilmStock(roll));
+    const firstRoll = roll_details[0];
 
     setIsSavingOrder(true);
     try {
@@ -254,9 +261,9 @@ export default function OrderCard({
           roll_count: Number(orderDraft.roll_count) || 1,
           film_type: firstRoll?.film_type,
           film_process: firstRoll?.film_process,
-          film_stock: firstRoll?.film_stock || undefined,
+          film_stock: isDisposableFilmType(firstRoll?.film_type) ? null : firstRoll?.film_stock || undefined,
           prints_4x6: Boolean(firstRoll?.prints_4x6),
-          roll_details: orderDraft.roll_details,
+          roll_details,
           wetransfer_link: draftProcessOnly ? undefined : orderDraft.wetransfer_link.trim() || undefined,
           notes: orderDraft.notes.trim() || undefined,
         }),
@@ -971,6 +978,7 @@ export default function OrderCard({
                             ))}
                           </select>
                         </div>
+                        {isDisposableFilmType(roll.film_type) ? null : (
                         <div>
                           <label className="mb-1 block text-xs text-slate-500">Film Stock</label>
                           <Input
@@ -980,6 +988,7 @@ export default function OrderCard({
                             className="border-slate-200"
                           />
                         </div>
+                        )}
                         <div>
                           <label className="mb-1 block text-xs text-slate-500">Scan Size</label>
                           <select
@@ -1185,9 +1194,9 @@ export default function OrderCard({
                               className="rounded-full bg-[var(--accent-purple)] px-2 py-0.5 text-xs font-medium text-white"
                             />
                           ) : null}
-                          {roll.film_stock ? (
+                          {summaryFilmStock(roll) ? (
                             <span className="rounded-full bg-slate-200 px-2 py-0.5 text-xs text-slate-700">
-                              {correctFilmStockSpelling(roll.film_stock)}
+                              {correctFilmStockSpelling(summaryFilmStock(roll) ?? "")}
                             </span>
                           ) : null}
                           {scanLabel ? (

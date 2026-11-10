@@ -8,6 +8,7 @@ import {
   getCustomerByEmailOrName, createCustomer, updateCustomer,
   createOrder, getOrderByNumber,
 } from "@/lib/db";
+import { isDisposableFilmType, withoutDisposableFilmStock } from "@/lib/disposable-roll";
 import {
   normalizeEmail, normalizeCustomerName, normalizeOrderNumber, isValidEmail,
   normalizeFilmType, validateRollDetails,
@@ -98,10 +99,15 @@ export async function createFilmDropoff(body: DropoffRequest): Promise<DropoffRe
     return { ok: false, status: 400, error: rollDetailsError };
   }
 
-  const normalizedRollDetails = roll_details?.map((roll) => ({
+  const normalizedRollDetails = roll_details?.map((roll) => withoutDisposableFilmStock({
     ...roll,
     film_type: normalizeFilmType(roll.film_type) ?? roll.film_type,
   }));
+  const firstRollDisposable = isDisposableFilmType(normalizedFilmType)
+    || isDisposableFilmType(normalizedRollDetails?.[0]?.film_type);
+  const orderFilmStock = firstRollDisposable || typeof film_stock !== "string"
+    ? undefined
+    : film_stock.trim() || undefined;
 
   const normalizedEmail = customer_email ? normalizeEmail(customer_email) : null;
   const nameParts = customer_name.trim().split(/\s+/);
@@ -158,7 +164,7 @@ export async function createFilmDropoff(body: DropoffRequest): Promise<DropoffRe
       roll_count,
       film_type: normalizedFilmType,
       film_process: resolvedFilmProcess,
-      film_stock: film_stock ?? undefined,
+      film_stock: orderFilmStock,
       roll_details: normalizedRollDetails ?? undefined,
       prints_4x6: prints_4x6 ?? undefined,
       dropoff_number: newTotalDropoffs,

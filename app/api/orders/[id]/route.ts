@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getOrderById, getOrderByNumber, updateOrder, deleteOrder, deleteIncomingDraftsForOrder, getCustomerById, updateCustomer } from "@/lib/db";
 import { normalizeStoredRollDetails } from "@/lib/blank-roll";
+import { isDisposableFilmType, withoutDisposableFilmStock } from "@/lib/disposable-roll";
 import { ensureHttps, normalizeOrderNumber, validateRollBlankFlags } from "@/lib/validation";
 import { requireAuth } from "@/lib/api-auth";
 import type { RollDetail } from "@/lib/types";
@@ -45,13 +46,18 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       : rawWetransferLink;
 
     let nextRollDetails = roll_details;
+    let nextFilmStock = film_stock;
     if (roll_details !== undefined) {
       const blankError = validateRollBlankFlags(roll_details);
       if (blankError) {
         return NextResponse.json({ error: blankError }, { status: 400 });
       }
       if (Array.isArray(roll_details)) {
-        nextRollDetails = normalizeStoredRollDetails(roll_details as RollDetail[]);
+        nextRollDetails = normalizeStoredRollDetails(roll_details as RollDetail[])
+          .map((roll) => withoutDisposableFilmStock(roll));
+        if (isDisposableFilmType(nextRollDetails[0]?.film_type)) {
+          nextFilmStock = null;
+        }
       }
     }
 
@@ -74,7 +80,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
     const order = await updateOrder(id, {
       order_number: nextOrderNumber, customer_name, customer_email, status, status_history, status_updated_at,
-      film_type, film_process, film_stock, roll_count, dropoff_date, dropoff_number,
+      film_type, film_process, film_stock: nextFilmStock, roll_count, dropoff_date, dropoff_number,
       roll_details: nextRollDetails, prints_4x6, scan_notes,
       color_scans_wetransfer_link, color_scans_delivered_at, color_partial_email_sent_at,
       bw_scans_wetransfer_link, bw_scans_delivered_at, bw_partial_email_sent_at,

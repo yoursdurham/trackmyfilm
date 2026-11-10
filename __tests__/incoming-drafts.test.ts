@@ -7,6 +7,7 @@ import {
   isDismissedStatusNotReady,
   isIncomingDraftUuid,
   parseIncomingDraftPayload,
+  preferredIntakeCustomerName,
   resolveIncomingDraftStatusChange,
   squarespaceDraftBlocksImport,
 } from "../lib/incoming-drafts";
@@ -31,6 +32,24 @@ const validBody = {
   import_source: "squarespace",
   status: "Received by Yours",
 };
+
+describe("preferredIntakeCustomerName", () => {
+  it("prefers a linked customer name, then the Squarespace name", () => {
+    expect(preferredIntakeCustomerName(
+      { customer_id: "cust-1", customer_name: "Squarespace Name" },
+      { first_name: "Olivia", last_name: "Eickerman" },
+    )).toBe("Olivia Eickerman");
+    expect(preferredIntakeCustomerName(
+      { customer_id: "cust-1", customer_name: "Olivia Eickerman" },
+      { first_name: "  ", last_name: "" },
+    )).toBe("Olivia Eickerman");
+    expect(preferredIntakeCustomerName(
+      { customer_name: "Chelsea Nicole" },
+      { first_name: "Ignored", last_name: "Person" },
+    )).toBe("Chelsea Nicole");
+    expect(preferredIntakeCustomerName({ customer_name: "  " }, null)).toBe("");
+  });
+});
 
 describe("parseIncomingDraftPayload", () => {
   it("normalizes a valid Squarespace draft and ignores a requested status", () => {
@@ -172,6 +191,7 @@ describe("parseIncomingDraftPayload", () => {
     expect(disposable.ok).toBe(true);
     if (!disposable.ok) return;
     expect(disposable.value.roll_details[0].film_type).toBe("Disposable Camera");
+    expect(disposable.value.roll_details[0].film_stock).toBeUndefined();
     expect(parseIncomingDraftPayload({
       ...validBody,
       roll_details: [{ ...validRoll, film_type: "Polaroid" }],

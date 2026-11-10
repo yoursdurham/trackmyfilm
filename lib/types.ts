@@ -68,7 +68,10 @@ export interface IncomingSquarespaceDraft {
   squarespace_order_number: string;
   external_order_id: string;
   customer_name: string;
-  /** Set when the Squarespace email matches an existing customer. The staged name stays blank. */
+  /**
+   * Set when the Squarespace email matches an existing customer.
+   * Display and Approve & Receive use that customer's name when it is set.
+   */
   customer_id?: string | null;
   customer_email: string | null;
   dropoff_date: string | null;

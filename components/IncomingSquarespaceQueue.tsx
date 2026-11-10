@@ -14,9 +14,11 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import type { SquarespaceCheckSummary } from "@/lib/squarespace-orders";
+import { summaryFilmStock } from "@/lib/disposable-roll";
 import { formatStockMatchLabel } from "@/lib/film-stock-match";
 import { correctFilmStockSpelling } from "@/lib/film-stocks";
-import type { IncomingSquarespaceDraft, RollDetail } from "@/lib/types";
+import { preferredIntakeCustomerName } from "@/lib/incoming-drafts";
+import type { Customer, IncomingSquarespaceDraft, RollDetail } from "@/lib/types";
 
 function formatDraftDate(date: string | null) {
   if (!date) return "No drop-off date";
@@ -27,16 +29,24 @@ function formatDraftDate(date: string | null) {
   }
 }
 
+function draftDisplayName(draft: IncomingSquarespaceDraft, customers: Customer[]) {
+  const linked = draft.customer_id
+    ? customers.find((customer) => customer.id === draft.customer_id) ?? null
+    : null;
+  return preferredIntakeCustomerName(draft, linked);
+}
+
 function summarizeRoll(roll: RollDetail) {
   const parts: string[] = [roll.film_type, roll.film_process];
   if (roll.scan_size) parts.push(roll.scan_size);
   if (roll.prints_4x6) parts.push("4x6 prints");
-  if (roll.film_stock) {
+  const stock = summaryFilmStock(roll);
+  if (stock) {
     const match = formatStockMatchLabel(roll);
-    const stock = correctFilmStockSpelling(roll.film_stock);
-    parts.push(match ? `${stock} (${match})` : stock);
+    const spelled = correctFilmStockSpelling(stock);
+    parts.push(match ? `${spelled} (${match})` : spelled);
   }
-  return parts.join(" · ");
+  return parts.filter((part) => part.trim()).join(" · ");
 }
 
 function CheckSummary({ summary }: { summary: SquarespaceCheckSummary }) {
@@ -81,6 +91,15 @@ export default function IncomingSquarespaceQueue() {
   const [dismissTarget, setDismissTarget] = useState<IncomingSquarespaceDraft | null>(null);
   const [sendEmailById, setSendEmailById] = useState<Record<string, boolean>>({});
   const [checkSummary, setCheckSummary] = useState<SquarespaceCheckSummary | null>(null);
+
+  const { data: customers = [] } = useQuery<Customer[]>({
+    queryKey: ["customers"],
+    queryFn: async () => {
+      const response = await fetch("/api/customers");
+      if (!response.ok) throw new Error("Failed to fetch customers");
+      return response.json();
+    },
+  });
 
   const { data: drafts = [], isLoading, isError } = useQuery<IncomingSquarespaceDraft[]>({
     queryKey: ["incomingDrafts"],
@@ -149,6 +168,8 @@ export default function IncomingSquarespaceQueue() {
     onError: (err: Error) => toast.error(err.message),
   });
 
+  const dismissName = dismissTarget ? draftDisplayName(dismissTarget, customers) : "";
+
   return (
     <section className="mb-6 rounded-xl border border-stone-100 bg-white p-4 shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -194,7 +215,9 @@ export default function IncomingSquarespaceQueue() {
         </p>
       ) : (
         <ul className="mt-3 divide-y divide-stone-100">
-          {drafts.map((draft) => (
+          {drafts.map((draft) => {
+            const displayName = draftDisplayName(draft, customers);
+            return (
             <li key={draft.id} className="flex flex-col gap-3 py-3 sm:flex-row sm:items-start sm:justify-between">
               <div className="min-w-0">
                 <p className="font-medium text-slate-800">
@@ -208,7 +231,7 @@ export default function IncomingSquarespaceQueue() {
                   ) : null}
                   <span className="font-normal text-slate-500">
                     {" · "}
-                    {draft.customer_name.trim() ? draft.customer_name : "No name yet"}
+                    {displayName || "No name yet"}
                   </span>
                 </p>
                 <p className="truncate text-sm text-slate-500">
@@ -284,7 +307,8 @@ export default function IncomingSquarespaceQueue() {
                 </div>
               </div>
             </li>
-          ))}
+            );
+          })}
         </ul>
       )}
 
@@ -294,7 +318,7 @@ export default function IncomingSquarespaceQueue() {
             <AlertDialogTitle>Dismiss this Squarespace order?</AlertDialogTitle>
             <AlertDialogDescription>
               {dismissTarget
-                ? `${dismissTarget.squarespace_order_number}${dismissTarget.customer_name.trim() ? ` for ${dismissTarget.customer_name}` : ""} will stay dismissed. It will not become a drop-off, and later imports will skip it.`
+                ? `${dismissTarget.squarespace_order_number}${dismissName ? ` for ${dismissName}` : ""} will stay dismissed. It will not become a drop-off, and later imports will skip it.`
                 : "It will stay dismissed and will not become a drop-off. Later imports will skip it."}
             </AlertDialogDescription>
           </AlertDialogHeader>

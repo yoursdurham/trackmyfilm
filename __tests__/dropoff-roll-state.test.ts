@@ -142,6 +142,14 @@ describe("applyCustomerDefaultsToRolls", () => {
     expect(next).toBe(rolls);
   });
 
+  it("clears a stock when the customer default is a disposable camera", () => {
+    const rolls = [filledRoll({ film_stock: "Kodak Gold 200", custom_stock: "leftover" })];
+    const next = applyCustomerDefaultsToRolls(rolls, { default_film_type: "Disposable Camera" });
+    expect(next[0].film_type).toBe("Disposable Camera");
+    expect(next[0].film_stock).toBe("");
+    expect(next[0].custom_stock).toBe("");
+  });
+
   it("120 and 110 remain selectable via customer defaults", () => {
     const rolls = [createEmptyDropoffRoll()];
     const for120 = applyCustomerDefaultsToRolls(rolls, { default_film_type: "120" });

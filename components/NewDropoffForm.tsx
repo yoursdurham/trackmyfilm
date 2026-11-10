@@ -10,9 +10,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { User, Calendar, Hash, Layers, Loader2, Film, Mail } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
+import { isDisposableFilmType } from "@/lib/disposable-roll";
 import { applyFilmListingToRolls, formatStockMatchLabel, mergeCustomerFilmNote } from "@/lib/film-stock-match";
 import { correctFilmStockSpelling, FILM_STOCKS } from "@/lib/film-stocks";
 import type { Customer, FilmType, FilmProcess, IncomingSquarespaceDraft, RollDetail } from "@/lib/types";
+import { preferredIntakeCustomerName } from "@/lib/incoming-drafts";
 import { DROP_OFF_FILM_TYPES, isValidEmail, normalizeEmail } from "@/lib/validation";
 import {
   applyCustomerDefaultsToRolls,
@@ -59,7 +61,8 @@ function rollStateFromDetail(roll: RollDetail): DropoffRollState {
   const scanSize = roll.scan_size && (DROP_OFF_SCAN_SIZES as readonly string[]).includes(roll.scan_size)
     ? roll.scan_size as DropoffScanSize
     : "Standard";
-  const stock = correctFilmStockSpelling(roll.film_stock?.trim() ?? "");
+  const disposable = isDisposableFilmType(filmType);
+  const stock = disposable ? "" : correctFilmStockSpelling(roll.film_stock?.trim() ?? "");
   const knownStock = stock !== "" && (FILM_STOCKS as readonly string[]).includes(stock);
   return {
     film_type: filmType,
@@ -125,16 +128,16 @@ export default function NewDropoffForm({
   const linkedCustomer = incomingDraft?.customer_id
     ? customers.find((customer) => customer.id === incomingDraft.customer_id) ?? null
     : null;
-  if (
-    linkedCustomer
-    && linkedCustomer.id !== appliedLinkId
-    && !formData.customer_name.trim()
-  ) {
+  if (linkedCustomer && linkedCustomer.id !== appliedLinkId) {
+    const linkedName = preferredIntakeCustomerName(
+      { customer_id: linkedCustomer.id, customer_name: incomingDraft?.customer_name ?? "" },
+      linkedCustomer,
+    );
     setAppliedLinkId(linkedCustomer.id);
     setSelectedCustomerId(linkedCustomer.id);
     setFormData((prev) => ({
       ...prev,
-      customer_name: `${linkedCustomer.first_name} ${linkedCustomer.last_name || ""}`.trim(),
+      customer_name: linkedName || prev.customer_name,
       customer_email: prev.customer_email || linkedCustomer.email || "",
     }));
   }
@@ -157,7 +160,15 @@ export default function NewDropoffForm({
   };
 
   const setRoll = <K extends keyof DropoffRollState>(index: number, key: K, value: DropoffRollState[K]) =>
-    setRolls((prev) => prev.map((r, i) => i === index ? { ...r, [key]: value } : r));
+    setRolls((prev) => prev.map((r, i) => {
+      if (i !== index) return r;
+      const next = { ...r, [key]: value };
+      if (key === "film_type" && isDisposableFilmType(String(value))) {
+        next.film_stock = "";
+        next.custom_stock = "";
+      }
+      return next;
+    }));
 
   const duplicateRoll = (index: number) => {
     setRolls((prev) => {
@@ -189,7 +200,7 @@ export default function NewDropoffForm({
     for (let i = 0; i < rolls.length; i++) {
       if (!rolls[i].film_type) { toast.error(`Select a film type for roll ${i + 1}`); return; }
       if (!rolls[i].film_process) { toast.error(`Select a film process for roll ${i + 1}`); return; }
-      if (rolls[i].film_stock === "__other__" && !rolls[i].custom_stock.trim()) {
+      if (!isDisposableFilmType(rolls[i].film_type) && rolls[i].film_stock === "__other__" && !rolls[i].custom_stock.trim()) {
         toast.error(`Enter the film stock name for roll ${i + 1}`); return;
       }
     }
@@ -199,7 +210,9 @@ export default function NewDropoffForm({
       const roll_details = rolls.map((r) => ({
         film_type: r.film_type as FilmType,
         film_process: r.film_process as FilmProcess,
-        film_stock: r.film_stock === "__other__" ? r.custom_stock.trim() || undefined
+        film_stock: isDisposableFilmType(r.film_type)
+          ? undefined
+          : r.film_stock === "__other__" ? r.custom_stock.trim() || undefined
           : r.film_stock || undefined,
         scan_size: r.scan_size,
         prints_4x6: r.prints_4x6,
@@ -502,7 +515,7 @@ export default function NewDropoffForm({
                   </div>
                 </div>
 
-                {/* Film stock */}
+                {isDisposableFilmType(roll.film_type) ? null : (
                 <div className="space-y-1">
                   <p className="text-xs font-medium text-slate-600">Film Stock</p>
                   <select
@@ -541,6 +554,7 @@ export default function NewDropoffForm({
                     />
                   )}
                 </div>
+                )}
               </div>
             ))}
           </div>
