@@ -23,6 +23,7 @@ Run these in order in: **Supabase Dashboard → SQL Editor → New Query**
 | `026_scans_only_ready_email.sql` | Adds `scans_only_ready_emailed_at` on `film_orders` so the Scans Only completion email is recorded once. Scans Only itself is the `scan_size` value `Scans Only` inside `roll_details`. | Yes — before Scans Only completion emails can store a timestamp. The app does not run this file. Safe to run again. |
 | `030_rls_auth_initplan.sql` | Recreates the customer read policies so `auth.jwt()` runs once per query, and adds an expression index on `lower(trim(customers.email))`. | Yes — after 023, when the database advisor warns that those policies re-check auth on every row. Safe to run again. The app does not run this file. |
 | `031_squarespace_pos_customer_link.sql` | Lets a Squarespace draft have a blank customer name, stores `customer_id` when the order email matches a customer, and stores `squarespace_channel` (`web` or `pos`). | Yes — before Check Squarespace can save POS orders or a blank name. Until it runs, Check Squarespace reports that this file still needs to be run. Safe to run again. The app does not run this file. |
+| `032_customer_rewards.sql` | Rewards ledger, reward rows, product-id settings, and promo codes stored from a manual Squarespace import. Backfills finished 35mm, 120, and disposable rolls. Customers can read their own rows. | Yes — before rewards, online codes, or in-store redemption. Safe to run again. The app does not run this file. |
 
 ## Notes
 

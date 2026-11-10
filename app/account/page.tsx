@@ -1,6 +1,8 @@
+import IntakeRewardPreview from "@/components/IntakeRewardPreview";
 import PublicHeader from "@/components/PublicHeader";
 import AccountProfile from "@/components/account/AccountProfile";
 import { isAccountPreview, previewAccountProfile } from "@/lib/account-profile";
+import { previewAccountRewards } from "@/lib/rewards";
 import { loadAccountProfile } from "@/lib/account-orders";
 import { customerAccountPageAllowed, customerAccountsEnabled } from "@/lib/customer-accounts";
 import { isCustomerAccountTester } from "@/lib/staff-auth";
@@ -26,7 +28,8 @@ export default async function AccountPage({
     return (
       <div className="flex min-h-screen flex-col bg-[#FFF6D3] font-jetbrains text-neutral-900">
         <PublicHeader heading="p" />
-        <AccountProfile profile={previewAccountProfile()} />
+        <AccountProfile profile={previewAccountProfile()} rewards={previewAccountRewards()} />
+        <IntakeRewardPreview />
       </div>
     );
   }
@@ -43,6 +46,8 @@ export default async function AccountPage({
       <AccountProfile
         profile={loaded.profile}
         ordersUnavailable={loaded.ordersUnavailable}
+        rewards={loaded.rewards}
+        rewardsUnavailable={loaded.rewardsUnavailable}
         signOutNext={accountsOpen || isCustomerAccountTester(sessionEmail) ? "/account/login" : null}
       />
     </div>

@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import InternalHeader from "@/components/InternalHeader";
 import AddCustomerForm from "@/components/AddCustomerForm";
+import RewardProductSettings from "@/components/RewardProductSettings";
 import type { CustomerSummary } from "@/lib/types";
 import {
   type CustomerListSortMode,
@@ -64,6 +65,7 @@ export default function CustomersPage() {
       <InternalHeader title="Customers" subtitle={`${customers.length} total`} />
 
       <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+        <RewardProductSettings />
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-1 flex-col gap-3 sm:flex-row sm:items-center">
             <div className="relative max-w-sm flex-1">
