@@ -267,7 +267,10 @@ export async function createOrder(data: Omit<FilmOrder, "id">): Promise<FilmOrde
   return created as FilmOrder;
 }
 
-export async function updateOrder(id: string, data: Partial<FilmOrder>): Promise<FilmOrder> {
+export async function updateOrder(
+  id: string,
+  data: Partial<Omit<FilmOrder, "film_stock">> & { film_stock?: string | null },
+): Promise<FilmOrder> {
   const { data: updated, error } = await getSupabase()
     .from("film_orders")
     .update(data)
@@ -438,6 +441,7 @@ export interface PendingIncomingDraftFilmPatch {
   squarespace_film_listing?: string;
   roll_details?: RollDetail[];
   notes?: string | null;
+  customer_name?: string;
 }
 
 /**
@@ -457,6 +461,7 @@ export async function updatePendingIncomingDraft(
     }
     if (patch.roll_details) body.roll_details = patch.roll_details;
     if (patch.notes !== undefined) body.notes = patch.notes;
+    if (patch.customer_name) body.customer_name = patch.customer_name;
     return getSupabase()
       .from("incoming_squarespace_drafts")
       .update(body)
@@ -467,7 +472,7 @@ export async function updatePendingIncomingDraft(
   const includeListing = Boolean(patch.squarespace_film_listing);
   let { error } = await write(includeListing);
   if (error && includeListing && isMissingSquarespaceFilmListingColumn(error)) {
-    const hasOther = Boolean(patch.roll_details) || patch.notes !== undefined;
+    const hasOther = Boolean(patch.roll_details) || patch.notes !== undefined || Boolean(patch.customer_name);
     if (!hasOther) return;
     ({ error } = await write(false));
   }

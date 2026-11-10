@@ -9,8 +9,9 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/api-auth";
 import { getCustomerById, getIncomingDraftById, updateIncomingDraftStatus } from "@/lib/db";
 import { createFilmDropoff, type DropoffRequest } from "@/lib/dropoff-service";
+import { withoutDisposableFilmStock } from "@/lib/disposable-roll";
 import { stripRollStockMatch } from "@/lib/film-stock-match";
-import { isIncomingDraftUuid, PENDING_INTAKE_STATUS } from "@/lib/incoming-drafts";
+import { isIncomingDraftUuid, PENDING_INTAKE_STATUS, preferredIntakeCustomerName } from "@/lib/incoming-drafts";
 import type { IncomingSquarespaceDraft, RollDetail } from "@/lib/types";
 
 function todayIsoDate() {
@@ -19,7 +20,7 @@ function todayIsoDate() {
 
 function receiveRequest(draft: IncomingSquarespaceDraft, body: Record<string, unknown>): DropoffRequest {
   const rolls = ((Array.isArray(body.roll_details) ? body.roll_details : draft.roll_details) as RollDetail[])
-    .map((roll) => stripRollStockMatch(roll));
+    .map((roll) => withoutDisposableFilmStock(stripRollStockMatch(roll)));
   const first = rolls[0];
   const customerEmail = typeof body.customer_email === "string"
     ? body.customer_email
@@ -29,9 +30,7 @@ function receiveRequest(draft: IncomingSquarespaceDraft, body: Record<string, un
     : draft.dropoff_date || todayIsoDate();
 
   return {
-    customer_name: typeof body.customer_name === "string" && body.customer_name.trim()
-      ? body.customer_name
-      : draft.customer_name,
+    customer_name: typeof body.customer_name === "string" ? body.customer_name.trim() : "",
     customer_email: customerEmail || undefined,
     order_number: typeof body.order_number === "string" && body.order_number.trim()
       ? body.order_number
@@ -42,7 +41,9 @@ function receiveRequest(draft: IncomingSquarespaceDraft, body: Record<string, un
     film_process: typeof body.film_process === "string" && body.film_process
       ? body.film_process
       : first?.film_process ?? "",
-    film_stock: typeof body.film_stock === "string" ? body.film_stock : first?.film_stock,
+    film_stock: first?.film_type === "Disposable Camera"
+      ? undefined
+      : typeof body.film_stock === "string" ? body.film_stock : first?.film_stock,
     roll_details: rolls,
     notes: typeof body.notes === "string" ? body.notes : draft.notes ?? undefined,
     send_email: body.send_email !== false,
@@ -85,22 +86,23 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     }
 
     let request = receiveRequest(draft, body);
-    if (!request.customer_name.trim() && draft.customer_id) {
-      const customer = await getCustomerById(draft.customer_id);
-      const linkedName = customer
-        ? `${customer.first_name} ${customer.last_name ?? ""}`.trim()
-        : "";
-      if (linkedName) {
+    const submittedName = request.customer_name.trim();
+    const squarespaceName = draft.customer_name.trim();
+    const staffTypedName = submittedName !== "" && submittedName !== squarespaceName;
+    if (!staffTypedName) {
+      const customer = draft.customer_id ? await getCustomerById(draft.customer_id) : null;
+      const name = preferredIntakeCustomerName(draft, customer);
+      if (name) {
         request = {
           ...request,
-          customer_name: linkedName,
+          customer_name: name,
           customer_email: request.customer_email || customer?.email || undefined,
         };
       }
     }
     if (!request.customer_name.trim()) {
       return NextResponse.json({
-        error: "Enter the customer name before approving. Squarespace checkout names are not copied onto the drop-off.",
+        error: "Enter the customer name before approving. This Squarespace order has no name.",
       }, { status: 400 });
     }
 

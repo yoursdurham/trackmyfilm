@@ -174,6 +174,19 @@ describe("applyFilmListingToRolls", () => {
     expect(applied.unmatchedNote).toBe(`${CUSTOMER_FILM_NOTE_PREFIX} Ultramax 400, mystery emulsion`);
   });
 
+  it("does not assign a stock to a disposable roll", () => {
+    const applied = applyFilmListingToRolls(
+      [
+        { film_type: "Disposable Camera", film_stock: "Kodak Gold 200" },
+        { film_type: "35mm" },
+      ],
+      "FunSaver, Portra 400",
+    );
+    expect(applied.rolls[0].film_stock).toBeUndefined();
+    expect(applied.rolls[1].film_stock).toBe("Kodak Portra 400");
+    expect(applied.unmatchedNote).toBe(`${CUSTOMER_FILM_NOTE_PREFIX} FunSaver, Portra 400`);
+  });
+
   it("does not duplicate a note that is already present", () => {
     const note = `${CUSTOMER_FILM_NOTE_PREFIX} mystery emulsion`;
     expect(mergeCustomerFilmNote("bag 4", note)).toBe(`bag 4\n${note}`);

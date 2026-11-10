@@ -8,6 +8,7 @@ import { formatScanSizeLabel } from "@/lib/scan-size-display";
 import { isBlankRoll } from "@/lib/blank-roll";
 import { getOrderRollDetails } from "@/lib/order-roll-utils";
 import { BlankRollBadge, RollBlankButton, useToggleRollBlank } from "@/components/RollBlankControl";
+import { summaryFilmStock } from "@/lib/disposable-roll";
 import { correctFilmStockSpelling } from "@/lib/film-stocks";
 import type { FilmOrder } from "@/lib/types";
 
@@ -96,9 +97,9 @@ export default function OrderDetailsReadOnly({ order, showDashboardLink = true }
                         {scanLabel}
                       </span>
                     ) : null}
-                    {roll.film_stock ? (
+                    {summaryFilmStock(roll) ? (
                       <span className="rounded-full bg-slate-200 px-2 py-0.5 text-xs text-slate-700">
-                        {correctFilmStockSpelling(roll.film_stock)}
+                        {correctFilmStockSpelling(summaryFilmStock(roll) ?? "")}
                       </span>
                     ) : null}
                     {roll.prints_4x6 ? (

@@ -3,6 +3,7 @@
  * API routes and tests both import from here. No database or email side effects.
  */
 
+import { withoutDisposableFilmStock } from "./disposable-roll";
 import type { FilmProcess, IncomingDraftStatus, RollDetail } from "./types";
 import {
   DROP_OFF_FILM_TYPES,
@@ -303,7 +304,7 @@ function parseRoll(
 
   return {
     ok: true,
-    roll: {
+    roll: withoutDisposableFilmStock({
       film_type: filmType,
       film_process: filmProcess,
       scan_size: scanSize,
@@ -311,8 +312,23 @@ function parseRoll(
       ...(filmStock ? { film_stock: filmStock } : {}),
       ...(filmStock && filmStockConfidence !== undefined ? { film_stock_confidence: filmStockConfidence } : {}),
       ...(filmStock && filmStockCreated ? { film_stock_created: true } : {}),
-    },
+    }),
   };
+}
+
+/**
+ * Linked customer name when that profile has one, otherwise the Squarespace
+ * name stored on the draft. Blank when neither exists.
+ */
+export function preferredIntakeCustomerName(
+  draft: { customer_name?: string | null; customer_id?: string | null },
+  linked?: { first_name?: string | null; last_name?: string | null } | null,
+): string {
+  if (draft.customer_id && linked) {
+    const linkedName = `${linked.first_name ?? ""} ${linked.last_name ?? ""}`.replace(/\s+/g, " ").trim();
+    if (linkedName) return linkedName;
+  }
+  return (draft.customer_name ?? "").replace(/\s+/g, " ").trim();
 }
 
 export type IncomingDraftStatusChange =

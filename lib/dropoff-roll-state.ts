@@ -1,3 +1,4 @@
+import { isDisposableFilmType } from "@/lib/disposable-roll";
 import type { Customer, FilmProcess, FilmType } from "@/lib/types";
 
 export const DROP_OFF_SCAN_SIZES = ["Standard", "High-Res", "TIFF", "Process Only", "Scans Only"] as const;
@@ -59,10 +60,18 @@ export function applyCustomerDefaultsToRolls(
   if (!customer.default_film_type && !customer.default_film_process && !customer.default_scan_size) {
     return rolls;
   }
-  return rolls.map((roll) => ({
-    ...roll,
-    film_type: customer.default_film_type || roll.film_type,
-    film_process: customer.default_film_process || roll.film_process,
-    scan_size: (customer.default_scan_size as DropoffScanSize | undefined) || roll.scan_size,
-  }));
+  return rolls.map((roll) => {
+    const film_type = customer.default_film_type || roll.film_type;
+    const next: DropoffRollState = {
+      ...roll,
+      film_type,
+      film_process: customer.default_film_process || roll.film_process,
+      scan_size: (customer.default_scan_size as DropoffScanSize | undefined) || roll.scan_size,
+    };
+    if (isDisposableFilmType(film_type)) {
+      next.film_stock = "";
+      next.custom_stock = "";
+    }
+    return next;
+  });
 }

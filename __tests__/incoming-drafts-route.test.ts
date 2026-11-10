@@ -16,6 +16,7 @@ const mockDeleteIncomingDraft = vi.fn();
 const mockGetOrderByNumber = vi.fn();
 const mockCreateOrder = vi.fn();
 const mockGetCustomers = vi.fn();
+const mockGetCustomerById = vi.fn();
 const mockSendOrderEmail = vi.fn();
 
 vi.mock("@/lib/api-auth", () => ({
@@ -37,6 +38,7 @@ vi.mock("@/lib/db", () => ({
   getOrderByNumber: (...args: unknown[]) => mockGetOrderByNumber(...args),
   createOrder: (...args: unknown[]) => mockCreateOrder(...args),
   getCustomers: (...args: unknown[]) => mockGetCustomers(...args),
+  getCustomerById: (...args: unknown[]) => mockGetCustomerById(...args),
 }));
 
 vi.mock("@/lib/email-service", () => ({
@@ -434,6 +436,96 @@ describe("Squarespace incoming draft routes", () => {
       expect(mockSendOrderEmail).toHaveBeenCalledWith("order-1", "film_drop_received");
       expect(mockUpdateIncomingDraftStatus).toHaveBeenCalledWith(DRAFT_ID, "accepted", "order-1");
       expect(mockDeleteIncomingDraft).not.toHaveBeenCalled();
+    });
+
+    it("prefers a linked customer name over the Squarespace name", async () => {
+      mockGetIncomingDraftById.mockResolvedValue({
+        id: DRAFT_ID,
+        status: "Pending Intake",
+        squarespace_order_number: "1210",
+        external_order_id: "squarespace-1210",
+        import_source: "squarespace",
+        customer_name: "Squarespace Name",
+        customer_id: "cust-olivia",
+        customer_email: "oliviaeickerman@gmail.com",
+        dropoff_date: "2026-11-08",
+        roll_count: 1,
+        roll_details: [{
+          film_type: "Disposable Camera",
+          film_process: "Color",
+          scan_size: "Standard",
+          film_stock: "unknown",
+        }],
+        notes: null,
+      });
+      mockGetCustomerById.mockResolvedValue({
+        id: "cust-olivia",
+        first_name: "Olivia",
+        last_name: "Eickerman",
+        email: "oliviaeickerman@gmail.com",
+      });
+
+      const res = await receive({ send_email: false });
+      expect(res.status).toBe(201);
+      const order = mockCreateOrder.mock.calls[0][0];
+      expect(order.customer_name).toBe("Olivia Eickerman");
+      expect(order.film_stock).toBeUndefined();
+      expect(order.roll_details[0].film_stock).toBeUndefined();
+      expect(mockGetCustomerById).toHaveBeenCalledWith("cust-olivia");
+
+      mockCreateOrder.mockClear();
+      const typed = await receive({ customer_name: "Squarespace Name", send_email: false });
+      expect(typed.status).toBe(201);
+      expect(mockCreateOrder.mock.calls[0][0].customer_name).toBe("Olivia Eickerman");
+
+      mockCreateOrder.mockClear();
+      const edited = await receive({ customer_name: "Liv Eickerman", send_email: false });
+      expect(edited.status).toBe(201);
+      expect(mockCreateOrder.mock.calls[0][0].customer_name).toBe("Liv Eickerman");
+    });
+
+    it("uses the Squarespace name when the order is not linked to a customer", async () => {
+      mockGetIncomingDraftById.mockResolvedValue({
+        id: DRAFT_ID,
+        status: "Pending Intake",
+        squarespace_order_number: "1214",
+        external_order_id: "squarespace-1214",
+        import_source: "squarespace",
+        customer_name: "Chelsea Nicole",
+        customer_email: "chelsea22nicole@gmail.com",
+        dropoff_date: "2026-11-10",
+        roll_count: 1,
+        roll_details: [{ film_type: "35mm", film_process: "Color", scan_size: "Standard" }],
+        notes: null,
+      });
+
+      const res = await receive({});
+      expect(res.status).toBe(201);
+      expect(mockCreateOrder.mock.calls[0][0].customer_name).toBe("Chelsea Nicole");
+      expect(mockGetCustomerById).not.toHaveBeenCalled();
+    });
+
+    it("asks for a name when Squarespace and the linked customer have none", async () => {
+      mockGetIncomingDraftById.mockResolvedValue({
+        id: DRAFT_ID,
+        status: "Pending Intake",
+        squarespace_order_number: "1215",
+        external_order_id: "squarespace-1215",
+        import_source: "squarespace",
+        customer_name: "",
+        customer_email: "noname@example.com",
+        dropoff_date: "2026-11-10",
+        roll_count: 1,
+        roll_details: [{ film_type: "35mm", film_process: "Color", scan_size: "Standard" }],
+        notes: null,
+      });
+
+      const res = await receive({});
+      expect(res.status).toBe(400);
+      expect(await res.json()).toEqual({
+        error: "Enter the customer name before approving. This Squarespace order has no name.",
+      });
+      expect(mockCreateOrder).not.toHaveBeenCalled();
     });
 
     it("skips the confirmation email when the checkbox is off", async () => {

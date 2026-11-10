@@ -86,6 +86,35 @@ describe("POST /api/dropoff — 110 film", () => {
     expect(orderArg.roll_details[1].film_type).toBe("110");
   });
 
+  it("does not store a film stock on a disposable camera", async () => {
+    const req = new Request("http://localhost/api/dropoff", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ...basePayload,
+        order_number: "DISP-1",
+        roll_count: 1,
+        film_type: "Disposable Camera",
+        film_stock: "unknown",
+        roll_details: [{
+          film_type: "Disposable Camera",
+          film_process: "Color",
+          scan_size: "Standard",
+          film_stock: "Kodak Gold 200",
+          film_stock_confidence: 80,
+        }],
+      }),
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(201);
+    const orderArg = mockCreateOrder.mock.calls[0][0];
+    expect(orderArg.film_type).toBe("Disposable Camera");
+    expect(orderArg.film_stock).toBeUndefined();
+    expect(orderArg.roll_details[0].film_stock).toBeUndefined();
+    expect(orderArg.roll_details[0].film_stock_confidence).toBeUndefined();
+  });
+
   it("coerces numeric 110 to string film_type", async () => {
     const req = new Request("http://localhost/api/dropoff", {
       method: "POST",

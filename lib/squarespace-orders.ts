@@ -11,6 +11,12 @@
  */
 
 import {
+  isDisposableCameraLabel,
+  isDisposableCameraText,
+  isDisposableFilmType,
+  withoutDisposableFilmStock,
+} from "./disposable-roll";
+import {
   applyFilmListingToRolls,
   customerFilmNote,
   FILM_STOCK_MATCH_THRESHOLD,
@@ -260,32 +266,7 @@ function readString(value: unknown): string | null {
   return null;
 }
 
-/**
- * Disposable cameras, FunSaver, and single-use cameras.
- * "not a disposable" does not match.
- */
-export function isDisposableCameraText(value: string): boolean {
-  if (/\b(?:not|no|non)[\s-]+disposab/i.test(value)) return false;
-  return /\bdisposables?\b|\bfun\s*savers?\b|\bsingle[\s-]*use(?:\s+cameras?)?\b/i.test(value);
-}
-
-/** A short label that names the camera, not a film stock. */
-export function isDisposableCameraLabel(value: string): boolean {
-  const compact = value.toLowerCase().replace(/[^a-z0-9]/g, "");
-  return [
-    "disposable",
-    "disposables",
-    "disposablecamera",
-    "disposablecameras",
-    "funsaver",
-    "funsavers",
-    "kodakfunsaver",
-    "singleuse",
-    "singleusecamera",
-  ].includes(compact) || (
-    value.trim().split(/\s+/).length <= 4 && isDisposableCameraText(value)
-  );
-}
+export { isDisposableCameraLabel, isDisposableCameraText } from "./disposable-roll";
 
 /**
  * A film-processing service, not a shop sale.
@@ -481,10 +462,28 @@ function printsFromOptions(options: NamedValue[]): boolean {
 function stockFromOptions(options: NamedValue[]): string | undefined {
   for (const option of options) {
     if (!/stock/i.test(option.label)) continue;
-    if (!option.value || /^(yes|no|n\/a|none|-)$/i.test(option.value)) continue;
+    if (!option.value || /^(yes|no|n\/a|none|-|unknown)$/i.test(option.value)) continue;
+    if (isDisposableCameraLabel(option.value)) continue;
     return option.value.slice(0, 200);
   }
   return undefined;
+}
+
+function addressPersonName(value: unknown): string {
+  const record = asRecord(value);
+  if (!record) return "";
+  const first = readString(record.firstName)?.trim() ?? "";
+  const last = readString(record.lastName)?.trim() ?? "";
+  return [first, last].filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
+}
+
+/**
+ * Billing name, then shipping name. Squarespace checkout and POS receipts
+ * put the customer on one of those addresses. A missing name stays blank.
+ */
+export function squarespaceCustomerName(order: Record<string, unknown>): string {
+  const name = addressPersonName(order.billingAddress) || addressPersonName(order.shippingAddress);
+  return name.slice(0, 200);
 }
 
 function orderNumberFrom(order: Record<string, unknown>): string | undefined {
@@ -629,8 +628,10 @@ function mapFilmLine(line: Record<string, unknown>, index: number):
     scan_size: scansOnlyProduct ? "Scans Only" : scanSizeFromOptions(options),
     prints_4x6: printsFromOptions(options),
   };
-  const stock = stockFromOptions(options);
-  if (stock) roll.film_stock = stock;
+  if (!disposable) {
+    const stock = stockFromOptions(options);
+    if (stock) roll.film_stock = stock;
+  }
   return {
     ok: true,
     rolls: Array.from({ length: quantity }, () => ({ ...roll })),
@@ -687,9 +688,10 @@ export function classifySquarespaceOrder(order: unknown): ClassifiedSquarespaceO
   const squarespaceFilmListing = joinUnique(collectedListings).slice(0, MAX_SQUARESPACE_FILM_LISTING);
 
   if (isDisposableCameraText(squarespaceFilmListing) || isDisposableCameraText(merchantNotes)) {
-    for (const roll of rolls) {
-      if (roll.film_type === "35mm" || roll.film_type === "Disposable Camera") {
-        roll.film_type = "Disposable Camera";
+    for (let index = 0; index < rolls.length; index += 1) {
+      const roll = rolls[index];
+      if (roll.film_type === "35mm" || isDisposableFilmType(roll.film_type)) {
+        rolls[index] = withoutDisposableFilmStock({ ...roll, film_type: "Disposable Camera" });
       }
     }
   }
@@ -722,7 +724,7 @@ export function classifySquarespaceOrder(order: unknown): ClassifiedSquarespaceO
     squarespace_order_number: orderNumber ?? "",
     external_order_id: externalOrderId,
     import_source: "squarespace",
-    customer_name: "",
+    customer_name: squarespaceCustomerName(record),
     customer_email: email || null,
     dropoff_date: dropoffDate,
     roll_count: rolls.length,

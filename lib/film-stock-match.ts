@@ -5,6 +5,7 @@
  * No database or email side effects.
  */
 
+import { isDisposableCameraLabel, isDisposableFilmType, withoutDisposableFilmStock } from "./disposable-roll";
 import { correctFilmStockSpelling, FILM_STOCKS } from "./film-stocks";
 
 export const CUSTOMER_FILM_NOTE_PREFIX = "Customer listed film:";
@@ -281,10 +282,11 @@ export function stripRollStockMatch<T extends {
   return rest;
 }
 
-function assignStock<T extends { film_stock?: string }>(
+function assignStock<T extends { film_stock?: string; film_type?: string }>(
   roll: T,
   token: ParsedFilmToken,
 ): T & { film_stock_confidence?: number; film_stock_created?: boolean } {
+  if (isDisposableFilmType(roll.film_type)) return withoutDisposableFilmStock(roll);
   if (!token.stock || roll.film_stock?.trim()) return roll;
   return {
     ...roll,
@@ -299,10 +301,12 @@ function assignStock<T extends { film_stock?: string }>(
  * A single stock with no quantity ("Portra 400") fills every remaining roll.
  * An explicit quantity ("2x Portra 400") or a list of stocks fills in order
  * and leaves extra rolls blank.
+ * Disposable Camera rolls are skipped. "Disposable" is the stock for those.
+ * A disposable label in the listing (FunSaver, single-use) is not a stock.
  * The original listing is always returned as a note, matched or not.
  * A name that is not close to one catalog stock is stored as a new stock.
  */
-export function applyFilmListingToRolls<T extends { film_stock?: string }>(
+export function applyFilmListingToRolls<T extends { film_stock?: string; film_type?: string }>(
   rolls: readonly T[],
   listing: string | null | undefined,
   catalog: readonly string[] = FILM_STOCKS,
@@ -310,13 +314,14 @@ export function applyFilmListingToRolls<T extends { film_stock?: string }>(
   rolls: Array<T & { film_stock_confidence?: number; film_stock_created?: boolean }>;
   unmatchedNote: string | null;
 } {
-  const next = rolls.map((roll) => ({ ...roll }));
+  const next = rolls.map((roll) => withoutDisposableFilmStock({ ...roll }));
   const text = listing?.trim() ?? "";
   if (!text || next.length === 0) {
     return { rolls: next, unmatchedNote: null };
   }
 
-  const tokens = parseFilmListing(text, catalog);
+  const tokens = parseFilmListing(text, catalog)
+    .filter((token) => !isDisposableCameraLabel(token.raw));
   const originalNote = customerFilmNote(text);
   if (tokens.length === 0) {
     return { rolls: next, unmatchedNote: originalNote };
@@ -337,6 +342,8 @@ export function applyFilmListingToRolls<T extends { film_stock?: string }>(
   for (const token of tokens) {
     const copies = Math.max(token.count, 1);
     for (let copy = 0; copy < copies && index < next.length; copy += 1) {
+      while (index < next.length && isDisposableFilmType(next[index].film_type)) index += 1;
+      if (index >= next.length) break;
       next[index] = assignStock(next[index], token);
       index += 1;
     }

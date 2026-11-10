@@ -8,6 +8,7 @@
  * film-type answer, matched stocks, and a Yes print choice.
  */
 
+import { isDisposableFilmType, withoutDisposableFilmStock } from "./disposable-roll";
 import { CUSTOMER_FILM_NOTE_PREFIX, mergeCustomerFilmNote } from "./film-stock-match";
 import {
   PENDING_INTAKE_STATUS,
@@ -26,6 +27,8 @@ export interface PendingDraftFilmPatch {
   squarespace_film_listing?: string;
   roll_details?: RollDetail[];
   notes?: string | null;
+  /** Filled when a pending row was staged with a blank name and Squarespace has one. */
+  customer_name?: string;
 }
 
 export interface PendingDraftFilmBackfill extends PendingDraftFilmPatch {
@@ -61,6 +64,27 @@ function mergeBackfillRolls(existingRolls: unknown, incomingRolls: RollDetail[])
   const next = existingRolls.map((value, index) => {
     const roll = (value && typeof value === "object" ? { ...value } : {}) as RollDetail;
     const incoming = incomingRolls[index];
+    if (incoming && isDisposableFilmType(incoming.film_type) && roll.film_type !== "Disposable Camera") {
+      roll.film_type = "Disposable Camera";
+      changed = true;
+    }
+    if (isDisposableFilmType(roll.film_type) || (incoming && isDisposableFilmType(incoming.film_type))) {
+      const stripped = withoutDisposableFilmStock(roll);
+      if (
+        stripped.film_stock !== roll.film_stock
+        || stripped.film_stock_confidence !== roll.film_stock_confidence
+        || stripped.film_stock_created !== roll.film_stock_created
+      ) {
+        changed = true;
+      }
+      const incomingPrints = incoming?.prints_4x6 === true;
+      const existingPrints = stripped.prints_4x6 === true;
+      if (existingPrints !== incomingPrints) {
+        stripped.prints_4x6 = incomingPrints;
+        changed = true;
+      }
+      return stripped;
+    }
     const stock = typeof roll.film_stock === "string" ? roll.film_stock.trim() : "";
     if (!stock && incoming?.film_stock) {
       roll.film_stock = incoming.film_stock;
@@ -91,9 +115,11 @@ function mergeBackfillRolls(existingRolls: unknown, incomingRolls: RollDetail[])
 }
 
 /**
- * Pending Intake rows imported before the film-type answer was captured can
- * receive it on the next Check Squarespace. Accepted and dismissed rows are
- * left alone. Returns null when the stored row already has the answer.
+ * Pending Intake rows imported before the film-type answer or customer name
+ * was captured can receive them on the next Check Squarespace. A blank name
+ * is filled from Squarespace. A name already stored is left as it is.
+ * Accepted and dismissed rows are left alone. Returns null when the stored
+ * row already has the answer.
  */
 export function pendingDraftFilmBackfill(
   existing: unknown,
@@ -104,6 +130,7 @@ export function pendingDraftFilmBackfill(
     id?: unknown;
     status?: unknown;
     notes?: unknown;
+    customer_name?: unknown;
     squarespace_film_listing?: unknown;
     roll_details?: unknown;
   };
@@ -128,7 +155,18 @@ export function pendingDraftFilmBackfill(
     patch.notes = mergedNotes;
   }
 
-  if (!patch.squarespace_film_listing && !patch.roll_details && patch.notes === undefined) {
+  const existingName = typeof row.customer_name === "string" ? row.customer_name.trim() : "";
+  const incomingName = incoming.customer_name.trim();
+  if (!existingName && incomingName) {
+    patch.customer_name = incomingName;
+  }
+
+  if (
+    !patch.squarespace_film_listing
+    && !patch.roll_details
+    && patch.notes === undefined
+    && !patch.customer_name
+  ) {
     return null;
   }
   return patch;
