@@ -14,9 +14,10 @@ export const dynamic = "force-dynamic";
 export default async function AccountPage({
   searchParams,
 }: {
-  searchParams: Promise<{ preview?: string }>;
+  searchParams: Promise<{ preview?: string; punches?: string }>;
 }) {
   const params = await searchParams;
+  const punches = params.punches === "0" || params.punches === "10" ? Number(params.punches) as 0 | 10 : 7;
   const accountsOpen = customerAccountsEnabled();
   let sessionEmail: string | null = null;
   if (!accountsOpen) {
@@ -28,7 +29,7 @@ export default async function AccountPage({
     return (
       <div className="flex min-h-screen flex-col bg-[#FFF6D3] font-jetbrains text-neutral-900">
         <PublicHeader heading="p" />
-        <AccountProfile profile={previewAccountProfile()} rewards={previewAccountRewards()} />
+        <AccountProfile profile={previewAccountProfile()} rewards={previewAccountRewards(punches)} />
         <IntakeRewardPreview />
       </div>
     );

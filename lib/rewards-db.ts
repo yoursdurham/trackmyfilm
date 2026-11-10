@@ -216,6 +216,28 @@ export function rewardsRepository(): RewardRepository {
       }
       return null;
     },
+    async legacyOrderIds(orderIds) {
+      const ids = [...new Set(orderIds.filter((id) => id.trim()))];
+      if (ids.length === 0) return [];
+      const { data, error } = await db
+        .from("reward_legacy_orders")
+        .select("order_id")
+        .in("order_id", ids);
+      if (error) {
+        const message = error.message.toLowerCase();
+        if (
+          error.code === "42P01"
+          || error.code === "PGRST205"
+          || message.includes("reward_legacy_orders")
+        ) {
+          return [];
+        }
+        throwIf(error);
+      }
+      return ((data ?? []) as { order_id: string }[])
+        .map((row) => row.order_id)
+        .filter((id) => typeof id === "string" && id.length > 0);
+    },
     async listImportedPromoCodes() {
       const { data, error } = await db
         .from("incoming_squarespace_drafts")

@@ -15,8 +15,16 @@
 -- A roll with blank = true does not count.
 -- One earn row per order (idempotency_key earn:order:<id>), so a
 -- status flip or a second import updates that row instead of
--- inserting another. Balance is the sum of earn and adjust rolls.
--- Rewards are created from floor(balance / 10).
+-- inserting another. Balance is the sum of earn, backfill, and
+-- adjust rolls. Rewards are created from floor(balance / 10).
+--
+-- Orders already finished when this file first runs do not get
+-- per-order earn rows. Each customer gets one backfill row of
+-- min(their qualifying historical rolls, 5). Those order ids are
+-- stored in reward_legacy_orders so a later status flip cannot
+-- add the uncapped count. Orders finished after this run count
+-- normally, on top of that starting credit. Re-running the file
+-- does not take the snapshot again.
 --
 -- Customers may read their own rows. Staff pages use the service
 -- role after the STAFF_EMAILS check, the same way orders do.
@@ -34,11 +42,12 @@ create table if not exists public.reward_events (
   idempotency_key text not null,
   created_at timestamptz not null default now(),
   constraint reward_events_kind_check
-    check (kind in ('earn', 'redeem', 'expire', 'restore', 'adjust')),
+    check (kind in ('earn', 'redeem', 'expire', 'restore', 'adjust', 'backfill')),
   constraint reward_events_rolls_check
     check (
       (kind = 'adjust' and rolls between -10000 and 10000 and rolls <> 0)
-      or (kind <> 'adjust' and rolls between 0 and 10000)
+      or (kind = 'backfill' and rolls between 1 and 5)
+      or (kind not in ('adjust', 'backfill') and rolls between 0 and 10000)
     ),
   constraint reward_events_idempotency_key_present
     check (char_length(btrim(idempotency_key)) > 0)
@@ -99,8 +108,23 @@ create table if not exists public.reward_settings (
   id integer primary key,
   product_ids text[] not null default '{}',
   updated_at timestamptz not null default now(),
+  backfill_completed_at timestamptz,
   constraint reward_settings_singleton check (id = 1)
 );
+
+alter table public.reward_settings
+  add column if not exists backfill_completed_at timestamptz;
+
+-- Orders already finished when the starting-credit snapshot was taken.
+-- The app refuses to write an earn row for these ids.
+create table if not exists public.reward_legacy_orders (
+  order_id uuid primary key references public.film_orders (id) on delete cascade,
+  customer_id uuid not null references public.customers (id) on delete cascade,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists reward_legacy_orders_customer_id_idx
+  on public.reward_legacy_orders (customer_id);
 
 insert into public.reward_settings (id)
 values (1)
@@ -110,7 +134,7 @@ alter table public.incoming_squarespace_drafts
   add column if not exists squarespace_promo_codes text[] not null default '{}';
 
 comment on table public.reward_events is
-  'Append-only reward ledger. Earn rows are one per film order. Balance is derived from earn and adjust rolls.';
+  'Append-only reward ledger. Balance is the sum of earn, backfill, and adjust rolls.';
 
 comment on table public.rewards is
   'One free dev + high-res scan. status earned, issued (online code), redeemed, or expired.';
@@ -121,25 +145,34 @@ comment on column public.reward_settings.product_ids is
 comment on column public.incoming_squarespace_drafts.squarespace_promo_codes is
   'Promo codes on a manually imported Squarespace order. The rewards cron reads these. It does not import orders.';
 
--- ─── Backfill finished rolls ─────────────────────────────────
--- Idempotent. Re-running updates the same earn row.
+comment on table public.reward_legacy_orders is
+  'Film orders already finished when starting credit was snapshotted. They do not earn again.';
 
-insert into public.reward_events (customer_id, kind, rolls, order_id, idempotency_key, reason)
-select
-  counted.customer_id,
-  'earn',
-  counted.rolls,
-  counted.id,
-  'earn:order:' || counted.id::text,
-  counted.reason
-from (
+comment on column public.reward_settings.backfill_completed_at is
+  'Set when the capped historical snapshot is stored. A later run of this file leaves it alone.';
+
+-- ─── Capped starting credit ──────────────────────────────────
+-- One backfill row per customer, at most 5 rolls. No per-order
+-- earn rows for orders finished before this snapshot. Running
+-- this file again does not retake the snapshot, so orders that
+-- finish later are not pulled into the cap.
+
+do $$
+begin
+  if exists (
+    select 1
+    from public.reward_settings
+    where id = 1
+      and backfill_completed_at is not null
+  ) then
+    return;
+  end if;
+
+  drop table if exists pg_temp.reward_backfill_snapshot;
+  create temporary table reward_backfill_snapshot as
   select
-    o.id,
+    o.id as order_id,
     o.customer_id,
-    case
-      when o.status = 'Scans Sent' then 'Counted when scans were sent'
-      else 'Counted when the process-only order was ready for pickup'
-    end as reason,
     case
       when jsonb_typeof(o.roll_details) = 'array' and jsonb_array_length(o.roll_details) > 0 then (
         select count(*)::integer
@@ -150,42 +183,49 @@ from (
       when o.film_type in ('35mm', '120', 'Disposable Camera')
         then greatest(coalesce(o.roll_count, 0), 0)
       else 0
-    end as rolls,
-    case
-      when jsonb_typeof(o.roll_details) = 'array' and jsonb_array_length(o.roll_details) > 0 then (
-        select coalesce(bool_and(
-          lower(regexp_replace(coalesce(roll ->> 'scan_size', ''), '[^a-z]', '', 'g')) = 'processonly'
-        ), false)
-        from jsonb_array_elements(o.roll_details) as roll
-        where nullif(btrim(coalesce(roll ->> 'scan_size', '')), '') is not null
-      )
-      else false
-    end as process_only,
-    o.status
+    end as rolls
   from public.film_orders o
   where o.customer_id is not null
-) as counted
-where counted.rolls > 0
-  and (
-    counted.status = 'Scans Sent'
-    or (counted.status = 'Ready for Pickup' and counted.process_only)
-  )
-on conflict (idempotency_key) do update
-  set rolls = excluded.rolls,
-      customer_id = excluded.customer_id,
-      reason = excluded.reason;
+    and (
+      o.status = 'Scans Sent'
+      or (
+        o.status = 'Ready for Pickup'
+        and case
+          when jsonb_typeof(o.roll_details) = 'array' and jsonb_array_length(o.roll_details) > 0 then (
+            select coalesce(bool_and(
+              lower(regexp_replace(coalesce(roll ->> 'scan_size', ''), '[^a-z]', '', 'g')) = 'processonly'
+            ), false)
+            from jsonb_array_elements(o.roll_details) as roll
+            where nullif(btrim(coalesce(roll ->> 'scan_size', '')), '') is not null
+          )
+          else false
+        end
+      )
+    );
 
-insert into public.rewards (customer_id, status, sequence)
-select owed.customer_id, 'earned', series.sequence
-from (
-  select customer_id, floor(sum(rolls)::numeric / 10)::integer as rewards_owed
-  from public.reward_events
-  where kind in ('earn', 'adjust')
+  insert into public.reward_legacy_orders (order_id, customer_id)
+  select order_id, customer_id
+  from reward_backfill_snapshot
+  on conflict (order_id) do nothing;
+
+  insert into public.reward_events (customer_id, kind, rolls, reason, idempotency_key)
+  select
+    customer_id,
+    'backfill',
+    least(sum(rolls), 5),
+    'Rolls finished before rewards. Starting credit is capped at 5, so history alone does not earn a reward.',
+    'backfill:customer:' || customer_id::text
+  from reward_backfill_snapshot
   group by customer_id
-) as owed
-cross join lateral generate_series(1, owed.rewards_owed) as series(sequence)
-where owed.rewards_owed >= 1
-on conflict (customer_id, sequence) do nothing;
+  having sum(rolls) > 0
+  on conflict (idempotency_key) do nothing;
+
+  update public.reward_settings
+  set backfill_completed_at = now()
+  where id = 1;
+
+  drop table if exists pg_temp.reward_backfill_snapshot;
+end $$;
 
 -- ─── Row level security ──────────────────────────────────────
 
@@ -195,14 +235,18 @@ alter table public.rewards enable row level security;
 alter table public.rewards force row level security;
 alter table public.reward_settings enable row level security;
 alter table public.reward_settings force row level security;
+alter table public.reward_legacy_orders enable row level security;
+alter table public.reward_legacy_orders force row level security;
 
 revoke all on table public.reward_events from public, anon, authenticated;
 revoke all on table public.rewards from public, anon, authenticated;
 revoke all on table public.reward_settings from public, anon, authenticated;
+revoke all on table public.reward_legacy_orders from public, anon, authenticated;
 
 grant all on table public.reward_events to service_role;
 grant all on table public.rewards to service_role;
 grant all on table public.reward_settings to service_role;
+grant all on table public.reward_legacy_orders to service_role;
 
 grant select (
   id,

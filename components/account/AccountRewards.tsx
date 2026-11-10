@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
+import RewardPunchCard from "@/components/account/RewardPunchCard";
 import WindowFrame from "@/components/WindowFrame";
 import type { AccountRewardsPayload } from "@/lib/rewards";
 
@@ -56,9 +57,13 @@ export default function AccountRewards({
           </p>
         ) : (
           <>
-            <p data-testid="reward-progress" className="font-jetbrains text-base font-bold leading-relaxed text-neutral-900">
-              {rewards.progressLabel}
-            </p>
+            <RewardPunchCard punched={rewards.rewardReady ? 10 : rewards.progress} />
+            {rewards.rewardReady && rewards.progress > 0 ? (
+              <div className="space-y-2">
+                <p className="font-jetbrains text-sm font-bold text-neutral-900">Toward your next one</p>
+                <RewardPunchCard punched={rewards.progress} />
+              </div>
+            ) : null}
             <p className="font-jetbrains text-sm leading-relaxed text-neutral-800">
               Every 10 rolls on your account earns a free development and high-res scan at Yours,. 35mm, 120, and disposable cameras count. A blank roll does not.
             </p>

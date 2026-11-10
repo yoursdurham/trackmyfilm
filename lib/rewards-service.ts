@@ -87,6 +87,8 @@ export interface RewardRepository {
   insertEvent(event: EventWrite): Promise<"inserted" | "exists">;
   findByPromoCode(code: string): Promise<RewardRecord | null>;
   listImportedPromoCodes(): Promise<string[]>;
+  /** Orders already finished when rewards began. They must not earn again. */
+  legacyOrderIds(orderIds: readonly string[]): Promise<string[]>;
 }
 
 export interface DiscountClient {
@@ -104,19 +106,24 @@ export function earnReason(order: RewardOrder): string {
 export function earnWritesForOrders(
   orders: readonly RewardOrder[],
   existingKeys: ReadonlySet<string>,
+  legacyOrderIds: ReadonlySet<string> = new Set(),
 ): EarnWrite[] {
   const writes: EarnWrite[] = [];
   for (const order of orders) {
     if (!order.id || !order.customer_id) continue;
-    const rolls = earnRollsForOrder(order);
     const idempotencyKey = orderEarnIdempotencyKey(order.id);
+    // A historical order keeps its capped backfill credit. Do not open an
+    // earn row for it, and zero one if a previous sync wrote the full count.
+    const rolls = legacyOrderIds.has(order.id) ? 0 : earnRollsForOrder(order);
     if (rolls === 0 && !existingKeys.has(idempotencyKey)) continue;
     writes.push({
       customerId: order.customer_id,
       orderId: order.id,
       rolls,
       idempotencyKey,
-      reason: earnReason(order),
+      reason: rolls === 0
+        ? "This order was finished before rewards and stays in the starting credit."
+        : earnReason(order),
     });
   }
   return writes;
@@ -157,7 +164,8 @@ export async function syncOrderEarns(
       if (event.kind === "earn") existingKeys.add(event.idempotencyKey);
     }
   }
-  const writes = earnWritesForOrders(orders, existingKeys);
+  const legacy = new Set(await repo.legacyOrderIds(orders.map((order) => order.id)));
+  const writes = earnWritesForOrders(orders, existingKeys, legacy);
   if (writes.length > 0) await repo.upsertEarns(writes);
   for (const customerId of customerIds) {
     await reconcileCustomer(repo, customerId);

@@ -9,6 +9,8 @@ import { ORDER_STATUS } from "@/lib/constants";
 import { isProcessOnlyOrder } from "@/lib/order-service";
 
 export const REWARD_ROLLS_PER_REWARD = 10;
+/** Historical finished rolls start each customer at no more than this. */
+export const HISTORICAL_STARTING_CREDIT_CAP = 5;
 export const REWARD_CODE_PREFIX = "TMF-";
 export const REWARD_VALID_DAYS = 90;
 export const REWARD_DISCOUNT_NAME = "Yours, free dev + high-res scan";
@@ -27,7 +29,7 @@ const PROMO_CODE_PATTERN = /^[A-Za-z0-9_-]{1,50}$/;
 const GIFT_CARD_CODE = /^GC[A-Za-z0-9]{14}$/i;
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
-export type RewardEventKind = "earn" | "redeem" | "expire" | "restore" | "adjust";
+export type RewardEventKind = "earn" | "redeem" | "expire" | "restore" | "adjust" | "backfill";
 export type RewardStatus = "earned" | "issued" | "redeemed" | "expired";
 export type RewardChannel = "online" | "in_store";
 
@@ -102,6 +104,39 @@ export function orderEarnIdempotencyKey(orderId: string): string {
   return `earn:order:${orderId}`;
 }
 
+export function backfillIdempotencyKey(customerId: string): string {
+  return `backfill:customer:${customerId}`;
+}
+
+/**
+ * Starting credit from rolls already finished when rewards began.
+ * Five or more becomes 5. Under five stays as it is. Zero stays zero,
+ * so history alone never reaches a reward.
+ */
+export function historicalStartingCredit(qualifyingRolls: number): number {
+  if (!Number.isFinite(qualifyingRolls)) return 0;
+  const rolls = Math.max(0, Math.trunc(qualifyingRolls));
+  return Math.min(rolls, HISTORICAL_STARTING_CREDIT_CAP);
+}
+
+/** How many customers land on each starting balance. Rewards from history are always zero. */
+export function historicalCreditDistribution(qualifyingTotals: readonly number[]): {
+  customers: number;
+  byStartingCredit: Record<0 | 1 | 2 | 3 | 4 | 5, number>;
+  rewardsFromHistory: number;
+} {
+  const byStartingCredit = { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+  for (const total of qualifyingTotals) {
+    const credit = historicalStartingCredit(total) as 0 | 1 | 2 | 3 | 4 | 5;
+    byStartingCredit[credit] += 1;
+  }
+  return {
+    customers: qualifyingTotals.length,
+    byStartingCredit,
+    rewardsFromHistory: 0,
+  };
+}
+
 export function redeemIdempotencyKey(rewardId: string): string {
   return `redeem:${rewardId}`;
 }
@@ -116,7 +151,7 @@ export function restoreIdempotencyKey(rewardId: string, validTo: string): string
 
 export function rewardBalance(events: readonly LedgerRoll[]): RewardBalance {
   const netRolls = events.reduce((sum, event) => {
-    if (event.kind === "earn" || event.kind === "adjust") return sum + event.rolls;
+    if (event.kind === "earn" || event.kind === "adjust" || event.kind === "backfill") return sum + event.rolls;
     return sum;
   }, 0);
   const safe = Math.max(0, Math.trunc(netRolls));
@@ -132,6 +167,16 @@ export function rewardProgressSentence(progress: number, target = REWARD_ROLLS_P
   const rolls = Math.max(0, Math.trunc(progress));
   const goal = Math.max(1, Math.trunc(target));
   return `${rolls} of ${goal} rolls toward your next free dev + high-res scan`;
+}
+
+/** Caption under the punch card. A full card means a reward is ready to use. */
+export function punchCardCaption(punched: number, total = REWARD_ROLLS_PER_REWARD): string {
+  const goal = Math.max(1, Math.trunc(total));
+  const count = Math.max(0, Math.min(goal, Math.trunc(Number.isFinite(punched) ? punched : 0)));
+  if (count >= goal) return `${goal} of ${goal} — your free dev + high-res scan is ready`;
+  const remaining = goal - count;
+  const rolls = remaining === 1 ? "1 more roll" : `${remaining} more rolls`;
+  return `${count} of ${goal} — ${rolls} until your free dev + high-res scan`;
 }
 
 /**
@@ -420,6 +465,10 @@ export function rewardHistoryLabel(event: {
     const count = Math.max(0, event.rolls);
     return count === 1 ? "1 roll counted" : `${count} rolls counted`;
   }
+  if (event.kind === "backfill") {
+    const count = Math.max(0, event.rolls);
+    return count === 1 ? "Starting credit: 1 roll" : `Starting credit: ${count} rolls`;
+  }
   if (event.kind === "adjust") {
     const sign = event.rolls > 0 ? `+${event.rolls}` : String(event.rolls);
     const because = event.reason?.trim() ? ` — ${event.reason.trim()}` : "";
@@ -448,7 +497,9 @@ export type AccountRewardHistoryItem = {
 
 export type AccountRewardsPayload = {
   customerId: string | null;
+  progress: number;
   progressLabel: string;
+  rewardReady: boolean;
   cards: AccountRewardCard[];
   history: AccountRewardHistoryItem[];
   onlineEnabled: boolean;
@@ -486,9 +537,12 @@ export function toAccountRewards(input: {
         via: event.rewardId ? via.get(event.rewardId) : null,
       }),
     }));
+  const rewardReady = cards.some((card) => card.status === "earned");
   return {
     customerId: input.customerId,
+    progress: balance.progress,
     progressLabel: rewardProgressSentence(balance.progress, balance.progressTarget),
+    rewardReady,
     cards,
     history,
     onlineEnabled: input.onlineEnabled,
@@ -497,19 +551,43 @@ export function toAccountRewards(input: {
 }
 
 /** Sample for the local account preview. Production never serves this. */
-export function previewAccountRewards(now = new Date("2026-08-01T15:00:00.000Z")): AccountRewardsPayload {
-  const validTo = rewardValidTo(now).toISOString();
-  return toAccountRewards({
+export function previewAccountRewards(
+  punches: 0 | 7 | 10 = 7,
+  now = new Date("2026-08-01T15:00:00.000Z"),
+): AccountRewardsPayload {
+  const shared = {
     customerId: "preview-customer",
-    onlineEnabled: true,
+    onlineEnabled: true as const,
     onlineMessage: null,
-    rewards: [
-      { id: "preview-earned", status: "earned", promoCode: null, validTo: null },
-      { id: "preview-issued", status: "issued", promoCode: "TMF-K7MQ2P", validTo, redeemedVia: null },
-    ],
-    events: [
-      { id: "preview-earn", kind: "earn", rolls: 17, reason: "Counted when scans were sent", createdAt: "2026-05-02T15:00:00.000Z", rewardId: null },
-    ],
+  };
+  if (punches === 0) {
+    return toAccountRewards({ ...shared, rewards: [], events: [] });
+  }
+  if (punches === 10) {
+    return toAccountRewards({
+      ...shared,
+      rewards: [{ id: "preview-earned", status: "earned", promoCode: null, validTo: null }],
+      events: [{
+        id: "preview-earn",
+        kind: "earn",
+        rolls: 10,
+        reason: "Counted when scans were sent",
+        createdAt: "2026-05-02T15:00:00.000Z",
+        rewardId: null,
+      }],
+    });
+  }
+  return toAccountRewards({
+    ...shared,
+    rewards: [],
+    events: [{
+      id: "preview-earn",
+      kind: "earn",
+      rolls: 7,
+      reason: "Counted when scans were sent",
+      createdAt: now.toISOString(),
+      rewardId: null,
+    }],
   });
 }
 

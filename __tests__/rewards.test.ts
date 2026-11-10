@@ -4,6 +4,8 @@ import {
   buildRewardDiscountRequest,
   earnRollsForOrder,
   generateRewardPromoCode,
+  historicalCreditDistribution,
+  historicalStartingCredit,
   isGiftCardShapedCode,
   isRewardPromoCode,
   onlineCodeAvailability,
@@ -11,6 +13,7 @@ import {
   parseRewardProductIds,
   planDiscountCleanup,
   planRewardRows,
+  punchCardCaption,
   qualifyingRollCount,
   rewardBalance,
   rewardProgressSentence,
@@ -54,7 +57,7 @@ function order(overrides: Partial<RewardOrder> = {}): RewardOrder {
   };
 }
 
-function memoryRepository(): RewardRepository & {
+function memoryRepository(legacyIds: readonly string[] = []): RewardRepository & {
   rewards: RewardRecord[];
   events: { customerId: string; kind: string; rolls: number; orderId: string | null; rewardId: string | null; reason: string | null; idempotencyKey: string }[];
 } {
@@ -154,6 +157,10 @@ function memoryRepository(): RewardRepository & {
     },
     async listImportedPromoCodes() {
       return [];
+    },
+    async legacyOrderIds(orderIds) {
+      const legacy = new Set(legacyIds);
+      return orderIds.filter((id) => legacy.has(id));
     },
   };
   return Object.assign(repo, { rewards, events });
@@ -594,6 +601,75 @@ describe("squarespace errors", () => {
     });
     expect(issued.ok).toBe(true);
     expect(calls).toBe(2);
+  });
+
+  it("caps historical credit at 5 and never grants a reward from that credit alone", () => {
+    expect(historicalStartingCredit(0)).toBe(0);
+    expect(historicalStartingCredit(4)).toBe(4);
+    expect(historicalStartingCredit(5)).toBe(5);
+    expect(historicalStartingCredit(17)).toBe(5);
+    expect(historicalStartingCredit(100.9)).toBe(5);
+    expect(rewardBalance([{ kind: "backfill", rolls: historicalStartingCredit(40) }])).toMatchObject({
+      netRolls: 5,
+      rewardsOwed: 0,
+      progress: 5,
+    });
+    expect(historicalCreditDistribution([0, 3, 5, 12, 40])).toEqual({
+      customers: 5,
+      byStartingCredit: { 0: 1, 1: 0, 2: 0, 3: 1, 4: 0, 5: 3 },
+      rewardsFromHistory: 0,
+    });
+    expect(punchCardCaption(7)).toBe("7 of 10 — 3 more rolls until your free dev + high-res scan");
+    expect(punchCardCaption(0)).toBe("0 of 10 — 10 more rolls until your free dev + high-res scan");
+    expect(punchCardCaption(10)).toBe("10 of 10 — your free dev + high-res scan is ready");
+  });
+
+  it("does not re-add uncapped credit when a historical order is synced again", async () => {
+    const repo = memoryRepository(["order-1"]);
+    const historical = order({
+      roll_count: 12,
+      roll_details: Array.from({ length: 12 }, () => roll()),
+    });
+    await syncOrderEarns(repo, [historical]);
+    await syncOrderEarns(repo, [historical]);
+    expect(repo.events.filter((event) => event.kind === "earn")).toHaveLength(0);
+
+    repo.events.push({
+      customerId: "customer-1",
+      kind: "earn",
+      rolls: 12,
+      orderId: "order-1",
+      rewardId: null,
+      reason: "old uncapped earn",
+      idempotencyKey: orderEarnIdempotencyKey("order-1"),
+    });
+    await syncOrderEarns(repo, [{ ...historical, status: ORDER_STATUS.RECEIVED_AT_LAB }]);
+    await syncOrderEarns(repo, [historical]);
+    expect(repo.events.find((event) => event.kind === "earn")?.rolls).toBe(0);
+
+    repo.events.push({
+      customerId: "customer-1",
+      kind: "backfill",
+      rolls: 5,
+      orderId: null,
+      rewardId: null,
+      reason: "Starting credit",
+      idempotencyKey: "backfill:customer:customer-1",
+    });
+    await syncOrderEarns(repo, [
+      historical,
+      order({
+        id: "order-new",
+        roll_count: 6,
+        roll_details: Array.from({ length: 6 }, () => roll()),
+      }),
+    ]);
+    const earnRows = repo.events.filter((event) => event.kind === "earn" && (event.rolls ?? 0) > 0);
+    expect(earnRows).toEqual([
+      expect.objectContaining({ orderId: "order-new", rolls: 6 }),
+    ]);
+    expect(rewardBalance(repo.events)).toMatchObject({ netRolls: 11, rewardsOwed: 1, progress: 1 });
+    expect(repo.rewards.filter((reward) => reward.status === "earned")).toHaveLength(1);
   });
 
   it("does not write a second earn when the helper sees the existing key", () => {
