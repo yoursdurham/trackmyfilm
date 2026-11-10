@@ -14,5 +14,7 @@ describe("reward punch card", () => {
     expect(full).toContain(">Free<");
     expect(seven.match(/<svg/g)).toHaveLength(10);
     expect(seven).not.toContain("<circle");
+    expect(seven.match(/width="26" height="40" rx="1"/g)).toHaveLength(10);
+    expect(seven).toContain("M34 20 H49 L55 27 V40 H34 Z");
   });
 });
