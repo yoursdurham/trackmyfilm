@@ -29,3 +29,9 @@ Create your account: {{{account_url}}}
 ```
 
 6. Publish the template. Drafts do not send. Send yourself a drop-off email and confirm the button opens `https://trackmyfilm.com/account/login?email=` with the customer address filled in, and that the page does not send a sign-in email until the button on that page is pressed.
+
+## Status notice on `film_drop_received`
+
+The copy and the expiry live in `lib/film-drop-status-notice.ts`. The template only has empty slots, filled when the app sends the email.
+
+Add two string variables, both with an empty fallback: `status_notice_html` and `status_notice_text`. In the HTML, put `{{{status_notice_html}}}` on its own row directly under "Hey {{{first_name}}}! We've got your film." In the plain-text body, put `{{{status_notice_text}}}` on the blank line before `Received:`. An empty value adds no notice. Do not paste the notice copy into the template.
