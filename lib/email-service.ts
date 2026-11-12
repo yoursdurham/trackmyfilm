@@ -8,6 +8,7 @@ import {
   type CustomerEmailStats,
 } from "@/lib/customer-email-stats";
 import { filmProductUrl } from "@/lib/film-product-links";
+import { filmDropStatusNotice, FILM_DROP_STATUS_NOTICE_VARIABLES } from "@/lib/film-drop-status-notice";
 import { correctFilmStockSpelling } from "@/lib/film-stocks";
 import type { FilmOrder } from "@/lib/types";
 
@@ -294,6 +295,9 @@ const variables: Record<string, string> = {
   if (template === "film_drop_received") {
     variables.notes = order.notes?.trim() ?? "";
     variables.account_url = filmDropAccountUrl(recipientEmail);
+    const statusNotice = filmDropStatusNotice();
+    variables[FILM_DROP_STATUS_NOTICE_VARIABLES.html] = statusNotice.html;
+    variables[FILM_DROP_STATUS_NOTICE_VARIABLES.text] = statusNotice.text;
   }
 
   if (template === "scans_sent" || template === "scans_only_ready") {
