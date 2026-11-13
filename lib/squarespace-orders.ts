@@ -486,6 +486,48 @@ export function squarespaceCustomerName(order: Record<string, unknown>): string 
   return name.slice(0, 200);
 }
 
+const PROMO_CODE_FIELD = /^[A-Za-z0-9_-]{1,50}$/;
+
+function collectPromoCode(value: unknown, codes: string[]) {
+  if (typeof value !== "string") return;
+  const trimmed = value.trim();
+  if (!PROMO_CODE_FIELD.test(trimmed)) return;
+  codes.push(trimmed.toUpperCase());
+}
+
+/**
+ * Promo codes on a Squarespace order. Manual Check Squarespace is the only
+ * import. Discount cleanup reads what that import stored. It does not fetch orders.
+ * Orders API discount lines use `promoCode`, same spelling as the Discounts API.
+ */
+export function promoCodesFromSquarespaceOrder(order: unknown): string[] {
+  const record = asRecord(order);
+  if (!record) return [];
+  const codes: string[] = [];
+  const lists = [record.discountLines, record.discounts, record.appliedDiscounts];
+  for (const list of lists) {
+    if (!Array.isArray(list)) continue;
+    for (const entry of list) {
+      if (typeof entry === "string") {
+        collectPromoCode(entry, codes);
+        continue;
+      }
+      const line = asRecord(entry);
+      if (!line) continue;
+      collectPromoCode(line.promoCode, codes);
+      collectPromoCode(line.promo_code, codes);
+      collectPromoCode(line.code, codes);
+    }
+  }
+  collectPromoCode(record.promoCode, codes);
+  const seen = new Set<string>();
+  return codes.filter((code) => {
+    if (seen.has(code)) return false;
+    seen.add(code);
+    return true;
+  });
+}
+
 function orderNumberFrom(order: Record<string, unknown>): string | undefined {
   const raw = readString(order.orderNumber);
   const trimmed = raw?.trim();
@@ -541,6 +583,13 @@ export function selectSquarespaceOrdersForIntake(
   }
 
   return { orders: eligible, invalid };
+}
+
+/** Squarespace line items identify the product with `productId`. Discounts use that same id. */
+export function squarespaceLineProductId(line: unknown): string | null {
+  const record = asRecord(line);
+  if (!record) return null;
+  return readString(record.productId);
 }
 
 function lineProductName(line: Record<string, unknown>): string {
@@ -734,12 +783,14 @@ export function classifySquarespaceOrder(order: unknown): ClassifiedSquarespaceO
   if (!parsed.ok) {
     return { kind: "error", orderNumber, message: parsed.error };
   }
+  const promoCodes = promoCodesFromSquarespaceOrder(record);
   return {
     kind: "import",
     draft: {
       ...parsed.value,
       squarespace_channel: posOrder ? "pos" : "web",
       ...(squarespaceFilmListing ? { squarespace_film_listing: squarespaceFilmListing } : {}),
+      ...(promoCodes.length > 0 ? { squarespace_promo_codes: promoCodes } : {}),
     },
   };
 }

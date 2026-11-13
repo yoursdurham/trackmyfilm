@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/film-delay-emails",
       "schedule": "0 14 * * *"
+    },
+    {
+      "path": "/api/cron/reward-discounts",
+      "schedule": "30 8 * * *"
     }
   ]
 }

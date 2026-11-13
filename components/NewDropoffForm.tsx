@@ -15,6 +15,8 @@ import { applyFilmListingToRolls, formatStockMatchLabel, orderNotesForFilmListin
 import { correctFilmStockSpelling, FILM_STOCKS } from "@/lib/film-stocks";
 import type { Customer, FilmType, FilmProcess, IncomingSquarespaceDraft, RollDetail } from "@/lib/types";
 import { preferredIntakeCustomerName } from "@/lib/incoming-drafts";
+import IntakeRewardOffer, { type IntakeRewardChoice } from "@/components/IntakeRewardOffer";
+import { isQualifyingRewardRoll } from "@/lib/rewards";
 import { DROP_OFF_FILM_TYPES, isValidEmail, normalizeEmail } from "@/lib/validation";
 import {
   applyCustomerDefaultsToRolls,
@@ -125,6 +127,43 @@ export default function NewDropoffForm({
   const [rolls, setRolls] = useState<DropoffRollState[]>(draftState?.rolls ?? [createEmptyDropoffRoll()]);
   const [customStocks, setCustomStocks] = useState<string[]>([]);
   const [appliedLinkId, setAppliedLinkId] = useState<string | null>(null);
+  const [rewardChoices, setRewardChoices] = useState<IntakeRewardChoice[]>([]);
+  const [rewardId, setRewardId] = useState("");
+  const [rewardRollIndex, setRewardRollIndex] = useState(0);
+  useEffect(() => {
+    const customerId = selectedCustomerId;
+    if (!open || !customerId) {
+      setRewardChoices([]);
+      setRewardId("");
+      return;
+    }
+    let cancelled = false;
+    void fetch(`/api/customers/${customerId}/rewards`)
+      .then(async (response) => {
+        if (!response.ok) return null;
+        return response.json() as Promise<{
+          ready?: boolean;
+          rewards?: { id: string; status: string; promoCode: string | null }[];
+        }>;
+      })
+      .then((body) => {
+        if (cancelled || !body?.ready) return;
+        const available = (body.rewards ?? []).flatMap((reward): IntakeRewardChoice[] => (
+          reward.status === "earned" || reward.status === "issued"
+            ? [{ id: reward.id, status: reward.status, promoCode: reward.promoCode }]
+            : []
+        ));
+        setRewardChoices(available);
+        setRewardId("");
+      })
+      .catch(() => {
+        if (!cancelled) setRewardChoices([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, selectedCustomerId]);
+
   const linkedCustomer = incomingDraft?.customer_id
     ? customers.find((customer) => customer.id === incomingDraft.customer_id) ?? null
     : null;
@@ -196,6 +235,10 @@ export default function NewDropoffForm({
     }
     if (!formData.order_number.trim()) { toast.error("Order number is required"); return; }
     if (!formData.roll_count || formData.roll_count < 1) { toast.error("Roll count must be at least 1"); return; }
+    if (rewardId && !rolls.some((roll, index) => index === rewardRollIndex && isQualifyingRewardRoll({ film_type: roll.film_type }))) {
+      toast.error("Choose a 35mm, 120, or disposable roll for the reward");
+      return;
+    }
 
     for (let i = 0; i < rolls.length; i++) {
       if (!rolls[i].film_type) { toast.error(`Select a film type for roll ${i + 1}`); return; }
@@ -233,6 +276,7 @@ export default function NewDropoffForm({
           roll_details,
           notes:          formData.notes || undefined,
           send_email:     sendEmail,
+          ...(rewardId ? { reward_id: rewardId, reward_roll_index: rewardRollIndex } : {}),
         }),
       });
 
@@ -267,6 +311,8 @@ export default function NewDropoffForm({
       setFormData({ ...emptyMeta, dropoff_date: format(new Date(), "yyyy-MM-dd") });
       setRolls([createEmptyDropoffRoll()]);
       setSelectedCustomerId(null);
+      setRewardChoices([]);
+      setRewardId("");
       setSendEmail(true);
       onOpenChange(false);
     } catch (err: unknown) {
@@ -408,6 +454,19 @@ export default function NewDropoffForm({
                 onChange={(e) => set("order_number", e.target.value)} />
             </div>
           </div>
+
+          <IntakeRewardOffer
+            rewards={rewardChoices}
+            rolls={rolls.flatMap((roll, index) => (
+              isQualifyingRewardRoll({ film_type: roll.film_type })
+                ? [{ index, label: `Roll ${index + 1} · ${roll.film_type || "film"}` }]
+                : []
+            ))}
+            rewardId={rewardId}
+            rollIndex={rewardRollIndex}
+            onRewardId={setRewardId}
+            onRollIndex={setRewardRollIndex}
+          />
 
           {/* Roll count */}
           <div className="space-y-2">

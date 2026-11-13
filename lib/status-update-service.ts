@@ -6,6 +6,7 @@ import { isMixedScanOrder, isPartialScanDeliveryComplete, scansSentBlockedReason
 import { isValidTransition, isKnownStatus, isValidUrl, ensureHttps } from "@/lib/validation";
 import { scanNotesForStorage } from "@/lib/scan-notes";
 import { EmailSendError, sendOrderEmail } from "@/lib/email-service";
+import { recordOrderRewards } from "@/lib/rewards-db";
 import type { FilmOrder, OrderStatus, StatusHistoryEntry } from "@/lib/types";
 
 const HOLD_REASON_MIGRATION_WARNING =
@@ -296,6 +297,8 @@ export async function updateOrderStatus({
   }
 
   const saved = await saveOrderUpdate(order_id, plan.updateData);
+  const counted = await getOrderById(order_id);
+  if (counted) await recordOrderRewards(counted);
   const holdWarning =
     saved.holdReasonDropped && plan.updateData.hold_reason
       ? HOLD_REASON_MIGRATION_WARNING
