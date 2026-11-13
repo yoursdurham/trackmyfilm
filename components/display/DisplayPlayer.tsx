@@ -8,11 +8,12 @@ import {
   reconcileDisplayConfig,
   type ReconcileDisplayResult,
 } from "@/lib/display-config";
+import { HEARTBEAT_WRITE_INTERVAL_MS } from "@/lib/display-heartbeat";
 import {
   DISPLAY_CONFIG_POLL_MS,
   DISPLAY_REFRESH_QUERY,
   DISPLAY_REFRESH_RETRY_MS,
-  displayRefreshPolicy,
+  displayPollDelayMs,
   planDisplaySync,
   type DisplaySyncPlan,
 } from "@/lib/display-schedule";
@@ -119,8 +120,8 @@ export default function DisplayPlayer({
   useEffect(() => {
     const controller = new AbortController();
     let timer = 0;
-    let interval = 0;
     let configTimer = 0;
+    let heartbeatTimer = 0;
     let cancelled = false;
     let reloading = false;
 
@@ -137,6 +138,7 @@ export default function DisplayPlayer({
     const forcedLoad = forceRefreshRequested();
     let requestId = 0;
     let contentRetryNotBefore = 0;
+    let contentFailures = 0;
     let bypassNext = false;
     let inFlight: { id: number; bypass: boolean; promise: Promise<"ok" | "failed" | "stale"> } | null = null;
 
@@ -152,9 +154,21 @@ export default function DisplayPlayer({
 
     function clearTimers() {
       window.clearTimeout(timer);
-      window.clearInterval(interval);
       timer = 0;
-      interval = 0;
+    }
+
+    function noteContentFailure() {
+      contentFailures += 1;
+      contentRetryNotBefore = Date.now() + displayPollDelayMs(
+        contentFailures,
+        DISPLAY_CONFIG_POLL_MS,
+        DISPLAY_REFRESH_RETRY_MS,
+      );
+    }
+
+    function noteContentSuccess() {
+      contentFailures = 0;
+      contentRetryNotBefore = 0;
     }
 
     function rememberContent(next: DisplayPayload, fetchedAt: number) {
@@ -210,12 +224,12 @@ export default function DisplayPlayer({
           if (cancelled || id !== requestId) return "stale";
           if (!response.ok) {
             if (response.status === 404 && !payloadRef.current) setMissing(true);
-            contentRetryNotBefore = Date.now() + DISPLAY_REFRESH_RETRY_MS;
+            noteContentFailure();
             return "failed";
           }
           const body: unknown = await response.json();
           if (!isDisplayPayload(body) || cancelled || id !== requestId) {
-            if (!cancelled && id === requestId) contentRetryNotBefore = Date.now() + DISPLAY_REFRESH_RETRY_MS;
+            if (!cancelled && id === requestId) noteContentFailure();
             return id === requestId ? "failed" : "stale";
           }
           const next = toPublicDisplayPayload(body);
@@ -233,27 +247,12 @@ export default function DisplayPlayer({
             return "stale";
           }
           showPayload(next, fetchedAt);
-          contentRetryNotBefore = 0;
+          noteContentSuccess();
           if (forcedLoad) stripForceRefresh();
-          if (plan.heartbeat) {
-            const heartbeat = new URLSearchParams();
-            if (bypass) heartbeat.set(DISPLAY_REFRESH_QUERY, "1");
-            const heartbeatQuery = heartbeat.toString();
-            try {
-              await fetch(`/api/displays/${encodeURIComponent(slug)}/heartbeat${heartbeatQuery ? `?${heartbeatQuery}` : ""}`, {
-                method: "POST",
-                headers: { "content-type": "application/json" },
-                body: JSON.stringify({ appVersion: "phase1", mode: next.mode }),
-                signal: controller.signal,
-              });
-            } catch {
-              // The config poll checks in again within a minute.
-            }
-          }
           return "ok";
         } catch {
           if (cancelled || controller.signal.aborted) return "stale";
-          contentRetryNotBefore = Date.now() + DISPLAY_REFRESH_RETRY_MS;
+          noteContentFailure();
           return "failed";
         }
       })();
@@ -266,7 +265,7 @@ export default function DisplayPlayer({
       return promise;
     }
 
-    function arm(mode: string | null, fetchedAt: number | null, force: boolean, immediate = true) {
+    function arm(mode: string | null, fetchedAt: number | null, force: boolean) {
       if (cancelled || reloading) return;
       clearTimers();
       const plan = planDisplaySync({
@@ -278,16 +277,10 @@ export default function DisplayPlayer({
         pollMs,
       });
 
+      if (plan.action === "hold") return;
+
       if (plan.action === "wait") {
         timer = window.setTimeout(() => arm(mode, fetchedAt, false), plan.waitMs);
-        return;
-      }
-
-      if (plan.action === "poll") {
-        pollMs = plan.pollMs;
-        const run = () => { void pollOnce(); };
-        if (immediate) void run();
-        interval = window.setInterval(run, pollMs);
         return;
       }
 
@@ -295,7 +288,8 @@ export default function DisplayPlayer({
         const outcome = await pull(plan, "schedule");
         if (cancelled || reloading || outcome === "stale") return;
         if (outcome === "failed") {
-          timer = window.setTimeout(() => arm(mode, fetchedAt, force), DISPLAY_REFRESH_RETRY_MS);
+          const wait = Math.max(1_000, contentRetryNotBefore - Date.now());
+          timer = window.setTimeout(() => arm(mode, fetchedAt, force), wait);
           return;
         }
         if (force) stripForceRefresh();
@@ -305,43 +299,16 @@ export default function DisplayPlayer({
       })();
     }
 
-    async function pollOnce() {
-      if (cancelled || reloading) return;
-      const outcome = await pull({
-        action: "fetch",
-        waitMs: 0,
-        pollMs,
-        heartbeat: !preview,
-        checkReload: true,
-        bypassCache: false,
-      }, "schedule");
-      if (cancelled || reloading || outcome !== "ok") return;
-      const shown = payloadRef.current;
-      if (!shown) return;
-      if (displayRefreshPolicy(shown.mode) !== "poll") {
-        arm(shown.mode, Date.now(), false);
-        return;
-      }
-      const nextPoll = clampRefreshSeconds(shown.refreshSeconds) * 1000;
-      if (nextPoll !== pollMs) {
-        pollMs = nextPoll;
-        window.clearInterval(interval);
-        interval = window.setInterval(() => { void pollOnce(); }, pollMs);
-      }
-    }
-
     function followConfig(result: ReconcileDisplayResult) {
       if (!result.payload || result.fetchedAt === null) return;
       requestId += 1;
       showPayload(result.payload, result.fetchedAt);
       if (!result.reschedule) return;
-      const slow = result.payload.mode === "film_menu" || result.payload.mode === "film_stats";
-      if (result.fetchContent && !slow) bypassNext = true;
-      arm(result.payload.mode, result.fetchedAt, false, result.fetchContent && !slow);
+      arm(result.payload.mode, result.fetchedAt, false);
     }
 
-    async function configOnce() {
-      if (cancelled || reloading) return;
+    async function configOnce(): Promise<"ok" | "retry" | "stop"> {
+      if (cancelled || reloading) return "stop";
       try {
         const params = new URLSearchParams();
         if (preview) params.set("preview", "1");
@@ -350,13 +317,13 @@ export default function DisplayPlayer({
           `/api/displays/${encodeURIComponent(slug)}/config${query ? `?${query}` : ""}`,
           { cache: "no-store", signal: controller.signal },
         );
-        if (cancelled) return;
+        if (cancelled) return "stop";
         if (!response.ok) {
           if (response.status === 404 && !payloadRef.current) setMissing(true);
-          return;
+          return response.status >= 500 || response.status === 429 ? "retry" : "ok";
         }
         const body: unknown = await response.json();
-        if (!isDisplayConfig(body)) return;
+        if (!isDisplayConfig(body)) return "ok";
         const nowMs = Date.now();
         if (displayNeedsReload({
           loadedBuildId,
@@ -368,10 +335,17 @@ export default function DisplayPlayer({
           rememberReload(nowMs);
           reloading = true;
           window.location.reload();
-          return;
+          return "stop";
         }
-        if (previousConfig && displayConfigContentKey(previousConfig) !== displayConfigContentKey(body)) {
-          contentRetryNotBefore = 0;
+        const configChanged = previousConfig !== null && (
+          displayConfigContentKey(previousConfig) !== displayConfigContentKey(body)
+          || previousConfig.menuRevision !== body.menuRevision
+        );
+        if (configChanged) noteContentSuccess();
+        if (previousConfig && previousConfig.menuRevision !== body.menuRevision && modes?.film_menu) {
+          const nextModes = { ...modes };
+          delete nextModes.film_menu;
+          modes = nextModes;
         }
         const currentPayload = payloadRef.current;
         const result = reconcileDisplayConfig({
@@ -385,8 +359,7 @@ export default function DisplayPlayer({
           modes: modes ?? {},
           openSignStats,
         });
-        const slowPayload = result.payload?.mode === "film_menu" || result.payload?.mode === "film_stats";
-        const willFetch = result.fetchContent && (!result.payload || slowPayload);
+        const willFetch = result.fetchContent;
         if (result.payload || !result.fetchContent) previousConfig = body;
         followConfig(result);
         if (willFetch) {
@@ -395,33 +368,69 @@ export default function DisplayPlayer({
             action: "fetch",
             waitMs: 0,
             pollMs,
-            heartbeat: !preview,
+            heartbeat: false,
             checkReload: true,
             bypassCache: true,
           }, "config");
           if (outcome === "ok") {
             previousConfig = body;
             const shown = payloadRef.current;
-            if (shown && !cancelled && !reloading) arm(shown.mode, contentFetchedAt, false, false);
+            if (shown && !cancelled && !reloading) arm(shown.mode, contentFetchedAt, false);
           }
         }
         if (previousConfig && payloadRef.current && contentFetchedAt !== null) {
           persist(payloadRef.current, contentFetchedAt);
         }
+        return "ok";
       } catch {
-        // A missed check keeps the last screen up. The next minute tries again.
+        if (cancelled || controller.signal.aborted) return "stop";
+        return "retry";
       }
     }
 
+    function sleep(ms: number, kind: "config" | "heartbeat") {
+      return new Promise<void>((resolve) => {
+        const id = window.setTimeout(resolve, ms);
+        if (kind === "config") configTimer = id;
+        else heartbeatTimer = id;
+      });
+    }
+
     async function configLoop() {
+      let failures = 0;
       while (!cancelled && !reloading) {
         const started = Date.now();
-        await configOnce();
+        const outcome = await configOnce();
+        if (cancelled || reloading || outcome === "stop") return;
+        failures = outcome === "retry" ? failures + 1 : 0;
+        const delay = displayPollDelayMs(failures, DISPLAY_CONFIG_POLL_MS);
+        const wait = Math.max(0, delay - (Date.now() - started));
+        await sleep(wait, "config");
+      }
+    }
+
+    async function heartbeatLoop() {
+      if (preview) return;
+      let failures = 0;
+      while (!cancelled && !reloading) {
+        let ok = false;
+        try {
+          const response = await fetch(`/api/displays/${encodeURIComponent(slug)}/heartbeat`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ appVersion: "phase1", mode: payloadRef.current?.mode ?? null }),
+            signal: controller.signal,
+          });
+          ok = response.ok;
+        } catch {
+          ok = false;
+        }
         if (cancelled || reloading) return;
-        const wait = Math.max(0, DISPLAY_CONFIG_POLL_MS - (Date.now() - started));
-        await new Promise<void>((resolve) => {
-          configTimer = window.setTimeout(resolve, wait);
-        });
+        failures = ok ? 0 : failures + 1;
+        const delay = ok
+          ? HEARTBEAT_WRITE_INTERVAL_MS
+          : displayPollDelayMs(failures, 60_000, HEARTBEAT_WRITE_INTERVAL_MS);
+        await sleep(delay, "heartbeat");
       }
     }
 
@@ -429,12 +438,14 @@ export default function DisplayPlayer({
     const bootFetchedAt = cached?.fetchedAt ?? (preview && initialRef.current ? Date.now() : null);
     arm(bootMode, bootFetchedAt, forceRefreshRequested());
     void configLoop();
+    void heartbeatLoop();
 
     return () => {
       cancelled = true;
       controller.abort();
       clearTimers();
       window.clearTimeout(configTimer);
+      window.clearTimeout(heartbeatTimer);
     };
   }, [slug, preview, loadedBuildId]);
 

@@ -71,9 +71,9 @@ function refreshHref(slug: string) {
 }
 
 function refreshHelp(mode: string) {
-  if (mode === "film_menu") return "Saves the price list and reads the database again on Saturday at 11:00 AM Eastern.";
-  if (mode === "film_stats") return "Saves the stats and reads the database again every two hours.";
-  return "Still checks about every 30 seconds.";
+  if (mode === "film_menu") return "The price list reloads Saturday at 11:00 AM Eastern, and within about two minutes after a price save.";
+  if (mode === "film_stats") return "Stats reload every two hours.";
+  return "A mode, message, or Open sign change shows up within about two minutes.";
 }
 
 export default function DisplaysPage() {
@@ -125,10 +125,11 @@ export default function DisplaysPage() {
       <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
         <p className="mb-6 max-w-2xl text-sm text-slate-500">
           Each screen opens one address and shows whatever you set here.
-          It reads those settings about once a minute, so a mode change or the Open sign shows up without reloading the TV.
-          The film menu price list still reloads on Saturday at 11:00 AM Eastern, and film stats still reload every two hours.
-          Open sign counts on the front window use that same two-hour stats refresh.
-          A screen looks Online if it checked in within the last few minutes.
+          A mode, message, or Open sign change shows up within about two minutes, without reloading the TV.
+          The Open sign still follows the shop clock on the TV, so Saturday at 11:00 AM does not wait on a poll.
+          The film menu price list reloads on Saturday at 11:00 AM Eastern, and within about two minutes after you save prices.
+          Film stats still reload every two hours. Open sign counts on the front window use that same two-hour refresh.
+          A screen looks Online if it checked in within the last hour and a half.
         </p>
 
         {isLoading ? (

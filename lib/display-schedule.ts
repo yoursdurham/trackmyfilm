@@ -7,21 +7,24 @@ import { lastSaturdayOpening, nextSaturdayOpening } from "@/lib/shop-hours";
  * payload (a booking or a custom message already beat the default). It is not
  * the default saved on the display row.
  *
- *   film_menu   once a week, Saturdays at 11:00 AM America/New_York
+ *   film_menu   once a week, Saturdays at 11:00 AM America/New_York,
+ *               and again within one config check after a price save
  *   film_stats  every two hours
- *   everything else keeps the saved poll interval (about 30 seconds)
+ *   everything else holds. A dashboard change arrives on the config check.
  *
- * While a screen is waiting, it does not call the heavy payload route.
- * It still reads the small display-row config about once a minute, and that
- * check-in is what updates last_seen. A later fetch that comes back as a
+ * The config check is every couple of minutes. The server answers it from a
+ * data cache, so a routine check does not read Supabase. A save drops that
+ * cache and the next check reads the row once. The Open sign follows the
+ * shop clock on the TV and does not wait for a poll. last_seen is a separate
+ * heartbeat, not part of this check. A later fetch that comes back as a
  * different mode adopts that mode's schedule immediately.
  */
 
-/** How often a screen reads its row (mode, Open sign, theme, override). */
-export const DISPLAY_CONFIG_POLL_MS = 60_000;
+/** How often a screen asks for its row. The answer is cached until a save. */
+export const DISPLAY_CONFIG_POLL_MS = 2 * 60 * 1000;
 
 export const FILM_STATS_REFRESH_MS = 2 * 60 * 60 * 1000;
-/** Try a failed film-menu or film-stats fetch again, without falling back to the 30-second poll. */
+/** Cap for a failed film-menu or film-stats fetch. The player backs off up to this. */
 export const DISPLAY_REFRESH_RETRY_MS = 15 * 60 * 1000;
 /** Query flag. Open `/display/<slug>?refresh=1` on the TV to fetch once immediately. */
 export const DISPLAY_REFRESH_QUERY = "refresh";
@@ -31,6 +34,19 @@ const MIN_WAIT_MS = 1_000;
 const MAX_WAIT_MS = 2_147_483_647;
 
 export type DisplayRefreshPolicy = "weekly" | "two-hour" | "poll";
+
+/**
+ * Delay after failed polls. The first failure waits `baseMs`, then each
+ * further failure doubles, up to `capMs`. Zero failures is the normal cadence.
+ */
+export function displayPollDelayMs(failures: number, baseMs: number, capMs = DISPLAY_REFRESH_RETRY_MS): number {
+  if (!Number.isFinite(baseMs) || baseMs <= 0) return capMs;
+  if (!Number.isFinite(failures) || failures <= 1) return Math.min(baseMs, capMs);
+  const shift = Math.min(Math.floor(failures) - 1, 8);
+  const scaled = baseMs * 2 ** shift;
+  if (!Number.isFinite(scaled)) return capMs;
+  return Math.min(capMs, Math.max(baseMs, scaled));
+}
 
 export function displayRefreshPolicy(mode: string | null | undefined): DisplayRefreshPolicy {
   if (mode === "film_menu") return "weekly";
@@ -65,11 +81,14 @@ function waitUntilNext(mode: string, fetchedAt: number, now: Date): number {
 }
 
 export interface DisplaySyncPlan {
-  /** fetch once, wait with no network, or keep the live poll. */
-  action: "fetch" | "wait" | "poll";
+  /** fetch once, wait with no network, or hold until the config check says something changed. */
+  action: "fetch" | "wait" | "hold";
   waitMs: number;
   pollMs: number;
-  /** POST last_seen after this fetch. Waiting never does. */
+  /**
+   * Kept so callers can see which fetches used to check in.
+   * The player posts last_seen on its own timer instead.
+   */
   heartbeat: boolean;
   /** A new deploy reloads the page only when a fetch actually ran. */
   checkReload: boolean;
@@ -115,11 +134,11 @@ export function planDisplaySync(input: {
       };
     }
     return {
-      action: "poll",
-      waitMs: pollMs,
+      action: "hold",
+      waitMs: 0,
       pollMs,
-      heartbeat: !input.preview,
-      checkReload: true,
+      heartbeat: false,
+      checkReload: false,
       bypassCache: false,
     };
   }

@@ -60,8 +60,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
   }
 
   const client = parseHeartbeatClient(body, req.headers.get("user-agent"));
-  // Film menu and film stats check in on the light config poll. A heartbeat
-  // from either path still counts, and the five-minute gate keeps the writes down.
+  // Screens post about every 45 minutes. The gate keeps a reboot from writing again.
   if (!heartbeatWriteDue(slug)) return json({ ok: true });
 
   try {

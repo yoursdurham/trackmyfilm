@@ -19,13 +19,20 @@ vi.mock("@/lib/api-auth", () => ({
   requireAuth: (...args: unknown[]) => mockRequireAuth(...args),
 }));
 
+vi.mock("next/cache", () => ({
+  unstable_cache: (fn: (...args: unknown[]) => unknown) => (...args: unknown[]) => fn(...args),
+  revalidateTag: () => {},
+}));
+
 vi.mock("@/lib/db", () => ({
   getDisplayBySlug: (...args: unknown[]) => mockGetDisplayBySlug(...args),
   updateDisplay: (...args: unknown[]) => mockUpdateDisplay(...args),
+  getFilmMenuUpdatedAt: () => Promise.resolve("2026-10-01T15:00:00.000Z"),
 }));
 
 vi.mock("@/lib/film-metrics-cache", () => ({
   getCachedFilmMetrics: (...args: unknown[]) => mockGetCachedFilmMetrics(...args),
+  clearFilmMetricsCache: () => {},
 }));
 
 vi.mock("@/lib/film-menu-cache", () => ({

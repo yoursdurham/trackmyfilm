@@ -16,6 +16,7 @@
  * function runs, so the clock and the calendar stay outside the renderer.
  */
 
+import { HEARTBEAT_WRITE_INTERVAL_MS } from "@/lib/display-heartbeat";
 import { sanitizeFilmDepartures } from "@/lib/film-departures";
 import { FRONT_WINDOW_SLUG, isOpenSignMode, openSignForceUntil, resolveOpenSignMode, type OpenSignMode } from "@/lib/shop-hours";
 import { sanitizeFilmMenu } from "@/lib/film-menu";
@@ -44,14 +45,14 @@ export function storedDisplayTheme(theme: string | null | undefined): string {
   return isSelectableDisplayTheme(value) ? value : DISPLAY_THEME;
 }
 /**
- * Poll interval for modes that stay live (idle, bookings, messages, the airport board).
- * The film menu and film stats do not use this timer. See lib/display-schedule.ts.
+ * Stored refresh interval, still returned on the payload. Kiosks do not poll
+ * the database on this timer. See lib/display-schedule.ts.
  */
 export const DEFAULT_REFRESH_SECONDS = 30;
 export const MIN_REFRESH_SECONDS = 10;
 export const MAX_REFRESH_SECONDS = 300;
-/** A live screen is online if it checked in within this window (a 5-minute heartbeat plus a minute of grace). */
-export const DISPLAY_ONLINE_WINDOW_MS = 6 * 60 * 1000;
+/** Online if the last check-in is inside two heartbeat intervals. */
+export const DISPLAY_ONLINE_WINDOW_MS = HEARTBEAT_WRITE_INTERVAL_MS * 2;
 export const CUSTOM_MESSAGE_MAX_LENGTH = 280;
 export const DISPLAY_SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
@@ -702,8 +703,8 @@ export function publicPayloadForDisplay(
 }
 
 /**
- * Every screen reads its config about once a minute and last_seen is written
- * every few minutes, including while the film menu or film stats stay cached.
+ * Every screen posts last_seen about once an hour. The window is the same
+ * for every mode, including while the film menu or film stats stay cached.
  * `mode` is accepted so older callers keep compiling.
  */
 export function displayOnlineWindowMs(mode?: string | null): number {

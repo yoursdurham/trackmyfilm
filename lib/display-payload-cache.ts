@@ -7,7 +7,8 @@ import { nextSaturdayOpening } from "@/lib/shop-hours";
  * A repeat poll can reuse it only when the display row still matches, so a
  * mode or Open-sign change is not stuck behind the weekly or two-hour copy.
  * Live modes are not stored. Preview and `?refresh=1` skip this copy.
- * The heavy film queries are what this skips. The row itself is cheap.
+ * The heavy film queries are what this skips. The display row has its own
+ * data cache, so a repeat read of the row is not a Supabase query either.
  */
 
 interface Entry {

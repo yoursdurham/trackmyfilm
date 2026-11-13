@@ -1,5 +1,9 @@
-/** At most one Supabase heartbeat write per screen inside this window. */
-export const HEARTBEAT_WRITE_INTERVAL_MS = 5 * 60 * 1000;
+/**
+ * At most one Supabase heartbeat write per screen inside this window.
+ * Kiosks post on this same interval. The Displays page treats a screen as
+ * online for two intervals, so one missed post does not flip it offline.
+ */
+export const HEARTBEAT_WRITE_INTERVAL_MS = 45 * 60 * 1000;
 
 const lastWrite = new Map<string, number>();
 
