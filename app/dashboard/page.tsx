@@ -9,6 +9,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Plus, Search, Film, Clock, CheckCircle, Package, Pause, Loader2, ScanLine } from "lucide-react";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
+import DashboardDisplays from "@/components/DashboardDisplays";
 import IncomingSquarespaceQueue from "@/components/IncomingSquarespaceQueue";
 import InternalHeader, { openNewDropoffDialog } from "@/components/InternalHeader";
 import OrderCard from "@/components/OrderCard";
@@ -241,6 +242,7 @@ function Dashboard() {
       <InternalHeader />
 
       <main className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 ${showBulkSelection && (selectedOrderIds.size > 0 || bulkReportVisible) ? "pb-36" : ""}`}>
+        <DashboardDisplays />
         <IncomingSquarespaceQueue />
 
         <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
