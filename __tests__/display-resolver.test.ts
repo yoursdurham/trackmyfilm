@@ -420,13 +420,13 @@ describe("isDisplayOnline", () => {
     expect(isDisplayOnline(null, now)).toBe(false);
   });
 
-  it("uses the short check-in window for the film menu and film stats too", () => {
+  it("uses the same check-in window for the film menu and film stats too", () => {
     const now = Date.parse("2026-10-08T16:00:00.000Z");
     expect(displayOnlineWindowMs("film_menu")).toBe(DISPLAY_ONLINE_WINDOW_MS);
     expect(displayOnlineWindowMs("film_stats")).toBe(DISPLAY_ONLINE_WINDOW_MS);
     expect(isDisplayOnline(new Date(now - 60 * 1000).toISOString(), now, "film_menu")).toBe(true);
-    expect(isDisplayOnline(new Date(now - 60 * 60 * 1000).toISOString(), now, "film_stats")).toBe(false);
-    expect(isDisplayOnline(new Date(now - 60 * 60 * 1000).toISOString(), now, "idle")).toBe(false);
+    expect(isDisplayOnline(new Date(now - DISPLAY_ONLINE_WINDOW_MS - 1).toISOString(), now, "film_stats")).toBe(false);
+    expect(isDisplayOnline(new Date(now - DISPLAY_ONLINE_WINDOW_MS - 1).toISOString(), now, "idle")).toBe(false);
   });
 
   it("marks a film-menu screen offline when its check-in is stale, even if a booking would win", () => {

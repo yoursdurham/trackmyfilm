@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/api-auth";
-import { getDisplayBySlug, updateDisplay } from "@/lib/db";
+import { updateDisplay } from "@/lib/db";
+import { clearFilmDeparturesCache } from "@/lib/film-departures-cache";
+import { clearFilmMenuCache } from "@/lib/film-menu-cache";
+import { clearFilmMetricsCache } from "@/lib/film-metrics-cache";
+import { readKioskDisplay } from "@/lib/display-row-cache";
 import { displayNow } from "@/lib/display-clock";
 import { displayConfigFingerprint, toDisplayConfig } from "@/lib/display-config";
 import { forgetDisplayPayload, readFreshDisplayPayload, rememberDisplayPayload } from "@/lib/display-payload-cache";
@@ -46,11 +50,17 @@ export async function GET(req: Request, { params }: { params: Promise<{ slug: st
   const preview = url.searchParams.get("preview") === "1";
   const force = url.searchParams.get(DISPLAY_REFRESH_QUERY) === "1";
   const now = displayNow();
+  const fresh = preview || force;
 
   try {
-    // The row is small. The saved payload is reused only while that row still
-    // matches, so a mode change cannot be served from the film-menu copy.
-    const row = await getDisplayBySlug(slug);
+    // Routine polls reuse the data-cached row. A forced refresh or a staff
+    // preview reads Supabase and skips the in-memory film copies.
+    if (fresh) {
+      clearFilmMenuCache();
+      clearFilmMetricsCache();
+      clearFilmDeparturesCache();
+    }
+    const row = await readKioskDisplay(slug, fresh);
     if (!row) return json({ error: "Unknown screen" }, 404);
     const fingerprint = displayConfigFingerprint(toDisplayConfig(row, displayBuildId()));
     if (!preview && !force) {

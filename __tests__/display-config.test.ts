@@ -34,6 +34,7 @@ function config(overrides: Partial<DisplayConfig> = {}): DisplayConfig {
     studioCheckoutLines: ["Lock the door"],
     refreshSeconds: 30,
     buildId: "dev",
+    menuRevision: "2026-10-01T00:00:00.000Z",
     ...overrides,
   };
 }
@@ -70,8 +71,8 @@ function reconcile(input: {
 }
 
 describe("display config poll", () => {
-  it("checks about once a minute", () => {
-    expect(DISPLAY_CONFIG_POLL_MS).toBe(60_000);
+  it("checks about every two minutes", () => {
+    expect(DISPLAY_CONFIG_POLL_MS).toBe(120_000);
   });
 
   it("keeps the Open sign off the studio screen", () => {
@@ -112,6 +113,27 @@ describe("display config poll", () => {
 
 describe("reconcileDisplayConfig", () => {
   const freshMenuAt = lastSaturdayOpening(NOW).getTime();
+
+  it("refetches the film menu when the price list timestamp changes", () => {
+    const row = config();
+    const decision = reconcile({
+      config: config({ menuRevision: "2026-10-08T18:00:00.000Z" }),
+      previousConfig: row,
+      current: { payload: payload(), fetchedAt: freshMenuAt },
+    });
+    expect(decision).toMatchObject({ payload: null, fetchContent: true, bypassCache: true });
+  });
+
+  it("leaves film stats in place when only the price list timestamp changes", () => {
+    const showing = payload({ mode: "film_stats", theme: "yours-clean", data: { rollsProcessing: 4 } });
+    const decision = reconcile({
+      config: config({ mode: "film_stats", menuRevision: "2026-10-08T18:00:00.000Z" }),
+      previousConfig: config({ mode: "film_stats" }),
+      current: { payload: showing, fetchedAt: NOW.getTime() },
+    });
+    expect(decision.fetchContent).toBe(false);
+    expect(decision.payload).toBeNull();
+  });
 
   it("does not refetch a fresh film menu when the row is unchanged", () => {
     const row = config();

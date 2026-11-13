@@ -3,9 +3,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mockGetDisplayBySlug = vi.fn();
 const mockTouch = vi.fn();
 
+vi.mock("next/cache", () => ({
+  unstable_cache: (fn: (...args: unknown[]) => unknown) => (...args: unknown[]) => fn(...args),
+  revalidateTag: () => {},
+}));
+
 vi.mock("@/lib/db", () => ({
   getDisplayBySlug: (...args: unknown[]) => mockGetDisplayBySlug(...args),
   touchDisplayHeartbeat: (...args: unknown[]) => mockTouch(...args),
+  getFilmMenuUpdatedAt: () => Promise.resolve("2026-10-01T15:00:00.000Z"),
 }));
 
 vi.mock("@/lib/film-metrics-cache", () => ({
@@ -21,7 +27,6 @@ vi.mock("@/lib/film-menu-cache", () => ({
 }));
 
 import { GET } from "@/app/api/displays/[slug]/config/route";
-import { clearDisplayHeartbeatThrottle } from "@/lib/display-heartbeat";
 import { displayBuildId } from "@/lib/display";
 
 const row = {
@@ -55,17 +60,15 @@ function get(slug = "front-window", query = "") {
 describe("GET /api/displays/:slug/config", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    clearDisplayHeartbeatThrottle();
     mockGetDisplayBySlug.mockResolvedValue(row);
     mockTouch.mockResolvedValue(true);
-    vi.spyOn(Date, "now").mockReturnValue(Date.parse("2026-10-08T19:00:00.000Z"));
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
-  it("returns the row settings and checks in when last_seen is stale", async () => {
+  it("returns the row settings and does not write last_seen", async () => {
     const response = await get();
     expect(response.status).toBe(200);
     expect(response.headers.get("cache-control")).toBe("no-store");
@@ -79,21 +82,12 @@ describe("GET /api/displays/:slug/config", () => {
       showOpenSign: true,
       showStudioBookings: false,
       buildId: displayBuildId(),
+      menuRevision: "2026-10-01T15:00:00.000Z",
     });
     expect(JSON.stringify(body)).not.toMatch(/secret@|customer_email/);
     expect(body).not.toHaveProperty("last_seen");
-    expect(mockTouch).toHaveBeenCalledTimes(1);
-    expect(mockGetDisplayBySlug).toHaveBeenCalledTimes(1);
-  });
-
-  it("does not write last_seen again inside five minutes", async () => {
-    mockGetDisplayBySlug.mockResolvedValue({
-      ...row,
-      last_seen: new Date(Date.now() - 60_000).toISOString(),
-    });
-    const response = await get();
-    expect(response.status).toBe(200);
     expect(mockTouch).not.toHaveBeenCalled();
+    expect(mockGetDisplayBySlug).toHaveBeenCalledTimes(1);
   });
 
   it("does not check in a staff preview", async () => {

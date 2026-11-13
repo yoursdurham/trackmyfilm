@@ -13,6 +13,7 @@ import { DEPARTURE_ORDER_SELECT, type DepartureOrder } from "./film-departures";
 import { FILM_METRICS_ORDER_SELECT, filmMetricsOrderOrFilter, rollsProcessedOrderOrFilter, turnaroundOrderOrFilter } from "./film-metrics";
 import { ORDER_STATUS } from "./constants";
 import { FILM_MENU_SLUG, type FilmMenu } from "./film-menu";
+import { invalidateKioskDisplayRow, invalidateKioskFilmMenu } from "./kiosk-cache-invalidate";
 import {
   BLANK_CUSTOMER_NAME_MIGRATION_ERROR,
   buildIncomingDraftInsert,
@@ -747,6 +748,7 @@ export async function updateDisplay(slug: string, patch: Partial<DisplayRow>): P
     .select("*")
     .maybeSingle();
   if (error) throw new Error(error.message);
+  if (data) invalidateKioskDisplayRow();
   return data as DisplayRow | null;
 }
 
@@ -758,6 +760,18 @@ export async function getFilmMenu(): Promise<unknown | null> {
     .maybeSingle();
   if (error) throw new Error(error.message);
   return data?.content ?? null;
+}
+
+/** Timestamp the kiosks compare so a price save shows up without a weekly wait. */
+export async function getFilmMenuUpdatedAt(): Promise<string> {
+  const { data, error } = await getSupabase()
+    .from("film_menus")
+    .select("updated_at")
+    .eq("slug", FILM_MENU_SLUG)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  const updated = data && typeof data.updated_at === "string" ? data.updated_at : "";
+  return updated;
 }
 
 export async function saveFilmMenu(content: FilmMenu): Promise<FilmMenu> {
@@ -774,12 +788,14 @@ export async function saveFilmMenu(content: FilmMenu): Promise<FilmMenu> {
     .select("content")
     .single();
   if (error) throw new Error(error.message);
+  invalidateKioskFilmMenu();
   return data.content as FilmMenu;
 }
 
 /**
  * Writes a heartbeat only when the screen has not checked in during the
- * last five minutes. A recent row is confirmed with an id read and no update.
+ * last interval. A recent row is confirmed with an id read and no update.
+ * This does not invalidate the kiosk row cache: last_seen is not a screen change.
  */
 export async function touchDisplayHeartbeat(slug: string, client: HeartbeatClient): Promise<boolean> {
   const now = new Date();

@@ -4,7 +4,9 @@ import {
   DISPLAY_CONFIG_POLL_MS,
   DISPLAY_REFRESH_QUERY,
   displayContentFresh,
+  displayPollDelayMs,
   displayRefreshPolicy,
+  DISPLAY_REFRESH_RETRY_MS,
   FILM_STATS_REFRESH_MS,
   planDisplaySync,
 } from "@/lib/display-schedule";
@@ -49,8 +51,8 @@ describe("Saturday shop-open instants", () => {
 });
 
 describe("display refresh policy", () => {
-  it("checks the display row about once a minute", () => {
-    expect(DISPLAY_CONFIG_POLL_MS).toBe(60_000);
+  it("checks the display row about every two minutes", () => {
+    expect(DISPLAY_CONFIG_POLL_MS).toBe(120_000);
   });
 
   it("slows only the film menu and film stats", () => {
@@ -127,16 +129,24 @@ describe("planDisplaySync", () => {
     });
   });
 
-  it("keeps live modes on the poll, including after a slow screen changes mode", () => {
+  it("holds live modes until a config check reports a change", () => {
     for (const mode of ["idle", "custom_message", "studio_active", "studio_welcome", "film_departures"]) {
       expect(plan({ mode, fetchedAt: now.getTime(), now })).toMatchObject({
-        action: "poll",
-        pollMs: 30_000,
-        heartbeat: true,
-        checkReload: true,
+        action: "hold",
+        heartbeat: false,
+        checkReload: false,
         bypassCache: false,
       });
     }
+  });
+
+  it("backs off failed polls without passing the retry cap", () => {
+    expect(displayPollDelayMs(0, 120_000)).toBe(120_000);
+    expect(displayPollDelayMs(1, 120_000)).toBe(120_000);
+    expect(displayPollDelayMs(2, 120_000)).toBe(240_000);
+    expect(displayPollDelayMs(3, 120_000)).toBe(480_000);
+    expect(displayPollDelayMs(8, 120_000)).toBe(DISPLAY_REFRESH_RETRY_MS);
+    expect(displayPollDelayMs(2, 60_000, 90_000)).toBe(90_000);
   });
 
   it("forces one fetch from the refresh query even when the copy is fresh", () => {

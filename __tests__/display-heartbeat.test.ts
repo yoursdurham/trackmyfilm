@@ -34,7 +34,7 @@ describe("POST /api/displays/:slug/heartbeat", () => {
     vi.restoreAllMocks();
   });
 
-  it("writes at most once inside five minutes", async () => {
+  it("writes at most once inside the heartbeat interval", async () => {
     mockTouch.mockResolvedValue(true);
     vi.spyOn(Date, "now").mockReturnValue(1_000_000);
 
@@ -61,7 +61,7 @@ describe("POST /api/displays/:slug/heartbeat", () => {
     expect(mockTouch).toHaveBeenCalledTimes(2);
   });
 
-  it("writes last_seen for a film-menu screen and still waits five minutes", async () => {
+  it("writes last_seen for a film-menu screen and still waits out the interval", async () => {
     mockTouch.mockResolvedValue(true);
     vi.spyOn(Date, "now").mockReturnValue(1_000_000);
     const first = await post("studio-vertical", { appVersion: "phase1", mode: "film_menu" });

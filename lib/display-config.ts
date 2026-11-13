@@ -21,9 +21,10 @@ import {
 import { studioCheckoutLinesFromRow, studioInfoLinesFromRow } from "@/lib/studio-info";
 
 /**
- * The display row, and nothing else. A kiosk reads this about once a minute.
+ * The display row, and nothing else, plus the film-menu timestamp.
+ * A kiosk reads this every couple of minutes from a server cache.
  * Film stats, the film menu, departures, and the studio calendar stay on
- * their own schedule.
+ * their own schedule. A new menuRevision means the price list changed.
  */
 export interface DisplayConfig {
   mode: string;
@@ -40,6 +41,8 @@ export interface DisplayConfig {
   studioCheckoutLines: string[];
   refreshSeconds: number;
   buildId: string;
+  /** film_menus.updated_at. Empty until the first cached read. */
+  menuRevision: string;
 }
 
 export interface ModeCacheEntry {
@@ -98,6 +101,7 @@ function linesOf(value: unknown): string[] {
 export function toDisplayConfig(
   row: DisplayResolveInput["display"],
   buildId: string,
+  menuRevision = "",
 ): DisplayConfig {
   const front = row.slug === FRONT_WINDOW_SLUG;
   const storedMode = isOpenSignMode(row.open_sign_mode)
@@ -127,6 +131,7 @@ export function toDisplayConfig(
     studioCheckoutLines: studioCheckoutLinesFromRow(row.studio_checkout_lines),
     refreshSeconds: clampRefreshSeconds(row.refresh_seconds),
     buildId,
+    menuRevision: menuRevision.trim(),
   };
 }
 
@@ -148,7 +153,8 @@ export function isDisplayConfig(value: unknown): value is DisplayConfig {
     && Array.isArray(record.studioCheckoutLines)
     && record.studioCheckoutLines.every((line) => typeof line === "string")
     && typeof record.refreshSeconds === "number"
-    && typeof record.buildId === "string";
+    && typeof record.buildId === "string"
+    && typeof record.menuRevision === "string";
 }
 
 /** Fields that decide which screen is showing. Theme and the Open sign are not in here. */
@@ -378,7 +384,11 @@ export function reconcileDisplayConfig(input: ReconcileDisplayInput): ReconcileD
 
   if (!identityChanged && input.current) {
     const patched = withChrome(input.current.payload, input.config, input.slug, input.now);
-    const fetchContent = statsStale(input, patched.mode);
+    const previous = input.previousConfig;
+    const priceChange = previous !== null
+      && previous.menuRevision !== input.config.menuRevision
+      && (patched.mode === "film_menu" || input.current.payload.mode === "film_menu");
+    const fetchContent = statsStale(input, patched.mode) || priceChange;
     if (chromeMatches(input.current.payload, patched)) return keep(input, fetchContent);
     return show(input, patched, input.current.fetchedAt, fetchContent);
   }
@@ -450,5 +460,6 @@ export function readCachedConfig(value: unknown): DisplayConfig | null {
     studioCheckoutLines: linesOf(value.studioCheckoutLines),
     refreshSeconds: value.refreshSeconds,
     buildId: value.buildId,
+    menuRevision: value.menuRevision,
   };
 }
