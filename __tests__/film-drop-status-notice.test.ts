@@ -7,10 +7,11 @@ import {
 } from "../lib/film-drop-status-notice";
 import type { FilmOrder } from "../lib/types";
 
-const EXPIRY = new Date("2026-11-18T00:00:00-05:00");
+const EXPIRY = new Date("2026-11-16T00:00:00-05:00");
 const BEFORE = new Date("2026-11-12T15:00:00-05:00");
-const LAST_MOMENT = new Date("2026-11-17T23:59:59-05:00");
-const AFTER = new Date("2026-11-18T00:00:01-05:00");
+const LAST_MOMENT = new Date("2026-11-15T23:59:59-05:00");
+const JUST_AFTER = new Date("2026-11-16T00:00:01-05:00");
+const AFTER = new Date("2026-11-16T13:33:00-05:00");
 
 const HEADING = "Status update";
 const MESSAGE =
@@ -22,9 +23,9 @@ function assertShopName(copy: string) {
 }
 
 describe("film drop status notice", () => {
-  it("shows the notice before end of day Tuesday Nov 17, 2026 America/New_York", () => {
+  it("shows the notice before the start of Monday Nov 16, 2026 America/New_York", () => {
     expect(Date.parse(FILM_DROP_STATUS_NOTICE.expiresAt)).toBe(EXPIRY.getTime());
-    expect(EXPIRY.toISOString()).toBe("2026-11-18T05:00:00.000Z");
+    expect(EXPIRY.toISOString()).toBe("2026-11-16T05:00:00.000Z");
 
     for (const now of [BEFORE, LAST_MOMENT]) {
       const notice = filmDropStatusNotice(now);
@@ -49,8 +50,8 @@ describe("film drop status notice", () => {
     }
   });
 
-  it("hides the notice at expiry and after", () => {
-    for (const now of [EXPIRY, AFTER]) {
+  it("hides the notice at expiry and after, including Monday afternoon Nov 16", () => {
+    for (const now of [EXPIRY, JUST_AFTER, AFTER]) {
       expect(filmDropStatusNotice(now)).toEqual({ html: "", text: "" });
     }
   });
