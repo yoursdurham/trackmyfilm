@@ -82,6 +82,8 @@ export interface IncomingSquarespaceDraft {
   squarespace_film_listing?: string | null;
   /** Squarespace Orders API `channel`: web for the shop, pos for in-person. */
   squarespace_channel?: "web" | "pos" | null;
+  /** Promo codes copied from the Squarespace order during a manual import. */
+  squarespace_promo_codes?: string[];
   import_source: string;
   status: IncomingDraftStatus;
   /** Set when Approve & Receive creates the film order. Deleting that order cascades. */

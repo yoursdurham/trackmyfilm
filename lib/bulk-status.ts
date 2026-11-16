@@ -2,6 +2,7 @@ import { ORDER_STATUS, STATUS_TEMPLATE_MAP } from "@/lib/constants";
 import { getOrdersByIds } from "@/lib/db";
 import { prepareOrderEmail } from "@/lib/email-service";
 import { emailTemplateForStatus } from "@/lib/order-service";
+import { recordOrderRewards } from "@/lib/rewards-db";
 import {
   commitPlannedStatus,
   planStatusChange,
@@ -255,6 +256,7 @@ export async function bulkUpdateOrderStatus({
         continue;
       }
       movedCount += 1;
+      await recordOrderRewards(result.order);
       if (result.order.status === status) {
         emailCandidates.push({ order: result.order, anchor: emailAnchor(result.order, status) });
       }

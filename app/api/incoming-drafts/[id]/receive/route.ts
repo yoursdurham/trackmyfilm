@@ -49,6 +49,9 @@ function receiveRequest(draft: IncomingSquarespaceDraft, body: Record<string, un
       ? body.notes
       : orderNotesForFilmListing(draft.notes, draft.squarespace_film_listing, draft.roll_details) ?? undefined,
     send_email: body.send_email !== false,
+    reward_id: typeof body.reward_id === "string" ? body.reward_id : undefined,
+    reward_roll_index: typeof body.reward_roll_index === "number" ? body.reward_roll_index : undefined,
+    squarespace_promo_codes: draft.squarespace_promo_codes,
   };
 }
 

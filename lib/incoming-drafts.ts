@@ -49,6 +49,8 @@ export interface IncomingDraftInput {
   squarespace_film_listing?: string | null;
   /** web for online checkout, pos for an in-person Squarespace order. */
   squarespace_channel?: "web" | "pos" | null;
+  /** Promo codes from the Squarespace order. Omitted when there are none. Column is migration 032. */
+  squarespace_promo_codes?: string[];
   import_source: string;
 }
 
@@ -68,6 +70,9 @@ export function buildIncomingDraftInsert(input: IncomingDraftInput) {
     notes: input.notes,
     ...(listing ? { squarespace_film_listing: listing } : {}),
     ...(input.squarespace_channel ? { squarespace_channel: input.squarespace_channel } : {}),
+    ...(input.squarespace_promo_codes && input.squarespace_promo_codes.length > 0
+      ? { squarespace_promo_codes: input.squarespace_promo_codes }
+      : {}),
     import_source: input.import_source,
     status: PENDING_INTAKE_STATUS,
   };

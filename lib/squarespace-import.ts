@@ -29,6 +29,8 @@ export interface PendingDraftFilmPatch {
   notes?: string | null;
   /** Filled when a pending row was staged with a blank name and Squarespace has one. */
   customer_name?: string;
+  /** Promo codes from a later manual Check Squarespace, when the row has none yet. */
+  squarespace_promo_codes?: string[];
 }
 
 export interface PendingDraftFilmBackfill extends PendingDraftFilmPatch {
@@ -124,6 +126,7 @@ export function pendingDraftFilmBackfill(
     customer_name?: unknown;
     squarespace_film_listing?: unknown;
     roll_details?: unknown;
+    squarespace_promo_codes?: unknown;
   };
   if (row.status !== PENDING_INTAKE_STATUS) return null;
   if (typeof row.id !== "string" || !row.id.trim()) return null;
@@ -157,11 +160,19 @@ export function pendingDraftFilmBackfill(
     patch.customer_name = incomingName;
   }
 
+  const existingCodes = Array.isArray(row.squarespace_promo_codes)
+    ? row.squarespace_promo_codes.filter((code): code is string => typeof code === "string" && code.trim() !== "")
+    : [];
+  if (existingCodes.length === 0 && incoming.squarespace_promo_codes && incoming.squarespace_promo_codes.length > 0) {
+    patch.squarespace_promo_codes = incoming.squarespace_promo_codes;
+  }
+
   if (
     !patch.squarespace_film_listing
     && !patch.roll_details
     && patch.notes === undefined
     && !patch.customer_name
+    && !patch.squarespace_promo_codes
   ) {
     return null;
   }

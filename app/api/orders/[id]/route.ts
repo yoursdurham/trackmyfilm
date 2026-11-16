@@ -4,6 +4,7 @@ import { normalizeStoredRollDetails } from "@/lib/blank-roll";
 import { isDisposableFilmType, withoutDisposableFilmStock } from "@/lib/disposable-roll";
 import { ensureHttps, normalizeOrderNumber, validateRollBlankFlags } from "@/lib/validation";
 import { requireAuth } from "@/lib/api-auth";
+import { reconcileCustomerRewards, recordOrderRewards } from "@/lib/rewards-db";
 import type { RollDetail } from "@/lib/types";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -89,6 +90,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       received_email_sent_at, at_lab_email_sent_at, process_only_finished_emailed_at, scans_only_ready_emailed_at, scans_sent_email_sent_at,
       email_status, email_error,
     });
+    await recordOrderRewards(order);
     return NextResponse.json(order);
   } catch {
     return NextResponse.json({ error: "Failed to update order" }, { status: 500 });
@@ -114,6 +116,7 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
     });
 
     await deleteOrder(id);
+    await reconcileCustomerRewards(order.customer_id);
 
     // Best-effort: decrement customer totals — don't fail the delete if this errors
     if (order.customer_id) {

@@ -385,7 +385,7 @@ export async function getIncomingDraftByExternalId(
   return data as IncomingSquarespaceDraft | null;
 }
 
-const OPTIONAL_DRAFT_COLUMNS = ["squarespace_film_listing", "squarespace_channel", "customer_id"] as const;
+const OPTIONAL_DRAFT_COLUMNS = ["squarespace_film_listing", "squarespace_channel", "customer_id", "squarespace_promo_codes"] as const;
 
 function missingOptionalDraftColumn(error: { message?: string; code?: string }): (typeof OPTIONAL_DRAFT_COLUMNS)[number] | null {
   const message = error.message ?? "";
@@ -443,6 +443,7 @@ export interface PendingIncomingDraftFilmPatch {
   roll_details?: RollDetail[];
   notes?: string | null;
   customer_name?: string;
+  squarespace_promo_codes?: string[];
 }
 
 /**
@@ -455,7 +456,7 @@ export async function updatePendingIncomingDraft(
   patch: PendingIncomingDraftFilmPatch,
 ): Promise<void> {
   const updatedAt = new Date().toISOString();
-  const write = (includeListing: boolean) => {
+  const write = (includeListing: boolean, includeCodes: boolean) => {
     const body: PendingIncomingDraftFilmPatch & { updated_at: string } = { updated_at: updatedAt };
     if (includeListing && patch.squarespace_film_listing) {
       body.squarespace_film_listing = patch.squarespace_film_listing;
@@ -463,6 +464,9 @@ export async function updatePendingIncomingDraft(
     if (patch.roll_details) body.roll_details = patch.roll_details;
     if (patch.notes !== undefined) body.notes = patch.notes;
     if (patch.customer_name) body.customer_name = patch.customer_name;
+    if (includeCodes && patch.squarespace_promo_codes) {
+      body.squarespace_promo_codes = patch.squarespace_promo_codes;
+    }
     return getSupabase()
       .from("incoming_squarespace_drafts")
       .update(body)
@@ -470,12 +474,26 @@ export async function updatePendingIncomingDraft(
       .eq("status", PENDING_INTAKE_STATUS);
   };
 
-  const includeListing = Boolean(patch.squarespace_film_listing);
-  let { error } = await write(includeListing);
+  let includeListing = Boolean(patch.squarespace_film_listing);
+  let includeCodes = Boolean(patch.squarespace_promo_codes);
+  let { error } = await write(includeListing, includeCodes);
   if (error && includeListing && isMissingSquarespaceFilmListingColumn(error)) {
-    const hasOther = Boolean(patch.roll_details) || patch.notes !== undefined || Boolean(patch.customer_name);
+    includeListing = false;
+    const hasOther = Boolean(patch.roll_details)
+      || patch.notes !== undefined
+      || Boolean(patch.customer_name)
+      || includeCodes;
     if (!hasOther) return;
-    ({ error } = await write(false));
+    ({ error } = await write(includeListing, includeCodes));
+  }
+  if (error && includeCodes && missingOptionalDraftColumn(error) === "squarespace_promo_codes") {
+    includeCodes = false;
+    const hasOther = Boolean(patch.roll_details)
+      || patch.notes !== undefined
+      || Boolean(patch.customer_name)
+      || includeListing;
+    if (!hasOther) return;
+    ({ error } = await write(includeListing, includeCodes));
   }
   if (error) throw new Error(error.message);
 }

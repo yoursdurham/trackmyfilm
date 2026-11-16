@@ -14,6 +14,7 @@ import {
   normalizeFilmType, validateRollDetails,
 } from "@/lib/validation";
 import { sendOrderEmail } from "@/lib/email-service";
+import { attachImportedRewardCodes, checkInStoreReward, redeemCustomerReward } from "@/lib/rewards-db";
 import type { Customer, FilmOrder, FilmProcess, RollDetail } from "@/lib/types";
 
 export interface DropoffRequest {
@@ -29,6 +30,11 @@ export interface DropoffRequest {
   prints_4x6?: boolean;
   notes?: string;
   send_email?: boolean;
+  /** Apply one available reward to this roll while the order is created. */
+  reward_id?: string;
+  reward_roll_index?: number;
+  /** Codes already stored on a manually imported Squarespace draft. */
+  squarespace_promo_codes?: string[];
 }
 
 export interface DropoffSuccess {
@@ -49,6 +55,7 @@ export interface DropoffSuccess {
       emailId?: string;
       error?: string;
     };
+    warning?: string;
   };
 }
 
@@ -75,8 +82,11 @@ function deriveOrderFilmProcess(roll_details: RollDetail[] | undefined, fallback
 export async function createFilmDropoff(body: DropoffRequest): Promise<DropoffResult> {
   const {
     customer_name, customer_email, order_number,
-    dropoff_date, roll_count, film_type, film_process, film_stock, roll_details, prints_4x6, notes,
+    dropoff_date, roll_count, film_type, film_process, film_stock, roll_details, prints_4x6,     notes,
     send_email = true,
+    reward_id,
+    reward_roll_index,
+    squarespace_promo_codes,
   } = body;
 
   const missing = [];
@@ -147,6 +157,16 @@ export async function createFilmDropoff(body: DropoffRequest): Promise<DropoffRe
       console.error("[dropoff] createCustomer failed:", message);
       return { ok: false, status: 500, error: `Failed to create customer: ${message}` };
     }
+  }
+
+  if (reward_id) {
+    const rewardCheck = await checkInStoreReward({
+      rewardId: reward_id,
+      customerId: customer.id,
+      rollIndex: reward_roll_index ?? -1,
+      rolls: normalizedRollDetails ?? [],
+    });
+    if (!rewardCheck.ok) return { ok: false, status: rewardCheck.status, error: rewardCheck.error };
   }
 
   const newTotalRolls = (customer.total_rolls || 0) + roll_count;
@@ -227,6 +247,19 @@ export async function createFilmDropoff(body: DropoffRequest): Promise<DropoffRe
     emailResult.error = "No customer email — email not sent";
   }
 
+  let warning: string | undefined;
+  if (reward_id) {
+    const redeemed = await redeemCustomerReward({
+      rewardId: reward_id,
+      orderId: order.id,
+      rollIndex: reward_roll_index ?? 0,
+    });
+    if (!redeemed.ok) warning = `Order was created, but the reward was not applied: ${redeemed.error}`;
+  }
+  if (squarespace_promo_codes && squarespace_promo_codes.length > 0) {
+    await attachImportedRewardCodes(order.id, squarespace_promo_codes);
+  }
+
   return {
     ok: true,
     body: {
@@ -239,6 +272,7 @@ export async function createFilmDropoff(body: DropoffRequest): Promise<DropoffRe
         total_dropoffs: newTotalDropoffs,
       },
       email: emailResult,
+      ...(warning ? { warning } : {}),
     },
   };
 }

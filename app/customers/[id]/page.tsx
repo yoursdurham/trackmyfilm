@@ -15,6 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 import InternalHeader from "@/components/InternalHeader";
 import CustomerPreferenceField from "@/components/CustomerPreferenceField";
 import CustomerProfileOrderHistory from "@/components/CustomerProfileOrderHistory";
+import CustomerRewardsPanel from "@/components/CustomerRewardsPanel";
 import { computeCalculatedPreferences } from "@/lib/customer-preference-calculations";
 import type { Customer, FilmProcess, FilmType } from "@/lib/types";
 import type { ContactMethod, CustomerOrderStats, DeliveryPreference } from "@/lib/customer-stats";
@@ -344,6 +345,8 @@ export default function CustomerProfilePage({ params }: { params: Promise<{ id: 
             <StatCard label="Common scan size" value={stats.common_scan_size ?? "—"} compact />
           </div>
         </section>
+
+        <CustomerRewardsPanel customerId={id} />
 
         {/* Preferences */}
         <section className="rounded-xl border border-stone-200 bg-white p-5 shadow-sm">

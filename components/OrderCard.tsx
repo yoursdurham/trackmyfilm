@@ -43,6 +43,7 @@ import { formatScanSizeLabel } from "@/lib/scan-size-display";
 import { isBlankRoll } from "@/lib/blank-roll";
 import { isValidWetransferLink, ensureHttps } from "@/lib/validation";
 import { BlankRollBadge, RollBlankButton, useToggleRollBlank } from "@/components/RollBlankControl";
+import OrderRewardControls from "@/components/OrderRewardControls";
 import type { FilmOrder, FilmProcess, FilmType, OrderStatus, RollDetail } from "@/lib/types";
 
 const FILM_TYPES: FilmType[] = ["35mm", "120", "110"];
@@ -1155,6 +1156,8 @@ export default function OrderCard({
                 </p>
               </div>
             </section>
+
+            <OrderRewardControls order={order} />
 
             {rollDetails.length > 0 ? (
               <section>

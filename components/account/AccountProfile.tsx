@@ -1,7 +1,9 @@
+import AccountRewards from "@/components/account/AccountRewards";
 import FilmStockPill from "@/components/FilmStockPill";
 import SharePhotosForm from "@/components/photos/SharePhotosForm";
 import WindowFrame from "@/components/WindowFrame";
 import type { AccountOrderView, AccountProfileData, AccountProgressStep } from "@/lib/account-profile";
+import type { AccountRewardsPayload } from "@/lib/rewards";
 
 const STEP_COLORS = ["bg-[#C5AED7]", "bg-[#E4D48A]", "bg-[#A1CC93]"] as const;
 
@@ -125,10 +127,14 @@ function StatCard({
 export default function AccountProfile({
   profile,
   ordersUnavailable = false,
+  rewards = null,
+  rewardsUnavailable = false,
   signOutNext = "/account/login",
 }: {
   profile: AccountProfileData;
   ordersUnavailable?: boolean;
+  rewards?: AccountRewardsPayload | null;
+  rewardsUnavailable?: boolean;
   /** Where sign-out lands. Null keeps the staff login, which is the default of that route. */
   signOutNext?: string | null;
 }) {
@@ -154,6 +160,10 @@ export default function AccountProfile({
           testId="stat-miles"
         />
       </section>
+
+      {rewards || rewardsUnavailable ? (
+        <AccountRewards rewards={rewards} unavailable={rewardsUnavailable} />
+      ) : null}
 
       <section className="space-y-3" data-testid="current-orders">
         <h2 className="font-jetbrains text-lg font-bold text-neutral-900">Current orders</h2>
