@@ -13,14 +13,15 @@
  * disappears without another template edit. Each value must stay under
  * Resend's 2,000-character string limit.
  *
- * `expiresAt` is the first instant the notice is hidden: end of day Tuesday,
- * Nov 17, 2026, America/New_York (2026-11-18T00:00:00-05:00).
+ * `expiresAt` is the first instant the notice is hidden. The Friday lab-run
+ * skip was pulled at the start of Monday, Nov 16, 2026, America/New_York
+ * (2026-11-16T00:00:00-05:00), ahead of the original Tuesday night cutoff.
  */
 export const FILM_DROP_STATUS_NOTICE = {
   heading: "Status update",
   message:
     "Heads up: we're skipping this Friday's lab run. Your film will head to the lab on Tuesday, Nov 17.",
-  expiresAt: "2026-11-18T00:00:00-05:00",
+  expiresAt: "2026-11-16T00:00:00-05:00",
 } as const;
 
 export const FILM_DROP_STATUS_NOTICE_VARIABLES = {
