@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { PASSWORD_UPDATE_PATH } from "@/lib/auth-redirect";
+import { isMarketingPreview } from "@/lib/marketing/access";
 import { isPhotoReviewPreview } from "@/lib/photo-submissions";
 import { isStaffEmail, isStaffPath } from "@/lib/staff-auth";
 
@@ -13,6 +14,13 @@ function requestHasAuthHandoff(url: URL) {
 }
 
 export async function proxy(request: NextRequest) {
+  const earlyPath = request.nextUrl.pathname;
+  const earlyPreview = request.nextUrl.searchParams.get("preview");
+  // Dev-only layout previews do not need a session. Production never takes this branch.
+  if (isMarketingPreview(earlyPath, earlyPreview) || isPhotoReviewPreview(earlyPath, earlyPreview)) {
+    return NextResponse.next();
+  }
+
   let supabaseResponse = NextResponse.next({ request });
   const authCookies: { name: string; value: string; options?: Parameters<NextResponse["cookies"]["set"]>[2] }[] = [];
 
@@ -69,10 +77,12 @@ export async function proxy(request: NextRequest) {
   const staff = user ? isStaffEmail(user.email) : false;
   // Sample review page for local screenshots. Production still requires staff.
   const photoPreview = isPhotoReviewPreview(path, request.nextUrl.searchParams.get("preview"));
+  const marketingPreview = isMarketingPreview(path, request.nextUrl.searchParams.get("preview"));
+  const layoutPreview = photoPreview || marketingPreview;
 
   // Signed-in account that is not on STAFF_EMAILS. Sign them out so the
   // session cannot be reused, and tell them why on the login page.
-  if (user && !staff && (isProtected || path === "/login") && !photoPreview) {
+  if (user && !staff && (isProtected || path === "/login") && !layoutPreview) {
     await supabase.auth.signOut();
     if (path === "/login" && request.nextUrl.searchParams.get("error") === NOT_STAFF_ERROR) {
       return supabaseResponse;
@@ -85,7 +95,7 @@ export async function proxy(request: NextRequest) {
   }
 
   // Unauthenticated user hitting a protected route → send to login
-  if (isProtected && !user && !photoPreview) {
+  if (isProtected && !user && !layoutPreview) {
     const loginUrl = request.nextUrl.clone();
     loginUrl.pathname = "/login";
     loginUrl.searchParams.set("redirectTo", path);
