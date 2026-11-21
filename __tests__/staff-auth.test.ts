@@ -150,6 +150,9 @@ describe("staff pages", () => {
     expect(isStaffPath("/dashboard/photos")).toBe(true);
     expect(isStaffPath("/display/studio-vertical")).toBe(false);
     expect(isStaffPath("/tracking")).toBe(false);
+    expect(isStaffPath("/marketing")).toBe(true);
+    expect(isStaffPath("/marketing/campaigns")).toBe(true);
+    expect(isStaffPath("/email/preferences")).toBe(false);
     expect(isStaffPath("/account")).toBe(false);
     expect(isStaffPath("/account/login")).toBe(false);
   });
@@ -161,6 +164,10 @@ describe("staff pages", () => {
 
     const display = await proxy(new NextRequest("http://localhost/display/studio-vertical"));
     expect(display.headers.get("location")).toBeNull();
+
+    const marketing = await proxy(new NextRequest("http://localhost/marketing"));
+    expect(marketing.headers.get("location")).toContain("/login");
+    expect(marketing.headers.get("location")).toContain("redirectTo=%2Fmarketing");
   });
 
   it("signs out a signed-in user who is not on STAFF_EMAILS", async () => {

@@ -76,6 +76,7 @@ export const STAFF_PATH_PREFIXES = [
   "/numbers",
   "/displays",
   "/reports",
+  "/marketing",
 ] as const;
 
 export function isStaffPath(pathname: string): boolean {
