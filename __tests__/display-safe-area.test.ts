@@ -9,6 +9,11 @@ describe("displaySafeArea", () => {
     expect(displaySafeArea("studio-vertical", "idle")).toEqual({ left: 222 });
   });
 
+  it("leaves Friendsgiving full bleed so the video's own black strip lines up", () => {
+    expect(displaySafeArea("studio-vertical", "friendsgiving")).toEqual({ left: 0 });
+    expect(displaySafeArea("front-window", "friendsgiving")).toEqual({ left: 0 });
+  });
+
   it("insets the studio stats layout by 215px", () => {
     expect(displaySafeArea("studio-vertical", "film_stats")).toEqual({ left: 215 });
     expect(displaySafeArea("lobby", "film_stats")).toEqual({ left: 0 });

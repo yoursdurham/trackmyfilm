@@ -14,7 +14,7 @@ import {
 import type { FilmDepartures } from "@/lib/film-departures";
 import type { FilmMenu } from "@/lib/film-menu";
 import { shopClock, type FilmMetrics } from "@/lib/film-metrics";
-import { FRIENDSGIVING_MODE } from "@/lib/friendsgiving-display";
+import { FRIENDSGIVING_MODE, isFriendsgivingSlug } from "@/lib/friendsgiving-display";
 import { FRONT_WINDOW_SLUG, resolveOpenSignMode } from "@/lib/shop-hours";
 import type { StudioBooking } from "@/lib/studio-calendar";
 import { getCachedStudioAgenda } from "@/lib/studio-calendar-cache";
@@ -58,7 +58,7 @@ const FILM_MODES = new Set(["film_stats", "film_status"]);
 
 function friendsgivingSelected(display: DisplayResolveInput["display"]): boolean {
   return display.is_enabled !== false
-    && display.slug === FRONT_WINDOW_SLUG
+    && isFriendsgivingSlug(display.slug)
     && (display.mode ?? "").trim() === FRIENDSGIVING_MODE;
 }
 

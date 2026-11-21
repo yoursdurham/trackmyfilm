@@ -212,6 +212,29 @@ describe("GET /api/displays/:slug", () => {
     expect(mockGetCachedFilmMetrics).toHaveBeenCalledTimes(1);
   });
 
+  it("keeps Friendsgiving on the studio screen and skips departures, bookings, and film reads", async () => {
+    mockGetDisplayBySlug.mockResolvedValue({
+      ...row,
+      mode: "friendsgiving",
+      show_studio_bookings: true,
+      override_mode: "custom_message",
+      override_payload: { message: "Back soon" },
+    });
+
+    const response = await get("studio-vertical");
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.mode).toBe("friendsgiving");
+    expect(body.data).toEqual({});
+    expect(body).not.toHaveProperty("showOpenSign");
+    expect(body).not.toHaveProperty("openSign");
+    expect(JSON.stringify(body)).not.toMatch(/Back soon/);
+    expect(mockGetCachedFilmMetrics).not.toHaveBeenCalled();
+    expect(mockGetCachedFilmMenu).not.toHaveBeenCalled();
+    expect(mockGetCachedFilmDepartures).not.toHaveBeenCalled();
+    expect(mockGetCachedStudioAgenda).not.toHaveBeenCalled();
+  });
+
   it("keeps Friendsgiving on the front window and skips the Open sign and bookings", async () => {
     mockGetDisplayBySlug.mockResolvedValue({
       ...row,
@@ -701,11 +724,24 @@ describe("PATCH /api/displays/:slug", () => {
     expect(body.theme).toBe("airport");
   });
 
-  it("accepts Friendsgiving only on the front window", async () => {
-    const rejected = await patch({ mode: "friendsgiving" });
+  it("accepts Friendsgiving on the front window and the studio screen", async () => {
+    const rejected = await PATCH(new Request("http://localhost/api/displays/lobby", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ mode: "friendsgiving" }),
+    }), {
+      params: Promise.resolve({ slug: "lobby" }),
+    });
     expect(rejected.status).toBe(400);
     expect(await rejected.json()).toEqual({ error: "That default mode is not available." });
     expect(mockUpdateDisplay).not.toHaveBeenCalled();
+
+    const studio = await patch({ mode: "friendsgiving" });
+    expect(studio.status).toBe(200);
+    expect(mockUpdateDisplay).toHaveBeenCalledWith("studio-vertical", { mode: "friendsgiving" });
+    const studioBody = await studio.json();
+    expect(studioBody.defaultMode).toBe("friendsgiving");
+    expect(studioBody.resolvedMode).toBe("friendsgiving");
 
     mockUpdateDisplay.mockImplementation(async (_slug: string, body: Record<string, unknown>) => ({
       ...row,

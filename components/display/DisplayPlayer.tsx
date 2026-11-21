@@ -30,8 +30,8 @@ import {
   type DisplayOrientation,
   type DisplayPayload,
 } from "@/lib/display";
-import { FRIENDSGIVING_MODE } from "@/lib/friendsgiving-display";
-import { FRONT_WINDOW_SLUG, nextRetailBoundary, resolveOpenSignMode, shouldShowOpenSign } from "@/lib/shop-hours";
+import { FRIENDSGIVING_MODE, isFriendsgivingSlug } from "@/lib/friendsgiving-display";
+import { nextRetailBoundary, resolveOpenSignMode, shouldShowOpenSign } from "@/lib/shop-hours";
 import AirportBoard from "@/components/display/AirportBoard";
 import CrtGreenScreen from "@/components/display/CrtGreenScreen";
 import FriendsgivingScreen from "@/components/display/FriendsgivingScreen";
@@ -497,8 +497,8 @@ export default function DisplayPlayer({
   const inset = displaySafeArea(slug, screen.mode).left;
 
   let normal;
-  if (slug === FRONT_WINDOW_SLUG && screen.mode === FRIENDSGIVING_MODE) {
-    normal = <FriendsgivingScreen />;
+  if (isFriendsgivingSlug(slug) && screen.mode === FRIENDSGIVING_MODE) {
+    normal = <FriendsgivingScreen slug={slug} />;
   } else if (orientation === "landscape") {
     normal = <LandscapeScreen payload={screen} notice={notice} />;
   } else if (displayUsesAirportTheme(screen.mode) || screen.theme === AIRPORT_THEME) {
