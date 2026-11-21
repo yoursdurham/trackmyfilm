@@ -12,7 +12,7 @@ import FilmMenuEditor from "@/components/displays/FilmMenuEditor";
 import OpenSignControl from "@/components/displays/OpenSignControl";
 import StudioLinesEditor from "@/components/displays/StudioLinesEditor";
 import { SELECTABLE_DISPLAY_THEMES, selectableDefaultModes } from "@/lib/display";
-import { FRIENDSGIVING_MODE } from "@/lib/friendsgiving-display";
+import { FRIENDSGIVING_MODE, isFriendsgivingSlug } from "@/lib/friendsgiving-display";
 import { FRONT_WINDOW_SLUG } from "@/lib/shop-hours";
 import { adminPreviewFrame } from "@/lib/display-layout";
 import type { AdminDisplay, DisplaysAdminResponse } from "@/lib/display-admin";
@@ -221,8 +221,10 @@ export default function DisplaysPage() {
                           ))}
                         </select>
                         <span className="mt-1 block text-xs text-slate-400">
-                          {display.slug === FRONT_WINDOW_SLUG && display.defaultMode === FRIENDSGIVING_MODE
-                            ? "Fills the front window until you pick another mode. The Open sign, bookings, and a custom message stay off this screen."
+                          {display.defaultMode === FRIENDSGIVING_MODE && isFriendsgivingSlug(display.slug)
+                            ? display.slug === FRONT_WINDOW_SLUG
+                              ? "Fills the front window until you pick another mode. The Open sign, bookings, and a custom message stay off this screen."
+                              : "Fills this screen until you pick another mode. Bookings, the airport board, and a custom message stay off."
                             : "Used when nothing is booked and the custom message is cleared."}
                         </span>
                       </label>

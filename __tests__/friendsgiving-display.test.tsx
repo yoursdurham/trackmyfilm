@@ -13,11 +13,13 @@ import {
   type DisplayPayload,
 } from "../lib/display";
 import { reconcileDisplayConfig, type DisplayConfig } from "../lib/display-config";
-import { displayNeedsOpenSignStats, displayShowsStudioBookings } from "../lib/display-screen";
+import { displayNeedsFilmDepartures, displayNeedsOpenSignStats, displayShowsStudioBookings } from "../lib/display-screen";
 import {
   FRIENDSGIVING_MODE,
   FRIENDSGIVING_VIDEO_SRC,
+  friendsgivingObjectFit,
   friendsgivingPlaybackAction,
+  friendsgivingVideoSrc,
 } from "../lib/friendsgiving-display";
 import { FRONT_WINDOW_SLUG, shouldShowOpenSign } from "../lib/shop-hours";
 
@@ -63,17 +65,29 @@ describe("Friendsgiving mode", () => {
     vi.useRealTimers();
   });
 
-  it("keeps the loop video in public and offers the mode only on the front window", () => {
-    const file = "public/display/friendsgiving-front-window.mp4";
-    expect(existsSync(file)).toBe(true);
-    expect(statSync(file).size).toBeGreaterThan(1_000_000);
-    expect(FRIENDSGIVING_VIDEO_SRC).toBe("/display/friendsgiving-front-window.mp4");
+  it("keeps both loop videos in public and offers the mode on the front window and the studio screen", () => {
+    const frontFile = "public/display/friendsgiving-front-window.mp4";
+    const studioFile = "public/display/friendsgiving-studio-vertical.mp4";
+    expect(existsSync(frontFile)).toBe(true);
+    expect(existsSync(studioFile)).toBe(true);
+    expect(statSync(frontFile).size).toBeGreaterThan(1_000_000);
+    expect(statSync(studioFile).size).toBeGreaterThan(1_000_000);
+    expect(FRIENDSGIVING_VIDEO_SRC[FRONT_WINDOW_SLUG]).toBe("/display/friendsgiving-front-window.mp4");
+    expect(FRIENDSGIVING_VIDEO_SRC["studio-vertical"]).toBe("/display/friendsgiving-studio-vertical.mp4");
+    expect(friendsgivingVideoSrc(FRONT_WINDOW_SLUG)).toBe("/display/friendsgiving-front-window.mp4");
+    expect(friendsgivingVideoSrc("studio-vertical")).toBe("/display/friendsgiving-studio-vertical.mp4");
+    expect(friendsgivingVideoSrc("lobby")).toBeNull();
+    expect(friendsgivingObjectFit(FRONT_WINDOW_SLUG)).toBe("contain");
+    expect(friendsgivingObjectFit("studio-vertical")).toBe("fill");
 
     expect(selectableDefaultModes(FRONT_WINDOW_SLUG).map((option) => option.value)).toContain(FRIENDSGIVING_MODE);
-    expect(selectableDefaultModes("studio-vertical").map((option) => option.value)).not.toContain(FRIENDSGIVING_MODE);
+    expect(selectableDefaultModes("studio-vertical").map((option) => option.value)).toContain(FRIENDSGIVING_MODE);
+    expect(selectableDefaultModes("studio-vertical").map((option) => option.label)).toContain("Friendsgiving");
+    expect(selectableDefaultModes("lobby").map((option) => option.value)).not.toContain(FRIENDSGIVING_MODE);
     expect(selectableDefaultModes("studio-vertical", "film_stats").map((option) => option.label)).toContain("Film stats");
     expect(isSelectableDefaultMode(FRIENDSGIVING_MODE, FRONT_WINDOW_SLUG)).toBe(true);
-    expect(isSelectableDefaultMode(FRIENDSGIVING_MODE, "studio-vertical")).toBe(false);
+    expect(isSelectableDefaultMode(FRIENDSGIVING_MODE, "studio-vertical")).toBe(true);
+    expect(isSelectableDefaultMode(FRIENDSGIVING_MODE, "lobby")).toBe(false);
     expect(isSelectableDefaultMode(FRIENDSGIVING_MODE)).toBe(false);
     expect(isSelectableDefaultMode("film_stats", "studio-vertical")).toBe(true);
     expect(isKnownDisplayMode(FRIENDSGIVING_MODE)).toBe(true);
@@ -129,8 +143,32 @@ describe("Friendsgiving mode", () => {
     const studio = resolveDisplayState({
       display: { ...front, slug: "studio-vertical" },
       now: THURSDAY_OPEN,
+      studio: {
+        active: { firstName: "Avery", sessionType: "1 Hour Session", start: "6:00 PM", end: "7:00 PM" },
+      },
+      playlist: { items: [{ mode: "film_departures", enabled: true }] },
+      departures: { flights: [{ destination: "Lab" }] },
+      film: { rollsProcessing: 4, customer_email: "guest@example.com" },
     });
-    expect(studio.mode).toBe("custom_message");
+    expect(studio).toMatchObject({
+      mode: FRIENDSGIVING_MODE,
+      priority: DISPLAY_PRIORITY.friendsgiving,
+      data: {},
+    });
+    expect(JSON.stringify(studio)).not.toMatch(/guest@|Avery|Back in ten|Lab/);
+    expect(displayNeedsFilmDepartures({ ...front, slug: "studio-vertical", override_mode: null })).toBe(false);
+    expect(displayShowsStudioBookings({
+      ...front,
+      slug: "studio-vertical",
+      override_mode: null,
+      override_payload: null,
+    })).toBe(false);
+
+    const other = resolveDisplayState({
+      display: { ...front, slug: "lobby" },
+      now: THURSDAY_OPEN,
+    });
+    expect(other.mode).toBe("custom_message");
   });
 
   it("returns to the normal winner as soon as another mode is selected", () => {
@@ -155,6 +193,34 @@ describe("Friendsgiving mode", () => {
     expect(quiet.mode).toBe("idle");
     expect(quiet.openSign).toBe("auto");
     expect(quiet.showOpenSign).toBe(true);
+
+    const studioBack = publicPayloadForDisplay({
+      ...front,
+      slug: "studio-vertical",
+      mode: "idle",
+      override_mode: null,
+      override_payload: null,
+    }, {
+      now: THURSDAY_OPEN,
+      studio: {
+        active: { firstName: "Avery", sessionType: "1 Hour Session", start: "6:00 PM", end: "7:00 PM" },
+      },
+    });
+    expect(studioBack.mode).toBe("studio_active");
+    expect(studioBack.data).toMatchObject({ firstName: "Avery" });
+    expect(displayNeedsFilmDepartures({
+      ...front,
+      slug: "studio-vertical",
+      mode: "film_departures",
+      override_mode: null,
+    })).toBe(true);
+    expect(displayShowsStudioBookings({
+      ...front,
+      slug: "studio-vertical",
+      mode: "film_departures",
+      override_mode: null,
+      show_studio_bookings: true,
+    })).toBe(true);
   });
 
   it("paints the video from a config poll and does not fetch film data", () => {
@@ -199,6 +265,44 @@ describe("Friendsgiving mode", () => {
     expect(restored.fetchContent).toBe(false);
     expect(restored.payload?.mode).toBe("custom_message");
     expect(restored.payload?.data).toEqual({ message: "Back in ten minutes" });
+
+    const studioDecision = reconcileDisplayConfig({
+      slug: "studio-vertical",
+      config: config({ showStudioBookings: true }),
+      now: PARTY,
+      current: {
+        payload: {
+          mode: "film_departures",
+          theme: "airport",
+          refreshSeconds: 30,
+          buildId: "dev",
+          data: { departures: { flights: [] } },
+        },
+        fetchedAt: PARTY.getTime() - 60_000,
+      },
+      previousConfig: config({ mode: "film_departures", overrideMode: null, overrideMessage: null }),
+      modes: {},
+      openSignStats: null,
+    });
+    expect(studioDecision.fetchContent).toBe(false);
+    expect(studioDecision.payload?.mode).toBe(FRIENDSGIVING_MODE);
+    expect(studioDecision.payload?.data).toEqual({});
+    expect(studioDecision.payload).not.toHaveProperty("showOpenSign");
+
+    const studioRestored = reconcileDisplayConfig({
+      slug: "studio-vertical",
+      config: config({ mode: "film_departures", overrideMode: null, overrideMessage: null, showStudioBookings: false }),
+      now: PARTY,
+      current: {
+        payload: studioDecision.payload as DisplayPayload,
+        fetchedAt: PARTY.getTime(),
+      },
+      previousConfig: config(),
+      modes: {},
+      openSignStats: null,
+    });
+    expect(studioRestored.fetchContent).toBe(true);
+    expect(studioRestored.payload).toBeNull();
   });
 
   it("fills the front window with the looping video and nothing else", () => {
@@ -221,13 +325,15 @@ describe("Friendsgiving mode", () => {
         preview
       />,
     );
-    expect(html).toContain(`src="${FRIENDSGIVING_VIDEO_SRC}"`);
+    expect(html).toContain(`src="${FRIENDSGIVING_VIDEO_SRC[FRONT_WINDOW_SLUG]}"`);
+    expect(html).not.toContain(FRIENDSGIVING_VIDEO_SRC["studio-vertical"]);
     expect(html).toContain("autoPlay");
     expect(html).toContain("loop");
     expect(html).toContain("playsInline");
     expect(html).toContain('preload="auto"');
     expect(html).toContain("muted");
     expect(html).toContain("object-contain");
+    expect(html).not.toContain("object-fill");
     expect(html).toContain("bg-black");
     expect(html).toContain('data-display-mode="friendsgiving"');
     expect(html).not.toContain("controls");
@@ -251,7 +357,22 @@ describe("Friendsgiving mode", () => {
         preview
       />,
     );
-    expect(studio).not.toContain(FRIENDSGIVING_VIDEO_SRC);
+    expect(studio).toContain(`src="${FRIENDSGIVING_VIDEO_SRC["studio-vertical"]}"`);
+    expect(studio).not.toContain(FRIENDSGIVING_VIDEO_SRC[FRONT_WINDOW_SLUG]);
+    expect(studio).toContain("object-fill");
+    expect(studio).not.toContain("object-contain");
+    expect(studio).toContain("autoPlay");
+    expect(studio).toContain("loop");
+    expect(studio).toContain("playsInline");
+    expect(studio).toContain('preload="auto"');
+    expect(studio).toContain("muted");
+    expect(studio).toContain("bg-black");
+    expect(studio).toContain('data-display-mode="friendsgiving"');
+    expect(studio).toContain('data-display-safe-inset="0"');
+    expect(studio).not.toContain("data-display-deadzone");
+    expect(studio).not.toContain("controls");
+    expect(studio).not.toContain("Welcome");
+    expect(studio).not.toContain("data-display-chrome");
   });
 
   it("restarts a finished or stuck video and resumes a pause", () => {

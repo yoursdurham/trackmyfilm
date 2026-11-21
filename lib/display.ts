@@ -6,8 +6,9 @@
  * pass them in; this module never reads the database.
  *
  * Priority (spec section 7.1):
- *   110  front-window Friendsgiving. It stays up over the Open sign,
- *        a custom message, studio bookings, and a playlist.
+ *   110  Friendsgiving on the front window or the studio screen. It stays
+ *        up over the Open sign, a custom message, studio bookings, a
+ *        playlist, and the departures board.
  *   100  manual override (custom message today)
  *    80  active studio session, including the ending-soon window
  *    70  studio welcome window
@@ -19,7 +20,7 @@
  */
 
 import { HEARTBEAT_WRITE_INTERVAL_MS } from "@/lib/display-heartbeat";
-import { FRIENDSGIVING_MODE } from "@/lib/friendsgiving-display";
+import { FRIENDSGIVING_MODE, isFriendsgivingSlug } from "@/lib/friendsgiving-display";
 import { sanitizeFilmDepartures } from "@/lib/film-departures";
 import { FRONT_WINDOW_SLUG, isOpenSignMode, openSignForceUntil, resolveOpenSignMode, type OpenSignMode } from "@/lib/shop-hours";
 import { sanitizeFilmMenu } from "@/lib/film-menu";
@@ -64,8 +65,10 @@ export const DISPLAY_SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
  * that edge without a database column. `studio-vertical` is the Acer
  * 1080×3840 mounted portrait: the dead strip runs past the old 210px
  * inset. 240px left a black gap; 222px is the inset for every mode
- * except film stats, which sits at 215px so the cards meet the strip.
- * Any other slug, including front-window, gets a zero inset.
+ * except film stats, which sits at 215px so the cards meet the strip,
+ * and Friendsgiving, which is full bleed because that video already
+ * includes the black strip. Any other slug, including front-window,
+ * gets a zero inset.
  */
 export const STUDIO_VERTICAL_DEAD_ZONE_PX = 222;
 export const STUDIO_STATS_DEAD_ZONE_PX = 215;
@@ -75,6 +78,9 @@ export const DISPLAY_SAFE_AREA = {
 } as const;
 
 export function displaySafeArea(slug: string, mode?: string | null): { left: number } {
+  if (slug === "studio-vertical" && mode === FRIENDSGIVING_MODE) {
+    return { left: 0 };
+  }
   if (slug === "studio-vertical" && mode === "film_stats") {
     return { left: STUDIO_STATS_DEAD_ZONE_PX };
   }
@@ -296,13 +302,13 @@ export function isDisplaySlug(slug: string): boolean {
 }
 
 export function isSelectableDefaultMode(mode: string, slug?: string | null): boolean {
-  if (mode === FRIENDSGIVING_MODE) return slug === FRONT_WINDOW_SLUG;
+  if (mode === FRIENDSGIVING_MODE) return isFriendsgivingSlug(slug);
   return SELECTABLE_DEFAULT_MODES.some((option) => option.value === mode);
 }
 
-/** Modes offered on the Displays page. Friendsgiving is front-window only. */
+/** Modes offered on the Displays page. Friendsgiving is the front window and the studio screen. */
 export function selectableDefaultModes(slug: string, current?: string | null): { value: string; label: string }[] {
-  const options: { value: string; label: string }[] = slug === FRONT_WINDOW_SLUG
+  const options: { value: string; label: string }[] = isFriendsgivingSlug(slug)
     ? [...SELECTABLE_DEFAULT_MODES, { value: FRIENDSGIVING_MODE, label: "Friendsgiving" }]
     : [...SELECTABLE_DEFAULT_MODES];
   if (current && !options.some((option) => option.value === current)) {
@@ -551,11 +557,12 @@ export function resolveDisplayState(input: DisplayResolveInput): ResolvedDisplay
     };
   }
 
-  // Friendsgiving is a temporary full-screen video. While it is the front
-  // window's selected mode it beats the Open sign, a custom message, studio
-  // bookings, and a playlist. Other screens ignore the mode name.
+  // Friendsgiving is a temporary full-screen video. While it is the selected
+  // mode on the front window or the studio screen it beats the Open sign,
+  // a custom message, studio bookings, a playlist, and the departures board.
+  // Screens without a Friendsgiving video ignore the mode name.
   if (
-    input.display.slug === FRONT_WINDOW_SLUG
+    isFriendsgivingSlug(input.display.slug)
     && (input.display.mode?.trim() || "") === FRIENDSGIVING_MODE
   ) {
     return {

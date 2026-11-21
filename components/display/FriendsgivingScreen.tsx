@@ -2,9 +2,10 @@
 
 import { useEffect, useRef } from "react";
 import {
-  FRIENDSGIVING_VIDEO_SRC,
   FRIENDSGIVING_WATCH_MS,
+  friendsgivingObjectFit,
   friendsgivingPlaybackAction,
+  friendsgivingVideoSrc,
   type FriendsgivingPlaybackAction,
 } from "@/lib/friendsgiving-display";
 
@@ -23,12 +24,13 @@ function recover(video: HTMLVideoElement, action: FriendsgivingPlaybackAction) {
   });
 }
 
-export default function FriendsgivingScreen() {
+export default function FriendsgivingScreen({ slug }: { slug: string }) {
+  const src = friendsgivingVideoSrc(slug);
   const ref = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
     const video = ref.current;
-    if (!video) return;
+    if (!video || !src) return;
     video.muted = true;
     let previousTime: number | null = null;
 
@@ -61,20 +63,26 @@ export default function FriendsgivingScreen() {
       video.removeEventListener("stalled", onStalled);
       window.clearInterval(timer);
     };
-  }, []);
+  }, [src]);
+
+  const fill = friendsgivingObjectFit(slug) === "fill";
 
   return (
     <div data-display-mode="friendsgiving" className="h-full w-full bg-black">
-      <video
-        ref={ref}
-        className="pointer-events-none h-full w-full bg-black object-contain"
-        autoPlay
-        muted
-        loop
-        playsInline
-        preload="auto"
-        src={FRIENDSGIVING_VIDEO_SRC}
-      />
+      {src ? (
+        <video
+          ref={ref}
+          className={fill
+            ? "pointer-events-none h-full w-full bg-black object-fill"
+            : "pointer-events-none h-full w-full bg-black object-contain"}
+          autoPlay
+          muted
+          loop
+          playsInline
+          preload="auto"
+          src={src}
+        />
+      ) : null}
     </div>
   );
 }

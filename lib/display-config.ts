@@ -11,7 +11,7 @@ import {
   type OpenSignStats,
 } from "@/lib/display";
 import { displayContentFresh } from "@/lib/display-schedule";
-import { FRIENDSGIVING_MODE } from "@/lib/friendsgiving-display";
+import { FRIENDSGIVING_MODE, isFriendsgivingSlug } from "@/lib/friendsgiving-display";
 import {
   FRONT_WINDOW_SLUG,
   isOpenSignMode,
@@ -209,13 +209,13 @@ function rowFromConfig(slug: string, config: DisplayConfig): DisplayResolveInput
 }
 
 /**
- * Friendsgiving, while selected on the front window, wins over an override.
- * Otherwise an override wins. With no override, studio bookings can cover
- * the default and the row alone cannot name the winner. Null means
+ * Friendsgiving, while selected on a screen that has a loop, wins over an
+ * override. Otherwise an override wins. With no override, studio bookings
+ * can cover the default and the row alone cannot name the winner. Null means
  * "ask the payload route".
  */
 function friendsgivingSelected(slug: string, config: DisplayConfig): boolean {
-  return slug === FRONT_WINDOW_SLUG
+  return isFriendsgivingSlug(slug)
     && config.isEnabled
     && config.mode.trim() === FRIENDSGIVING_MODE;
 }
