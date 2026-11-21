@@ -107,7 +107,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ slug: 
   } = {};
 
   if ("mode" in record) {
-    if (typeof record.mode !== "string" || !isSelectableDefaultMode(record.mode)) {
+    if (typeof record.mode !== "string" || !isSelectableDefaultMode(record.mode, slug)) {
       return json({ error: "That default mode is not available." }, 400);
     }
     patch.mode = record.mode;
