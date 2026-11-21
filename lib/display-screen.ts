@@ -14,6 +14,7 @@ import {
 import type { FilmDepartures } from "@/lib/film-departures";
 import type { FilmMenu } from "@/lib/film-menu";
 import { shopClock, type FilmMetrics } from "@/lib/film-metrics";
+import { FRIENDSGIVING_MODE } from "@/lib/friendsgiving-display";
 import { FRONT_WINDOW_SLUG, resolveOpenSignMode } from "@/lib/shop-hours";
 import type { StudioBooking } from "@/lib/studio-calendar";
 import { getCachedStudioAgenda } from "@/lib/studio-calendar-cache";
@@ -55,8 +56,15 @@ export function refreshSecondsForShop(
 
 const FILM_MODES = new Set(["film_stats", "film_status"]);
 
+function friendsgivingSelected(display: DisplayResolveInput["display"]): boolean {
+  return display.is_enabled !== false
+    && display.slug === FRONT_WINDOW_SLUG
+    && (display.mode ?? "").trim() === FRIENDSGIVING_MODE;
+}
+
 function winningMode(display: DisplayResolveInput["display"]): string {
   if (display.is_enabled === false) return "";
+  if (friendsgivingSelected(display)) return FRIENDSGIVING_MODE;
   const override = display.override_mode?.trim() ?? "";
   if (override) return override;
   return (display.mode ?? "").trim();
@@ -73,6 +81,7 @@ export function displayNeedsFilmMetrics(display: DisplayResolveInput["display"])
 export function displayNeedsOpenSignStats(display: DisplayResolveInput["display"], now = new Date()): boolean {
   if (display.slug !== FRONT_WINDOW_SLUG) return false;
   if (display.is_enabled === false) return false;
+  if (friendsgivingSelected(display)) return false;
   if (winningMode(display) === "custom_message") return false;
   const setting = resolveOpenSignMode({
     slug: display.slug,
@@ -95,6 +104,7 @@ export function displayNeedsFilmDepartures(display: DisplayResolveInput["display
 /** Bookings can cover the default mode. A manual override already wins, so skip the fetch. */
 export function displayShowsStudioBookings(display: DisplayResolveInput["display"]): boolean {
   if (display.is_enabled === false) return false;
+  if (friendsgivingSelected(display)) return false;
   if (display.show_studio_bookings === false) return false;
   if (display.override_mode?.trim()) return false;
   return true;

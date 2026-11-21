@@ -11,7 +11,8 @@ import { Textarea } from "@/components/ui/textarea";
 import FilmMenuEditor from "@/components/displays/FilmMenuEditor";
 import OpenSignControl from "@/components/displays/OpenSignControl";
 import StudioLinesEditor from "@/components/displays/StudioLinesEditor";
-import { SELECTABLE_DEFAULT_MODES, SELECTABLE_DISPLAY_THEMES } from "@/lib/display";
+import { SELECTABLE_DISPLAY_THEMES, selectableDefaultModes } from "@/lib/display";
+import { FRIENDSGIVING_MODE } from "@/lib/friendsgiving-display";
 import { FRONT_WINDOW_SLUG } from "@/lib/shop-hours";
 import { adminPreviewFrame } from "@/lib/display-layout";
 import type { AdminDisplay, DisplaysAdminResponse } from "@/lib/display-admin";
@@ -27,6 +28,7 @@ function modeLabel(mode: string) {
   if (mode === "film_stats") return "Film stats";
   if (mode === "film_menu") return "Film menu";
   if (mode === "film_departures") return "Airport board";
+  if (mode === FRIENDSGIVING_MODE) return "Friendsgiving";
   return mode;
 }
 
@@ -73,6 +75,7 @@ function refreshHref(slug: string) {
 function refreshHelp(mode: string) {
   if (mode === "film_menu") return "The price list reloads Saturday at 11:00 AM Eastern, and within about two minutes after a price save.";
   if (mode === "film_stats") return "Stats reload every two hours.";
+  if (mode === FRIENDSGIVING_MODE) return "The Friendsgiving video stays on this screen until you pick another mode. Switching back shows up within about two minutes.";
   return "A mode, message, or Open sign change shows up within about two minutes.";
 }
 
@@ -158,9 +161,7 @@ export default function DisplaysPage() {
               const message = drafts[display.slug] ?? display.overrideMessage ?? "";
               const previewOpen = previewSlug === display.slug;
               const preview = adminPreviewFrame(display);
-              const modeChoices = SELECTABLE_DEFAULT_MODES.some((option) => option.value === display.defaultMode)
-                ? SELECTABLE_DEFAULT_MODES
-                : [...SELECTABLE_DEFAULT_MODES, { value: display.defaultMode, label: display.defaultMode }];
+              const modeChoices = selectableDefaultModes(display.slug, display.defaultMode);
               return (
                 <section key={display.slug} className="rounded-xl border border-stone-200 bg-white p-5 shadow-sm">
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -220,7 +221,9 @@ export default function DisplaysPage() {
                           ))}
                         </select>
                         <span className="mt-1 block text-xs text-slate-400">
-                          Used when nothing is booked and the custom message is cleared.
+                          {display.slug === FRONT_WINDOW_SLUG && display.defaultMode === FRIENDSGIVING_MODE
+                            ? "Fills the front window until you pick another mode. The Open sign, bookings, and a custom message stay off this screen."
+                            : "Used when nothing is booked and the custom message is cleared."}
                         </span>
                       </label>
 

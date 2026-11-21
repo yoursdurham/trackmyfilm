@@ -6,6 +6,8 @@
  * pass them in; this module never reads the database.
  *
  * Priority (spec section 7.1):
+ *   110  front-window Friendsgiving. It stays up over the Open sign,
+ *        a custom message, studio bookings, and a playlist.
  *   100  manual override (custom message today)
  *    80  active studio session, including the ending-soon window
  *    70  studio welcome window
@@ -17,6 +19,7 @@
  */
 
 import { HEARTBEAT_WRITE_INTERVAL_MS } from "@/lib/display-heartbeat";
+import { FRIENDSGIVING_MODE } from "@/lib/friendsgiving-display";
 import { sanitizeFilmDepartures } from "@/lib/film-departures";
 import { FRONT_WINDOW_SLUG, isOpenSignMode, openSignForceUntil, resolveOpenSignMode, type OpenSignMode } from "@/lib/shop-hours";
 import { sanitizeFilmMenu } from "@/lib/film-menu";
@@ -82,6 +85,7 @@ export function displaySafeArea(slug: string, mode?: string | null): { left: num
 }
 
 export const DISPLAY_PRIORITY = {
+  friendsgiving: 110,
   override: 100,
   studioActive: 80,
   studioWelcome: 70,
@@ -284,14 +288,27 @@ const DATA_KEYS_BY_MODE: Record<string, readonly string[]> = {
   film_status: FILM_STATUS_DATA_KEYS,
   film_menu: FILM_MENU_DATA_KEYS,
   film_departures: FILM_DEPARTURES_DATA_KEYS,
+  [FRIENDSGIVING_MODE]: [],
 };
 
 export function isDisplaySlug(slug: string): boolean {
   return slug.length <= 64 && DISPLAY_SLUG_PATTERN.test(slug);
 }
 
-export function isSelectableDefaultMode(mode: string): boolean {
+export function isSelectableDefaultMode(mode: string, slug?: string | null): boolean {
+  if (mode === FRIENDSGIVING_MODE) return slug === FRONT_WINDOW_SLUG;
   return SELECTABLE_DEFAULT_MODES.some((option) => option.value === mode);
+}
+
+/** Modes offered on the Displays page. Friendsgiving is front-window only. */
+export function selectableDefaultModes(slug: string, current?: string | null): { value: string; label: string }[] {
+  const options: { value: string; label: string }[] = slug === FRONT_WINDOW_SLUG
+    ? [...SELECTABLE_DEFAULT_MODES, { value: FRIENDSGIVING_MODE, label: "Friendsgiving" }]
+    : [...SELECTABLE_DEFAULT_MODES];
+  if (current && !options.some((option) => option.value === current)) {
+    options.push({ value: current, label: current });
+  }
+  return options;
 }
 
 /** Plain text only. Tags are removed, not decoded into HTML. */
@@ -534,6 +551,23 @@ export function resolveDisplayState(input: DisplayResolveInput): ResolvedDisplay
     };
   }
 
+  // Friendsgiving is a temporary full-screen video. While it is the front
+  // window's selected mode it beats the Open sign, a custom message, studio
+  // bookings, and a playlist. Other screens ignore the mode name.
+  if (
+    input.display.slug === FRONT_WINDOW_SLUG
+    && (input.display.mode?.trim() || "") === FRIENDSGIVING_MODE
+  ) {
+    return {
+      mode: FRIENDSGIVING_MODE,
+      theme: themeForMode(FRIENDSGIVING_MODE, input.display.theme),
+      refreshSeconds: seconds,
+      buildId: displayBuildId(),
+      data: {},
+      priority: DISPLAY_PRIORITY.friendsgiving,
+    };
+  }
+
   const candidates: { mode: string; priority: number; data: Record<string, unknown> }[] = [];
 
   const overrideMode = input.display.override_mode?.trim() || "";
@@ -673,7 +707,10 @@ export function toPublicDisplayPayload(resolved: {
     else delete data.message;
   }
   const openSign = isOpenSignMode(resolved.openSign) ? resolved.openSign : null;
-  const signCanShow = openSign === "auto" || openSign === "on" || (openSign === null && resolved.showOpenSign === true);
+  const suppressOpenSign = mode === FRIENDSGIVING_MODE;
+  const signCanShow = !suppressOpenSign && (
+    openSign === "auto" || openSign === "on" || (openSign === null && resolved.showOpenSign === true)
+  );
   let openSignUntil: string | undefined;
   if (openSign === "on" && typeof resolved.openSignUntil === "string") {
     const until = new Date(resolved.openSignUntil);
@@ -687,8 +724,8 @@ export function toPublicDisplayPayload(resolved: {
     ),
     buildId: payloadBuildId(resolved.buildId),
     data,
-    ...(openSign ? { openSign } : {}),
-    ...(openSignUntil ? { openSignUntil } : {}),
+    ...(suppressOpenSign ? {} : openSign ? { openSign } : {}),
+    ...(suppressOpenSign ? {} : openSignUntil ? { openSignUntil } : {}),
     ...(signCanShow
       ? { showOpenSign: true, openSignStats: sanitizeOpenSignStats(resolved.openSignStats) }
       : {}),

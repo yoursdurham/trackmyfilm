@@ -11,6 +11,7 @@ import {
   type OpenSignStats,
 } from "@/lib/display";
 import { displayContentFresh } from "@/lib/display-schedule";
+import { FRIENDSGIVING_MODE } from "@/lib/friendsgiving-display";
 import {
   FRONT_WINDOW_SLUG,
   isOpenSignMode,
@@ -208,11 +209,20 @@ function rowFromConfig(slug: string, config: DisplayConfig): DisplayResolveInput
 }
 
 /**
- * Override wins. With no override, studio bookings can cover the default and
- * the row alone cannot name the winner. Null means "ask the payload route".
+ * Friendsgiving, while selected on the front window, wins over an override.
+ * Otherwise an override wins. With no override, studio bookings can cover
+ * the default and the row alone cannot name the winner. Null means
+ * "ask the payload route".
  */
-function commandedMode(config: DisplayConfig): string | null {
+function friendsgivingSelected(slug: string, config: DisplayConfig): boolean {
+  return slug === FRONT_WINDOW_SLUG
+    && config.isEnabled
+    && config.mode.trim() === FRIENDSGIVING_MODE;
+}
+
+function commandedMode(slug: string, config: DisplayConfig): string | null {
   if (!config.isEnabled) return "idle";
+  if (friendsgivingSelected(slug, config)) return FRIENDSGIVING_MODE;
   const override = config.overrideMode?.trim() || "";
   if (override === "custom_message") return config.overrideMessage ? "custom_message" : "idle";
   if (override) return override;
@@ -307,6 +317,10 @@ function chromeMatches(current: DisplayPayload, patched: DisplayPayload): boolea
 
 function payloadMatchesConfig(payload: DisplayPayload, config: DisplayConfig, slug: string, now: Date): boolean {
   if (!config.isEnabled) return payload.mode === "idle";
+  if (friendsgivingSelected(slug, config)) {
+    return payload.mode === FRIENDSGIVING_MODE
+      && chromeMatches(payload, withChrome(payload, config, slug, now));
+  }
   const override = config.overrideMode?.trim() || "";
   if (override === "custom_message") {
     return payload.mode === "custom_message" && payload.data.message === config.overrideMessage;
@@ -325,7 +339,8 @@ function payloadMatchesConfig(payload: DisplayPayload, config: DisplayConfig, sl
 function statsStale(input: ReconcileDisplayInput, mode: string | undefined): boolean {
   if (input.slug !== FRONT_WINDOW_SLUG) return false;
   if (!input.config.isEnabled) return false;
-  if (mode === "custom_message" || mode === "film_stats") return false;
+  if (mode === "custom_message" || mode === "film_stats" || mode === FRIENDSGIVING_MODE) return false;
+  if (friendsgivingSelected(input.slug, input.config)) return false;
   const setting = resolveOpenSignMode({
     slug: input.slug,
     openSignMode: input.config.openSignMode,
@@ -393,12 +408,12 @@ export function reconcileDisplayConfig(input: ReconcileDisplayInput): ReconcileD
     return show(input, patched, input.current.fetchedAt, fetchContent);
   }
 
-  const commanded = commandedMode(input.config);
+  const commanded = commandedMode(input.slug, input.config);
   if (commanded === null) return keep(input, true);
 
-  // Idle and a custom message are complete on the row. Departures, studio
-  // sessions, and film status still need a payload fetch.
-  if (commanded === "idle" || commanded === "custom_message") {
+  // Idle, a custom message, and Friendsgiving are complete on the row.
+  // Departures, studio sessions, and film status still need a payload fetch.
+  if (commanded === "idle" || commanded === "custom_message" || commanded === FRIENDSGIVING_MODE) {
     const payload = buildResolved(input);
     return show(input, payload, input.now.getTime(), statsStale(input, payload.mode));
   }

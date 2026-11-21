@@ -212,6 +212,35 @@ describe("GET /api/displays/:slug", () => {
     expect(mockGetCachedFilmMetrics).toHaveBeenCalledTimes(1);
   });
 
+  it("keeps Friendsgiving on the front window and skips the Open sign and bookings", async () => {
+    mockGetDisplayBySlug.mockResolvedValue({
+      ...row,
+      slug: "front-window",
+      orientation: "landscape",
+      mode: "friendsgiving",
+      theme: "yours-dark",
+      show_open_sign: true,
+      open_sign_mode: "auto",
+      show_studio_bookings: true,
+      override_mode: "custom_message",
+      override_payload: { message: "Back soon" },
+    });
+
+    const response = await get("front-window");
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.mode).toBe("friendsgiving");
+    expect(body.data).toEqual({});
+    expect(body).not.toHaveProperty("showOpenSign");
+    expect(body).not.toHaveProperty("openSign");
+    expect(body).not.toHaveProperty("openSignStats");
+    expect(JSON.stringify(body)).not.toMatch(/Back soon/);
+    expect(mockGetCachedFilmMetrics).not.toHaveBeenCalled();
+    expect(mockGetCachedFilmMenu).not.toHaveBeenCalled();
+    expect(mockGetCachedFilmDepartures).not.toHaveBeenCalled();
+    expect(mockGetCachedStudioAgenda).not.toHaveBeenCalled();
+  });
+
   it("does not load film stats for the Open sign on any other screen", async () => {
     mockGetDisplayBySlug.mockResolvedValue({
       ...row,
@@ -670,6 +699,36 @@ describe("PATCH /api/displays/:slug", () => {
     expect(body.defaultMode).toBe("film_departures");
     expect(body.resolvedMode).toBe("film_departures");
     expect(body.theme).toBe("airport");
+  });
+
+  it("accepts Friendsgiving only on the front window", async () => {
+    const rejected = await patch({ mode: "friendsgiving" });
+    expect(rejected.status).toBe(400);
+    expect(await rejected.json()).toEqual({ error: "That default mode is not available." });
+    expect(mockUpdateDisplay).not.toHaveBeenCalled();
+
+    mockUpdateDisplay.mockImplementation(async (_slug: string, body: Record<string, unknown>) => ({
+      ...row,
+      slug: "front-window",
+      orientation: "landscape",
+      override_mode: "custom_message",
+      override_payload: { message: "Back soon" },
+      show_open_sign: true,
+      open_sign_mode: "auto",
+      ...body,
+    }));
+    const response = await PATCH(new Request("http://localhost/api/displays/front-window", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ mode: "friendsgiving" }),
+    }), {
+      params: Promise.resolve({ slug: "front-window" }),
+    });
+    expect(response.status).toBe(200);
+    expect(mockUpdateDisplay).toHaveBeenCalledWith("front-window", { mode: "friendsgiving" });
+    const body = await response.json();
+    expect(body.defaultMode).toBe("friendsgiving");
+    expect(body.resolvedMode).toBe("friendsgiving");
   });
 
   it("accepts film stats as a default mode", async () => {

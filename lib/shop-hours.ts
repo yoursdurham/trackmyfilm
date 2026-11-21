@@ -3,6 +3,8 @@
  * account sign-in email: Thursdays 5-7PM and Saturdays 11-2PM.
  * Times are America/New_York. The end minute is when the shop is closed.
  */
+import { FRIENDSGIVING_MODE } from "@/lib/friendsgiving-display";
+
 export const SHOP_TIME_ZONE = "America/New_York";
 export const FRONT_WINDOW_SLUG = "front-window";
 
@@ -234,7 +236,8 @@ export function openSignForceUntil(until: string | null | undefined, now: Date):
 /**
  * Only the front window. Auto follows retail hours. On shows the sign
  * regardless of hours. Off hides it. A custom message still wins.
- * Every other slug ignores the control.
+ * Friendsgiving fills the window, so the sign stays off until that mode
+ * is cleared. Every other slug ignores the control.
  */
 export function shouldShowOpenSign(input: {
   slug: string;
@@ -243,6 +246,7 @@ export function shouldShowOpenSign(input: {
   now: Date;
 }): boolean {
   if (input.slug !== FRONT_WINDOW_SLUG) return false;
+  if (input.mode === FRIENDSGIVING_MODE) return false;
   if (input.mode === "custom_message") return false;
   if (input.setting === "on") return true;
   if (input.setting === "off") return false;
