@@ -75,12 +75,13 @@ describe("sendOrderEmail film_details_html stock links", () => {
 
     expect(html).toBe(
       [
-        '<p style="margin:0 0 6px;padding:0;">Roll 1: 35mm / Color / High-Res / <a href="https://www.yoursdurham.com/shopping/p/kodak-portra-160-35mm" target="_blank" style="color:#1a1a1a;text-decoration:underline;">Kodak Portra 160</a></p>',
-        '<p style="margin:0 0 6px;padding:0;">Roll 2: 120 / Black &amp; White / Standard / <a href="https://www.yoursdurham.com/shopping/p/kodak-portra-160-120" target="_blank" style="color:#1a1a1a;text-decoration:underline;">Kodak Portra 160</a></p>',
-        '<p style="margin:0 0 6px;padding:0;">Roll 3: 120 / Color / Kodak UltraMax 400</p>',
-        '<p style="margin:0 0 6px;padding:0;">Roll 4: 35mm / Color / <a href="https://www.yoursdurham.com/shopping/p/fuji-400-35mm" target="_blank" style="color:#1a1a1a;text-decoration:underline;">Fujifilm &lt;Superia&gt; &amp; 400</a> + 4x6 Prints</p>',
-      ].join(""),
+        '<a href="https://www.yoursdurham.com/shopping/p/kodak-portra-160-35mm">Kodak Portra 160</a>, 35mm, Color, High-Res',
+        '<a href="https://www.yoursdurham.com/shopping/p/kodak-portra-160-120">Kodak Portra 160</a>, 120, Black &amp; White, Standard',
+        "Kodak UltraMax 400, 120, Color",
+        '<a href="https://www.yoursdurham.com/shopping/p/fuji-400-35mm">Fujifilm &lt;Superia&gt; &amp; 400</a>, 35mm, Color, 4x6 prints',
+      ].join("<br>"),
     );
+    expect(html).not.toMatch(/Roll \d+:/);
     expect(html).not.toContain("kodak-ultramax-400-35mm");
     expect(html).not.toContain("<Superia>");
     expect(body.template.variables.order_number).toBe("JE100");
@@ -116,10 +117,10 @@ describe("sendOrderEmail film_details_html stock links", () => {
     expect(html).toContain("Phoenix 200 - Blue");
     expect(html).not.toContain("Pheonix");
     expect(html).toContain(
-      '<a href="https://www.yoursdurham.com/shopping/p/harman-phoenix-ii-200" target="_blank" style="color:#1a1a1a;text-decoration:underline;">Phoenix 200 - Blue</a>',
+      '<a href="https://www.yoursdurham.com/shopping/p/harman-phoenix-ii-200">Phoenix 200 - Blue</a>',
     );
     expect(html).toContain(
-      '<a href="https://www.yoursdurham.com/shopping/p/kodak-fun-saver-single-use-800-iso" target="_blank" style="color:#1a1a1a;text-decoration:underline;">Kodak Gold 200</a>',
+      '<a href="https://www.yoursdurham.com/shopping/p/kodak-fun-saver-single-use-800-iso">Kodak Gold 200</a>',
     );
   });
 });
