@@ -7,9 +7,12 @@ import {
   EMPTY_CUSTOMER_EMAIL_STATS,
   type CustomerEmailStats,
 } from "@/lib/customer-email-stats";
-import { filmProductUrl } from "@/lib/film-product-links";
 import { filmDropStatusNotice, FILM_DROP_STATUS_NOTICE_VARIABLES } from "@/lib/film-drop-status-notice";
-import { correctFilmStockSpelling } from "@/lib/film-stocks";
+import {
+  buildFilmDetailsHtml,
+  capResendTemplateVariables,
+  RESEND_TEMPLATE_VARIABLE_LIMIT,
+} from "@/lib/resend-template-variables";
 import type { FilmOrder } from "@/lib/types";
 
 type TemplateName =
@@ -113,63 +116,11 @@ function shouldSkipEmail(template: TemplateName, lastSent: string | undefined) {
 /** Sign-in page for the drop-off email. The address is only a query param; the page does not send a link on its own. */
 export function filmDropAccountUrl(email: string): string {
   const url = `https://trackmyfilm.com/account/login?email=${encodeURIComponent(email)}`;
-  // Resend string variables are capped at 2,000 characters. A link that does
-  // not fit still opens sign-in, without a prefilled address.
-  if (url.length <= 2000) return url;
+  // A link that does not fit still opens sign-in, without a prefilled address.
+  if (url.length <= RESEND_TEMPLATE_VARIABLE_LIMIT) return url;
   return "https://trackmyfilm.com/account/login";
 }
 
-function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
-
-function filmStockHtml(stock: string, format: string | undefined): string {
-  const safe = escapeHtml(correctFilmStockSpelling(stock));
-  const href = filmProductUrl(stock, format);
-  if (!href) return safe;
-  return `<a href="${escapeHtml(href)}" target="_blank" style="color:#1a1a1a;text-decoration:underline;">${safe}</a>`;
-}
-
-function buildFilmDetailsHtml(rollDetails: unknown) {
-  if (!Array.isArray(rollDetails) || rollDetails.length === 0) {
-    return "";
-  }
-
-  return rollDetails
-    .map((roll, index) => {
-      if (!roll || typeof roll !== "object") return "";
-
-      const r = roll as {
-        film_type?: string;
-        film_process?: string;
-        scan_size?: string;
-        film_stock?: string;
-        prints_4x6?: boolean;
-      };
-
-      const parts = [
-        r.film_type,
-        r.film_process,
-        r.scan_size,
-      ].filter((part): part is string => typeof part === "string" && part.length > 0)
-        .map(escapeHtml);
-
-      if (typeof r.film_stock === "string" && r.film_stock.length > 0) {
-        parts.push(filmStockHtml(r.film_stock, r.film_type));
-      }
-
-      if (parts.length === 0) return "";
-
-      const prints = r.prints_4x6 ? " + 4x6 Prints" : "";
-
-      return `<p style="margin:0 0 6px;padding:0;">Roll ${index + 1}: ${parts.join(" / ")}${prints}</p>`;
-    })
-    .join("");
-}
 export async function sendPartialScanEmail(orderId: string, batch: ScanDeliveryBatch) {
   return sendOrderEmail(orderId, "partial_scans_sent", { partialBatch: batch });
 }
@@ -353,7 +304,10 @@ const variables: Record<string, string> = {
       reply_to: process.env.REPLY_TO_EMAIL || "hello@yoursdurham.com",
       template: {
         id: templateId,
-        variables,
+        variables: capResendTemplateVariables(variables, {
+          template,
+          orderNumber: order.order_number,
+        }),
       },
     },
   };

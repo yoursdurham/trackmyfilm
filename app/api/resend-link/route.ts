@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getOrderByNumber, updateOrder } from "@/lib/db";
 import { isWithinDedupWindow, normalizeEmail, normalizeOrderNumber } from "@/lib/validation";
 import { isScansOnlyOrder } from "@/lib/order-service";
+import { capResendTemplateVariables } from "@/lib/resend-template-variables";
 import { scanNotesForEmail, scanNotesHtml } from "@/lib/scan-notes";
 
 const RATE_LIMIT_WINDOW_MS = 60_000;
@@ -103,7 +104,7 @@ export async function POST(req: Request) {
       return genericResponse();
     }
 
-    const variables = {
+    const variables = capResendTemplateVariables({
       first_name: (order.customer_name || "there").trim().split(" ")[0],
       order_number: order.order_number ?? "",
       roll_count: String(order.roll_count ?? 0),
@@ -116,7 +117,10 @@ export async function POST(req: Request) {
             "Your scans are ready. This order was already developed, so there was no lab processing.",
         }
         : {}),
-    };
+    }, {
+      template: scansOnly ? "scans_only_ready" : "scans_sent",
+      orderNumber: order.order_number,
+    });
 
     const payload = {
       from: process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev",
