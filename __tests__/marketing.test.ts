@@ -369,12 +369,9 @@ describe("reporting", () => {
     expect(attributeDropoffs({ webhookConfigured: true, clicks: [], orders: [{ email: "ada@example.com", at: "2026-05-10T00:00:00.000Z" }], windowDays: 14 })).toMatchObject({ state: "value", value: 0 });
   });
 
-  it("offers AI drafting through the editor without an OpenAI key", () => {
-    const status = aiDraftingStatus();
-    expect(status.available).toBe(true);
-    expect(status.title).toBe("Draft with AI");
-    expect(status.detail).toContain("OIDC");
-    expect(status.detail).not.toContain("OPENAI");
+  it("does not offer AI drafting without a provider integration", () => {
+    expect(aiDraftingStatus({}).available).toBe(false);
+    expect(aiDraftingStatus({ AI_GATEWAY_API_KEY: "present" }).detail).toContain("does not call it");
   });
 });
 
