@@ -83,14 +83,19 @@ export function attributeDropoffs(input: {
   };
 }
 
-export function aiDraftingStatus(): {
-  available: true;
+export function aiDraftingStatus(env: Record<string, string | undefined> = process.env): {
+  available: false;
   title: string;
   detail: string;
 } {
+  const hasGateway = Boolean(env.AI_GATEWAY_API_KEY?.trim());
+  const hasOpenAi = Boolean(env.OPENAI_API_KEY?.trim());
+  const keyNote = hasGateway || hasOpenAi
+    ? "A provider key is present, but this app does not call it."
+    : "No AI_GATEWAY_API_KEY or OPENAI_API_KEY is set.";
   return {
-    available: true,
-    title: "Draft with AI",
-    detail: "The editor can draft a subject, preview, and blocks from a short note. That note and a fixed shop description are the only things sent. Customer lists, segments, and email addresses are not. On Vercel this uses the AI Gateway with the deployment OIDC token. Set AI_GATEWAY_API_KEY to draft outside Vercel.",
+    available: false,
+    title: "AI drafting needs a provider",
+    detail: `${keyNote} The Vercel AI SDK is not installed, and this screen does not send customer activity anywhere. Write the subject, preview text, and body yourself. Nothing here is sent until you confirm a campaign.`,
   };
 }
